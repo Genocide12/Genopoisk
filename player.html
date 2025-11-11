@@ -2,202 +2,78 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KinoPlayer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Плеер</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
-            padding: 20px;
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent;
         }
-        .header { text-align: center; margin-bottom: 30px; }
-        .header h1 { font-size: 28px; margin-bottom: 10px; }
-        .search-box {
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            position: fixed;
+            touch-action: pan-y;
+        }
+        .player-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             width: 100%;
-            padding: 15px;
-            font-size: 16px;
-            border: 2px solid var(--tg-theme-button-color, #667eea);
-            border-radius: 12px;
-            margin-bottom: 20px;
-            background: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
+            height: 100%;
         }
-        .menu-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        .menu-btn {
-            padding: 20px;
-            background: var(--tg-theme-button-color, #667eea);
-            color: var(--tg-theme-button-text-color, #ffffff);
+        .player-frame {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
+            display: block;
         }
-        .menu-btn:active { transform: scale(0.95); }
-        .films-grid { display: grid; gap: 15px; }
-        .film-card {
-            display: flex;
-            gap: 15px;
-            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
-            padding: 15px;
-            border-radius: 12px;
-            cursor: pointer;
-        }
-        .film-poster {
-            width: 80px;
-            height: 120px;
-            border-radius: 8px;
-            object-fit: cover;
-            background: var(--tg-theme-button-color, #667eea);
-        }
-        .film-info { flex: 1; }
-        .film-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-        .film-meta { font-size: 14px; color: var(--tg-theme-hint-color, #999); }
-        .loading { text-align: center; padding: 40px; font-size: 18px; }
     </style>
 </head>
 <body>
-    <div class="header"><h1>🎬 KinoPlayer</h1></div>
-    <input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск фильма...">
-    <div class="menu-grid">
-        <button class="menu-btn" onclick="loadPopular()">🔥 Популярные</button>
-        <button class="menu-btn" onclick="loadTop250()">⭐ Топ 250</button>
-        <button class="menu-btn" onclick="loadNew()">🎬 Новинки</button>
-        <button class="menu-btn" onclick="loadRandom()">🎯 Случайный</button>
+    <div class="player-container">
+        <iframe class="player-frame" id="playerFrame" 
+                allowfullscreen 
+                allow="autoplay; fullscreen; picture-in-picture; encrypted-media; download" 
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox allow-downloads"
+                frameborder="0"
+                scrolling="no"></iframe>
     </div>
-    <div id="filmsContainer" class="films-grid"></div>
 
     <script>
         const tg = window.Telegram.WebApp;
+        tg.ready();
         tg.expand();
-        const API_KEY_DECODED = atob('MGZmM2QzNTUtZjFkNS00MmMyLWJiMDYtZGY0ODJlZTViNjVi');
-
-        let searchTimeout;
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                if (e.target.value.trim()) searchFilms(e.target.value);
-            }, 500);
+        tg.disableVerticalSwipes();
+        tg.enableClosingConfirmation();
+        tg.setHeaderColor('#000000');
+        tg.setBackgroundColor('#000000');
+        
+        // Кнопка "Назад"
+        tg.BackButton.show();
+        tg.BackButton.onClick(() => {
+            window.location.href = 'index.html';
         });
 
-        async function searchFilms(query) {
-            showLoading();
-            try {
-                const response = await fetch(`https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword=${query}`, {
-                    headers: { 'X-API-KEY': API_KEY_DECODED }
-                });
-                const data = await response.json();
-                displayFilms(data.films || []);
-            } catch (error) {
-                showError('Ошибка поиска');
-            }
-        }
+        // Параметры
+        const params = new URLSearchParams(window.location.search);
+        const filmId = params.get('id');
+        const title = params.get('title') || 'Фильм';
+        document.title = title;
 
-        async function loadPopular() {
-            showLoading();
-            try {
-                const response = await fetch('https://kinopoiskapiunofficial.tech/api/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=1', {
-                    headers: { 'X-API-KEY': API_KEY_DECODED }
-                });
-                const data = await response.json();
-                displayFilms(data.films || []);
-            } catch (error) {
-                showError('Ошибка загрузки');
-            }
-        }
-
-        async function loadTop250() {
-            showLoading();
-            try {
-                const response = await fetch('https://kinopoiskapiunofficial.tech/api/v2.2/films/top?type=TOP_250_BEST_FILMS&page=1', {
-                    headers: { 'X-API-KEY': API_KEY_DECODED }
-                });
-                const data = await response.json();
-                displayFilms(data.films || []);
-            } catch (error) {
-                showError('Ошибка загрузки');
-            }
-        }
-
-        async function loadNew() {
-            showLoading();
-            try {
-                const response = await fetch('https://kinopoiskapiunofficial.tech/api/v2.2/films/premieres?year=2025&month=NOVEMBER', {
-                    headers: { 'X-API-KEY': API_KEY_DECODED }
-                });
-                const data = await response.json();
-                displayFilms(data.items || []);
-            } catch (error) {
-                showError('Ошибка загрузки');
-            }
-        }
-
-        async function loadRandom() {
-            showLoading();
-            try {
-                const page = Math.floor(Math.random() * 10) + 1;
-                const response = await fetch(`https://kinopoiskapiunofficial.tech/api/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`, {
-                    headers: { 'X-API-KEY': API_KEY_DECODED }
-                });
-                const data = await response.json();
-                const films = data.films || [];
-                if (films.length > 0) {
-                    const randomFilm = films[Math.floor(Math.random() * films.length)];
-                    openPlayer(randomFilm.filmId || randomFilm.kinopoiskId, randomFilm.nameRu || randomFilm.nameEn);
-                }
-            } catch (error) {
-                showError('Ошибка загрузки');
-            }
-        }
-
-        function displayFilms(films) {
-            const container = document.getElementById('filmsContainer');
-            container.innerHTML = '';
-            films.slice(0, 10).forEach(film => {
-                const filmId = film.filmId || film.kinopoiskId;
-                const title = film.nameRu || film.nameEn || 'Без названия';
-                const year = film.year || 'Н/Д';
-                const rating = film.rating || 'Н/Д';
-                const poster = film.posterUrlPreview || '';
-
-                const card = document.createElement('div');
-                card.className = 'film-card';
-                card.onclick = () => openPlayer(filmId, title);
-                card.innerHTML = `
-                    <img class="film-poster" src="${poster}" alt="${title}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%22120%22%3E%3Crect fill=%22%23667eea%22 width=%22100%25%22 height=%22100%25%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2230%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22%3E🎬%3C/text%3E%3C/svg%3E'">
-                    <div class="film-info">
-                        <div class="film-title">${title}</div>
-                        <div class="film-meta">📅 ${year} • ⭐ ${rating}</div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function openPlayer(filmId, title) {
-            // Используем JavaScript навигацию вместо <a href>
-            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
-            window.location.href = `${baseUrl}player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
-        }
-
-        function showLoading() {
-            document.getElementById('filmsContainer').innerHTML = '<div class="loading">⏳ Загрузка...</div>';
-        }
-
-        function showError(message) {
-            document.getElementById('filmsContainer').innerHTML = `<div class="loading">❌ ${message}</div>`;
-        }
-
-        loadPopular();
+        // Загружаем плеер
+        const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
+        document.getElementById('playerFrame').src = playerUrl;
     </script>
 </body>
 </html>

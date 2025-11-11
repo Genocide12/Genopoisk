@@ -10,7 +10,6 @@
             margin: 0; 
             padding: 0; 
             box-sizing: border-box; 
-            -webkit-tap-highlight-color: transparent;
         }
         html, body {
             width: 100vw;
@@ -18,16 +17,6 @@
             overflow: hidden;
             background: #000;
             position: fixed;
-            touch-action: pan-y;
-        }
-        .player-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
         }
         .player-frame {
             position: absolute;
@@ -36,44 +25,63 @@
             width: 100%;
             height: 100%;
             border: none;
-            display: block;
+        }
+        .download-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 999999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .download-btn:active {
+            transform: scale(0.95);
         }
     </style>
 </head>
 <body>
-    <div class="player-container">
-        <iframe class="player-frame" id="playerFrame" 
-                allowfullscreen 
-                allow="autoplay; fullscreen; picture-in-picture; encrypted-media; download" 
-                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox allow-downloads"
-                frameborder="0"
-                scrolling="no"></iframe>
-    </div>
+    <iframe class="player-frame" id="playerFrame" 
+            allowfullscreen 
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media" 
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox allow-downloads"
+            frameborder="0"></iframe>
+    
+    <button class="download-btn" id="downloadBtn" onclick="downloadFilm()">⬇️</button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
-        tg.disableVerticalSwipes();
         tg.enableClosingConfirmation();
         tg.setHeaderColor('#000000');
         tg.setBackgroundColor('#000000');
         
-        // Кнопка "Назад"
         tg.BackButton.show();
         tg.BackButton.onClick(() => {
             window.location.href = 'index.html';
         });
 
-        // Параметры
         const params = new URLSearchParams(window.location.search);
         const filmId = params.get('id');
         const title = params.get('title') || 'Фильм';
         document.title = title;
 
-        // Загружаем плеер
         const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
         document.getElementById('playerFrame').src = playerUrl;
+
+        function downloadFilm() {
+            tg.showAlert('Для скачивания откройте плеер в полноэкранном режиме и нажмите кнопку скачивания в плеере');
+        }
     </script>
 </body>
 </html>

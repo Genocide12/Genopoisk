@@ -11,13 +11,9 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--tg-theme-bg-color, #ffffff);
             color: var(--tg-theme-text-color, #000000);
-            overflow-x: hidden;
+            padding: 20px;
         }
-        .container { padding: 20px; }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
+        .header { text-align: center; margin-bottom: 30px; }
         .header h1 { font-size: 28px; margin-bottom: 10px; }
         .search-box {
             width: 100%;
@@ -47,10 +43,7 @@
             transition: transform 0.2s;
         }
         .menu-btn:active { transform: scale(0.95); }
-        .films-grid {
-            display: grid;
-            gap: 15px;
-        }
+        .films-grid { display: grid; gap: 15px; }
         .film-card {
             display: flex;
             gap: 15px;
@@ -58,6 +51,8 @@
             padding: 15px;
             border-radius: 12px;
             cursor: pointer;
+            text-decoration: none;
+            color: inherit;
         }
         .film-poster {
             width: 80px;
@@ -70,99 +65,29 @@
         .film-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
         .film-meta { font-size: 14px; color: var(--tg-theme-hint-color, #999); }
         .loading { text-align: center; padding: 40px; font-size: 18px; }
-        
-        /* Плеер */
-        .player-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #000;
-            z-index: 1000;
-        }
-        .player-header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 15px;
-            background: rgba(0,0,0,0.8);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 1001;
-        }
-        .back-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 18px;
-            cursor: pointer;
-        }
-        .player-title {
-            color: white;
-            font-size: 16px;
-            flex: 1;
-        }
-        .player-frame {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
     </style>
 </head>
 <body>
-    <div class="container" id="mainContainer">
-        <div class="header">
-            <h1>🎬 KinoPlayer</h1>
-        </div>
-
-        <input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск фильма...">
-
-        <div class="menu-grid">
-            <button class="menu-btn" onclick="loadPopular()">🔥 Популярные</button>
-            <button class="menu-btn" onclick="loadTop250()">⭐ Топ 250</button>
-            <button class="menu-btn" onclick="loadNew()">🎬 Новинки</button>
-            <button class="menu-btn" onclick="loadRandom()">🎯 Случайный</button>
-        </div>
-
-        <div id="filmsContainer" class="films-grid"></div>
+    <div class="header"><h1>🎬 KinoPlayer</h1></div>
+    <input type="text" class="search-box" id="searchInput" placeholder="🔍 Поиск фильма...">
+    <div class="menu-grid">
+        <button class="menu-btn" onclick="loadPopular()">🔥 Популярные</button>
+        <button class="menu-btn" onclick="loadTop250()">⭐ Топ 250</button>
+        <button class="menu-btn" onclick="loadNew()">🎬 Новинки</button>
+        <button class="menu-btn" onclick="loadRandom()">🎯 Случайный</button>
     </div>
-
-    <!-- Плеер -->
-    <div class="player-overlay" id="playerOverlay">
-        <div class="player-header">
-            <button class="back-btn" onclick="closePlayer()">←</button>
-            <div class="player-title" id="playerTitle"></div>
-        </div>
-        <iframe class="player-frame" id="playerFrame" allowfullscreen></iframe>
-    </div>
+    <div id="filmsContainer" class="films-grid"></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.BackButton.onClick(() => {
-            if (document.getElementById('playerOverlay').style.display === 'block') {
-                closePlayer();
-            } else {
-                tg.close();
-            }
-        });
-
-        const API_KEY = 'MGZmM2QzNTUtZjFkNS00MmMyLWJiMDYtZGY0ODJlZTViNjVi';
-        const API_KEY_DECODED = atob(API_KEY);
+        const API_KEY_DECODED = atob('MGZmM2QzNTUtZjFkNS00MmMyLWJiMDYtZGY0ODJlZTViNjVi');
 
         let searchTimeout;
         document.getElementById('searchInput').addEventListener('input', (e) => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
-                if (e.target.value.trim()) {
-                    searchFilms(e.target.value);
-                }
+                if (e.target.value.trim()) searchFilms(e.target.value);
             }, 500);
         });
 
@@ -229,7 +154,7 @@
                 const films = data.films || [];
                 if (films.length > 0) {
                     const randomFilm = films[Math.floor(Math.random() * films.length)];
-                    openPlayer(randomFilm.filmId || randomFilm.kinopoiskId, randomFilm.nameRu || randomFilm.nameEn);
+                    window.location.href = `player.html?id=${randomFilm.filmId || randomFilm.kinopoiskId}&title=${encodeURIComponent(randomFilm.nameRu || randomFilm.nameEn)}`;
                 }
             } catch (error) {
                 showError('Ошибка загрузки');
@@ -239,7 +164,6 @@
         function displayFilms(films) {
             const container = document.getElementById('filmsContainer');
             container.innerHTML = '';
-
             films.slice(0, 10).forEach(film => {
                 const filmId = film.filmId || film.kinopoiskId;
                 const title = film.nameRu || film.nameEn || 'Без названия';
@@ -247,9 +171,9 @@
                 const rating = film.rating || 'Н/Д';
                 const poster = film.posterUrlPreview || '';
 
-                const card = document.createElement('div');
+                const card = document.createElement('a');
                 card.className = 'film-card';
-                card.onclick = () => openPlayer(filmId, title);
+                card.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
                 card.innerHTML = `
                     <img class="film-poster" src="${poster}" alt="${title}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%22120%22%3E%3Crect fill=%22%23667eea%22 width=%22100%25%22 height=%22100%25%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2230%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22%3E🎬%3C/text%3E%3C/svg%3E'">
                     <div class="film-info">
@@ -261,25 +185,6 @@
             });
         }
 
-        function openPlayer(filmId, title) {
-            const url = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
-            
-            document.getElementById('playerTitle').textContent = title || 'Фильм';
-            document.getElementById('playerFrame').src = url;
-            document.getElementById('playerOverlay').style.display = 'block';
-            document.getElementById('mainContainer').style.display = 'none';
-            
-            tg.BackButton.show();
-        }
-
-        function closePlayer() {
-            document.getElementById('playerOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            document.getElementById('playerFrame').src = '';
-            
-            tg.BackButton.hide();
-        }
-
         function showLoading() {
             document.getElementById('filmsContainer').innerHTML = '<div class="loading">⏳ Загрузка...</div>';
         }
@@ -288,7 +193,6 @@
             document.getElementById('filmsContainer').innerHTML = `<div class="loading">❌ ${message}</div>`;
         }
 
-        // Загрузка популярных при старте
         loadPopular();
     </script>
 </body>

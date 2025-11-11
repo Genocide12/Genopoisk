@@ -647,8 +647,7 @@
             if (isTelegramWebApp && telegramBackButton) telegramBackButton.show();
             try {
                 const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
-                const data = await apiGet(url + `&X-API-KEY=${API_KEY}`);
-                const films = data.films || data.items || [];
+        const data = await apiGet(url + `&X-API-KEY=${API_KEY}`);                const films = data.films || data.items || [];
                 document.getElementById('searchResults').innerHTML = '';
                 displayFilms(films.slice(0, 30), 'searchResults');
             } catch (error) {

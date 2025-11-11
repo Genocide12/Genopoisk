@@ -80,27 +80,6 @@
             background-clip: text;
         }
 
-        .tg-back-button {
-            display: none;
-            position: fixed;
-            top: calc(env(safe-area-inset-top, 0px) + 10px);
-            left: 15px;
-            z-index: 999;
-            background: rgba(255,255,255,0.95);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            color: #333;
-            font-weight: 500;
-        }
-
-        .tg-webapp .tg-back-button {
-            display: block;
-        }
-
         .search-box {
             position: relative;
             max-width: min(600px, 100%);
@@ -157,6 +136,11 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
         .category-card:hover {
@@ -454,6 +438,10 @@
                 flex: 1 1 100%;
                 height: 250px;
             }
+
+            .category-card {
+                min-height: 100px;
+            }
         }
 
         @media (max-width: 360px) {
@@ -464,6 +452,7 @@
 
             .category-card {
                 padding: 15px;
+                min-height: 90px;
             }
 
             .films-grid {
@@ -490,8 +479,6 @@
     </style>
 </head>
 <body>
-    <button class="tg-back-button" onclick="handleTelegramBack()">← Назад</button>
-
     <div class="container" id="mainView">
         <div class="header">
             <h1>🎬 KinoPlayer</h1>
@@ -565,12 +552,14 @@
         console.log('%cVideo Player: Embess', 'color: #764ba2;');
         
         let isTelegramWebApp = false;
+        let telegramBackButton = null;
         
         (function() {
             try {
                 const tg = window.Telegram?.WebApp;
                 if (tg) {
                     isTelegramWebApp = true;
+                    telegramBackButton = tg.BackButton;
                     document.body.classList.add('tg-webapp');
                     tg.ready();
                     tg.expand();
@@ -578,7 +567,18 @@
                     tg.setHeaderColor?.('#667eea');
                     tg.setBackgroundColor?.('#667eea');
                     
-                    // Fix scroll issues in Telegram
+                    tg.BackButton.onClick(() => {
+                        if (document.getElementById('playerContainer').style.display === 'block') {
+                            closePlayer();
+                        } else if (document.getElementById('searchView').style.display === 'block' || 
+                                   document.getElementById('randomPreview').innerHTML !== '' ||
+                                   document.getElementById('filmsGrid').innerHTML !== '') {
+                            goBack();
+                        } else {
+                            tg.close();
+                        }
+                    });
+                    
                     document.documentElement.style.overflow = 'auto';
                     document.body.style.overflow = 'auto';
                     document.body.style.position = 'relative';
@@ -633,6 +633,10 @@
             document.getElementById('searchView').style.display = 'block';
             document.getElementById('searchLoading').style.display = 'block';
 
+            if (isTelegramWebApp && telegramBackButton) {
+                telegramBackButton.show();
+            }
+
             try {
                 const response = await fetch(
                     `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}`,
@@ -652,6 +656,10 @@
         }
 
         async function loadCategory(category) {
+            if (isTelegramWebApp && telegramBackButton) {
+                telegramBackButton.show();
+            }
+            
             currentCategory = category;
             currentPage = 1;
             hasMore = true;
@@ -718,7 +726,6 @@
                 </div>
             `;
             
-            // Scroll to preview
             setTimeout(() => {
                 preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
@@ -852,17 +859,9 @@
             document.getElementById('filmsGrid').innerHTML = '';
             document.getElementById('qualityWarning').innerHTML = '';
             currentCategory = null;
-        }
-
-        function handleTelegramBack() {
-            if (document.getElementById('playerContainer').style.display === 'block') {
-                closePlayer();
-            } else if (document.getElementById('searchView').style.display === 'block' || 
-                       document.getElementById('randomPreview').innerHTML !== '' ||
-                       document.getElementById('filmsGrid').innerHTML !== '') {
-                goBack();
-            } else if (isTelegramWebApp && window.Telegram?.WebApp) {
-                window.Telegram.WebApp.close();
+            
+            if (isTelegramWebApp && telegramBackButton) {
+                telegramBackButton.hide();
             }
         }
 

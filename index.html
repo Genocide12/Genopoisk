@@ -599,7 +599,8 @@
             });
         })();
         
-        const API_KEY = '0ff3d355-f1d5-42c2-bb06-df482ee5b65b';
+        // ОБНОВЛЁННЫЙ API КЛЮЧ
+        const API_KEY = '26d2222a-3f07-492d-a17e-80fdc91e2fe9';
         const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
         
         const PLAYER_CONFIG = {
@@ -644,12 +645,14 @@
                 );
 
                 const data = await response.json();
+                console.log('Search response:', data);
                 const films = data.films || [];
                 
                 document.getElementById('searchResults').innerHTML = '';
                 displayFilms(films.slice(0, 30), 'searchResults');
             } catch (error) {
                 console.error('Error searching:', error);
+                alert('Ошибка поиска: ' + error.message);
             } finally {
                 document.getElementById('searchLoading').style.display = 'none';
             }
@@ -686,6 +689,7 @@
                 });
 
                 const data = await response.json();
+                console.log('Random film response:', data);
                 const films = data.films || [];
                 
                 if (films.length > 0) {
@@ -694,7 +698,7 @@
                 }
             } catch (error) {
                 console.error('Error loading random film:', error);
-                alert('Ошибка загрузки. Попробуйте снова.');
+                alert('Ошибка загрузки: ' + error.message);
             } finally {
                 hideLoading();
             }
@@ -760,11 +764,13 @@
                     }
                 }
 
+                console.log('Fetching:', url);
                 const response = await fetch(url, {
                     headers: { 'X-API-KEY': API_KEY }
                 });
 
                 const data = await response.json();
+                console.log('Films response:', data);
                 const films = data.films || data.items || [];
                 
                 if (films.length > 0) {
@@ -780,7 +786,7 @@
             } catch (error) {
                 console.error('Error loading films:', error);
                 if (currentPage === 1) {
-                    alert('Ошибка загрузки данных. Попробуйте снова.');
+                    alert('Ошибка загрузки данных: ' + error.message);
                 }
             } finally {
                 isLoading = false;

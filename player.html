@@ -6,11 +6,7 @@
     <title>Плеер</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
             width: 100vw;
             height: 100vh;
@@ -25,51 +21,25 @@
             width: 100%;
             height: 100%;
             border: none;
-        }
-        .download-btn {
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            background: rgba(102, 126, 234, 0.9);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            font-size: 24px;
-            cursor: pointer;
-            z-index: 999999;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .download-btn:active {
-            transform: scale(0.95);
+            display: block;
         }
     </style>
 </head>
 <body>
-    <iframe class="player-frame" id="playerFrame" 
-            allowfullscreen 
-            allow="autoplay; fullscreen; picture-in-picture; encrypted-media" 
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox allow-downloads"
+    <iframe class="player-frame" id="playerFrame"
+            allowfullscreen
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox"
             frameborder="0"></iframe>
-    
-    <button class="download-btn" id="downloadBtn" onclick="downloadFilm()">⬇️</button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
-        tg.enableClosingConfirmation();
         tg.setHeaderColor('#000000');
         tg.setBackgroundColor('#000000');
-        
         tg.BackButton.show();
-        tg.BackButton.onClick(() => {
-            window.location.href = 'index.html';
-        });
+        tg.BackButton.onClick(() => window.location.href = 'index.html');
 
         const params = new URLSearchParams(window.location.search);
         const filmId = params.get('id');
@@ -78,10 +48,6 @@
 
         const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
         document.getElementById('playerFrame').src = playerUrl;
-
-        function downloadFilm() {
-            tg.showAlert('Для скачивания откройте плеер в полноэкранном режиме и нажмите кнопку скачивания в плеере');
-        }
     </script>
 </body>
 </html>

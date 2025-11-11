@@ -3,25 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <meta name="description" content="KinoPlayer - просмотр фильмов онлайн. Источник данных: Кинопоиск API. Плеер: Embess">
+    <meta name="description" content="Genopoisk - Поиск и просмотр фильмов онлайн. Источник данных: Кинопоиск API. Плеер: Embess">
     <meta name="author" content="Genopoisk Team">
     <meta name="data-source" content="Kinopoisk Unofficial API - kinopoiskapiunofficial.tech">
     <meta name="video-source" content="Embess Player - api.embess.ws">
-    <title>🎬 KinoPlayer</title>
+    <title>🎬 Genopoisk</title>
     
-    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- 
-        DATA SOURCES:
-        - Film metadata: Kinopoisk Unofficial API (kinopoiskapiunofficial.tech)
-        - Video player: Embess (api.embess.ws)
-        - Posters & images: Kinopoisk CDN
-        
-        DISCLAIMER:
-        This application is for educational purposes only.
-        All content rights belong to their respective owners.
-    -->
     
     <style>
         * {
@@ -37,7 +25,7 @@
 
         html, body {
             width: 100%;
-            height: 100%;
+            min-height: 100vh;
             overflow-x: hidden;
             -webkit-text-size-adjust: 100%;
             touch-action: manipulation;
@@ -48,31 +36,45 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: var(--tg-text);
-            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: clamp(12px, 2.8vw, 20px);
+            flex: 1;
         }
 
         .header {
             text-align: center;
-            padding: clamp(20px, 4vw, 30px) 0;
+            padding: clamp(15px, 3vw, 25px) 0;
             color: white;
             animation: fadeIn 0.8s ease-in;
         }
 
+        /* Hide title in Telegram */
+        .tg-webapp .header h1 {
+            display: none;
+        }
+
         .header h1 {
             font-size: clamp(1.5rem, 5vw, 2.5rem);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
         .header p {
-            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
-            opacity: 0.9;
+            font-size: clamp(0.85rem, 3vw, 1.05rem);
+            opacity: 0.95;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+            background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.7));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .search-box {
@@ -112,15 +114,7 @@
             font-weight: bold;
             font-size: clamp(12px, 3.2vw, 14px);
             transition: all 0.3s ease;
-        }
-
-        .search-button:hover {
-            transform: translateY(-50%) scale(1.05);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-
-        .search-button:active {
-            transform: translateY(-50%) scale(0.98);
+            display: none;
         }
 
         .categories {
@@ -193,15 +187,18 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            opacity: 0;
+            animation: fadeInCard 0.5s ease-in forwards;
+        }
+
+        @keyframes fadeInCard {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .film-card:hover {
             transform: translateY(-10px);
             box-shadow: 0 15px 40px rgba(0,0,0,0.2);
-        }
-
-        .film-card:active {
-            transform: translateY(-5px);
         }
 
         .film-poster {
@@ -229,6 +226,64 @@
         .film-details {
             font-size: clamp(0.75rem, 3.2vw, 0.85rem);
             color: #666;
+        }
+
+        .random-film-preview {
+            background: white;
+            border-radius: 20px;
+            padding: clamp(20px, 4vw, 30px);
+            margin: clamp(20px, 4vw, 30px) 0;
+            animation: fadeIn 0.5s ease-in;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .random-film-content {
+            display: flex;
+            gap: clamp(15px, 3vw, 25px);
+            flex-wrap: wrap;
+        }
+
+        .random-film-poster {
+            flex: 0 0 200px;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+
+        .random-film-info {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .random-film-title {
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .random-film-meta {
+            font-size: clamp(0.9rem, 3.2vw, 1rem);
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .play-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: clamp(12px, 3vw, 15px) clamp(25px, 5vw, 35px);
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: clamp(1rem, 3.6vw, 1.1rem);
+            font-weight: bold;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .play-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
 
         .player-container {
@@ -282,10 +337,6 @@
             transform: scale(1.05);
         }
 
-        .close-button:active {
-            transform: scale(0.95);
-        }
-
         .player-iframe {
             width: 100%;
             height: calc(100% - clamp(50px, 12vw, 60px));
@@ -310,8 +361,20 @@
             transform: scale(1.05);
         }
 
-        .back-button:active {
-            transform: scale(0.95);
+        .quality-warning {
+            background: rgba(255, 193, 7, 0.15);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 12px;
+            padding: clamp(12px, 3vw, 16px);
+            margin: clamp(20px, 4vw, 30px) 0;
+            color: rgba(255,255,255,0.9);
+            font-size: clamp(0.8rem, 3vw, 0.9rem);
+            text-align: center;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .quality-warning::before {
+            content: "⚠️ ";
         }
 
         .footer {
@@ -319,8 +382,9 @@
             padding: clamp(25px, 5vw, 30px) clamp(15px, 4vw, 20px);
             color: rgba(255,255,255,0.7);
             font-size: clamp(0.75rem, 3vw, 0.85rem);
-            margin-top: clamp(40px, 8vw, 50px);
+            margin-top: auto;
             border-top: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.1);
         }
 
         .footer a {
@@ -354,7 +418,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Mobile phones (portrait) */
         @media (max-width: 480px) {
             .categories {
                 grid-template-columns: repeat(2, 1fr);
@@ -370,12 +433,12 @@
                 height: 48vw;
             }
 
-            .header h1 {
-                font-size: 1.8rem;
+            .random-film-poster {
+                flex: 1 1 100%;
+                height: 250px;
             }
         }
 
-        /* Very small screens / Telegram WebApp */
         @media (max-width: 360px) {
             .categories {
                 grid-template-columns: 1fr 1fr;
@@ -390,18 +453,8 @@
                 grid-template-columns: 1fr 1fr;
                 gap: 10px;
             }
-
-            .search-input {
-                padding-right: 45px;
-            }
-
-            .search-button {
-                padding: 8px 15px;
-                font-size: 11px;
-            }
         }
 
-        /* Tablets */
         @media (min-width: 481px) and (max-width: 900px) {
             .categories {
                 grid-template-columns: repeat(3, 1fr);
@@ -412,7 +465,6 @@
             }
         }
 
-        /* Large desktops */
         @media (min-width: 1200px) {
             .films-grid {
                 grid-template-columns: repeat(6, 1fr);
@@ -424,7 +476,7 @@
     <div class="container" id="mainView">
         <div class="header">
             <h1>🎬 KinoPlayer</h1>
-            <p>Поиск и просмотр фильмов онлайн</p>
+            <p>Genopoisk - Поиск и просмотр фильмов онлайн 🎬</p>
         </div>
 
         <div class="search-box">
@@ -459,14 +511,9 @@
             <p>Загрузка...</p>
         </div>
 
+        <div id="randomPreview"></div>
         <div class="films-grid" id="filmsGrid"></div>
-        
-        <div class="footer">
-            <p>Powered by <a href="https://kinopoiskapiunofficial.tech" target="_blank">Kinopoisk API</a> & <a href="https://api.embess.ws" target="_blank">Embess Player</a></p>
-            <p style="font-size: 0.75rem; margin-top: 10px; opacity: 0.6;">
-                Все права на контент принадлежат правообладателям. Данное приложение создано исключительно в образовательных целях.
-            </p>
-        </div>
+        <div id="qualityWarning"></div>
     </div>
 
     <div class="container" id="searchView" style="display: none;">
@@ -478,6 +525,13 @@
         <div class="films-grid" id="searchResults"></div>
     </div>
 
+    <div class="footer">
+        <p>Powered by <a href="https://kinopoiskapiunofficial.tech" target="_blank">Kinopoisk API</a> & <a href="https://api.embess.ws" target="_blank">Embess Player</a></p>
+        <p style="font-size: 0.75rem; margin-top: 10px; opacity: 0.6;">
+            Все права на контент принадлежат правообладателям. Данное приложение создано исключительно в образовательных целях.
+        </p>
+    </div>
+
     <div class="player-container" id="playerContainer">
         <div class="player-header">
             <div class="player-title" id="playerTitle"></div>
@@ -487,66 +541,36 @@
     </div>
 
     <script>
-        // ============================================
-        // DATA SOURCES ATTRIBUTION
-        // ============================================
-        console.log('%c🎬 KinoPlayer - Data Sources', 'font-size: 16px; font-weight: bold; color: #667eea;');
-        console.log('%cFilm Metadata API: Kinopoisk Unofficial API', 'color: #764ba2;');
-        console.log('%cAPI URL: https://kinopoiskapiunofficial.tech', 'color: #666;');
+        console.log('%c🎬 Genopoisk - Data Sources', 'font-size: 16px; font-weight: bold; color: #667eea;');
+        console.log('%cFilm Metadata: Kinopoisk Unofficial API', 'color: #764ba2;');
         console.log('%cVideo Player: Embess', 'color: #764ba2;');
-        console.log('%cPlayer URL: https://api.embess.ws', 'color: #666;');
-        console.log('%c\nDisclaimer: All content rights belong to their respective owners.', 'font-style: italic; color: #999;');
-        console.log('%cThis application is for educational purposes only.', 'font-style: italic; color: #999;');
         
-        // ============================================
-        // TELEGRAM WEBAPP INTEGRATION
-        // ============================================
+        // Telegram WebApp detection and setup
         (function() {
             try {
                 const tg = window.Telegram?.WebApp;
                 if (tg) {
+                    document.body.classList.add('tg-webapp');
                     tg.ready();
                     tg.expand();
                     tg.disableVerticalSwipes?.();
                     tg.setHeaderColor?.('#667eea');
                     tg.setBackgroundColor?.('#667eea');
                 }
-            } catch(e) {
-                console.log('Not running in Telegram WebApp');
-            }
+            } catch(e) {}
 
-            // Prevent double-tap zoom on mobile
             let lastTouchEnd = 0;
             document.addEventListener('touchend', function (event) {
-                const now = (new Date()).getTime();
-                if (now - lastTouchEnd <= 300) {
-                    event.preventDefault();
-                }
+                const now = Date.now();
+                if (now - lastTouchEnd <= 300) event.preventDefault();
                 lastTouchEnd = now;
             }, { passive: false });
 
-            // Prevent horizontal scroll
             window.addEventListener('scroll', () => {
-                if (window.scrollX !== 0) {
-                    window.scrollTo(0, window.scrollY);
-                }
+                if (window.scrollX !== 0) window.scrollTo(0, window.scrollY);
             });
-
-            // Fix viewport on orientation change
-            const fixViewport = () => {
-                const meta = document.querySelector('meta[name="viewport"]');
-                if (meta) {
-                    meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
-                }
-            };
-            
-            window.addEventListener('orientationchange', () => setTimeout(fixViewport, 300));
-            window.addEventListener('resize', () => setTimeout(fixViewport, 100));
         })();
         
-        // ============================================
-        // API CONFIGURATION
-        // ============================================
         const API_KEY = '0ff3d355-f1d5-42c2-bb06-df482ee5b65b';
         const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
         
@@ -556,63 +580,28 @@
             sharing: false
         };
 
-        // ============================================
-        // EVENT LISTENERS
-        // ============================================
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                searchFilms();
+        let currentPage = 1;
+        let currentCategory = null;
+        let isLoading = false;
+        let hasMore = true;
+        let searchTimeout = null;
+
+        // Live search with debounce
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            
+            clearTimeout(searchTimeout);
+            
+            if (query.length >= 2) {
+                searchTimeout = setTimeout(() => {
+                    liveSearch(query);
+                }, 500);
+            } else if (query.length === 0) {
+                goBack();
             }
         });
 
-        // ============================================
-        // CATEGORY LOADING
-        // ============================================
-        async function loadCategory(category) {
-            showLoading();
-            try {
-                let url = '';
-                if (category === 'popular') {
-                    url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=1`;
-                } else if (category === 'top250') {
-                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=1`;
-                } else if (category === 'new') {
-                    const currentYear = new Date().getFullYear();
-                    const currentMonth = new Date().toLocaleString('en-US', { month: 'LONG' }).toUpperCase();
-                    url = `${API_BASE}/v2.2/films/premieres?year=${currentYear}&month=${currentMonth}`;
-                } else if (category === 'random') {
-                    const randomPage = Math.floor(Math.random() * 10) + 1;
-                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}`;
-                }
-
-                const response = await fetch(url, {
-                    headers: { 'X-API-KEY': API_KEY }
-                });
-
-                const data = await response.json();
-                const films = data.films || data.items || [];
-                
-                if (category === 'random' && films.length > 0) {
-                    const randomFilm = films[Math.floor(Math.random() * films.length)];
-                    playFilm(randomFilm.filmId || randomFilm.kinopoiskId, randomFilm.nameRu || randomFilm.nameEn);
-                } else {
-                    displayFilms(films.slice(0, 20));
-                }
-            } catch (error) {
-                console.error('Error loading category:', error);
-                alert('Ошибка загрузки данных. Попробуйте снова.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // ============================================
-        // SEARCH FUNCTIONALITY
-        // ============================================
-        async function searchFilms() {
-            const query = document.getElementById('searchInput').value.trim();
-            if (!query) return;
-
+        async function liveSearch(query) {
             document.getElementById('mainView').style.display = 'none';
             document.getElementById('searchView').style.display = 'block';
             document.getElementById('searchLoading').style.display = 'block';
@@ -627,36 +616,169 @@
                 const films = data.films || [];
                 
                 document.getElementById('searchResults').innerHTML = '';
-                displayFilms(films.slice(0, 20), 'searchResults');
+                displayFilms(films.slice(0, 30), 'searchResults');
             } catch (error) {
                 console.error('Error searching:', error);
-                alert('Ошибка поиска. Попробуйте снова.');
             } finally {
                 document.getElementById('searchLoading').style.display = 'none';
             }
         }
 
-        // ============================================
-        // DISPLAY FILMS
-        // ============================================
-        function displayFilms(films, containerId = 'filmsGrid') {
-            const container = document.getElementById(containerId);
-            container.innerHTML = '';
+        async function loadCategory(category) {
+            currentCategory = category;
+            currentPage = 1;
+            hasMore = true;
+            document.getElementById('filmsGrid').innerHTML = '';
+            document.getElementById('randomPreview').innerHTML = '';
+            document.getElementById('qualityWarning').innerHTML = '';
+            
+            if (category === 'random') {
+                await loadRandomFilm();
+            } else {
+                await loadMoreFilms();
+                setupInfiniteScroll();
+            }
+        }
 
-            if (films.length === 0) {
+        async function loadRandomFilm() {
+            showLoading();
+            try {
+                const randomPage = Math.floor(Math.random() * 10) + 1;
+                const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}`;
+
+                const response = await fetch(url, {
+                    headers: { 'X-API-KEY': API_KEY }
+                });
+
+                const data = await response.json();
+                const films = data.films || [];
+                
+                if (films.length > 0) {
+                    const randomFilm = films[Math.floor(Math.random() * films.length)];
+                    displayRandomFilm(randomFilm);
+                }
+            } catch (error) {
+                console.error('Error loading random film:', error);
+                alert('Ошибка загрузки. Попробуйте снова.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayRandomFilm(film) {
+            const filmId = film.filmId || film.kinopoiskId;
+            const title = film.nameRu || film.nameEn || 'Без названия';
+            const year = film.year || 'Н/Д';
+            const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+            const genres = film.genres?.map(g => g.genre).join(', ') || 'Неизвестно';
+            const poster = film.posterUrlPreview || film.posterUrl || '';
+
+            const preview = document.getElementById('randomPreview');
+            preview.innerHTML = `
+                <div class="random-film-preview">
+                    <div class="random-film-content">
+                        <img src="${poster}" alt="${title}" class="random-film-poster" onerror="this.style.display='none'">
+                        <div class="random-film-info">
+                            <div class="random-film-title">${title}</div>
+                            <div class="random-film-meta">📅 ${year}</div>
+                            <div class="random-film-meta">⭐ Рейтинг: ${rating}</div>
+                            <div class="random-film-meta">🎭 ${genres}</div>
+                            <button class="play-button" onclick="playFilm(${filmId}, '${title.replace(/'/g, "\\'")}')">
+                                ▶ Смотреть фильм
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadMoreFilms() {
+            if (isLoading || !hasMore) return;
+            
+            isLoading = true;
+            showLoading();
+            
+            try {
+                let url = '';
+                let maxPages = 20;
+                
+                if (currentCategory === 'popular') {
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}`;
+                    maxPages = 5;
+                } else if (currentCategory === 'top250') {
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}`;
+                    maxPages = 13;
+                } else if (currentCategory === 'new') {
+                    url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=2024&yearTo=2025&page=${currentPage}`;
+                    maxPages = 5;
+                    
+                    if (currentPage === 1) {
+                        document.getElementById('qualityWarning').innerHTML = `
+                            <div class="quality-warning">
+                                Внимание! В разделе "Новинки" могут встречаться фильмы низкого качества (CAMRip, TS). Приносим извинения за неудобства.
+                            </div>
+                        `;
+                    }
+                }
+
+                const response = await fetch(url, {
+                    headers: { 'X-API-KEY': API_KEY }
+                });
+
+                const data = await response.json();
+                const films = data.films || data.items || [];
+                
+                if (films.length > 0) {
+                    displayFilms(films, 'filmsGrid', true);
+                    currentPage++;
+                    
+                    if (currentPage > maxPages) {
+                        hasMore = false;
+                    }
+                } else {
+                    hasMore = false;
+                }
+            } catch (error) {
+                console.error('Error loading films:', error);
+                if (currentPage === 1) {
+                    alert('Ошибка загрузки данных. Попробуйте снова.');
+                }
+            } finally {
+                isLoading = false;
+                hideLoading();
+            }
+        }
+
+        function setupInfiniteScroll() {
+            window.addEventListener('scroll', () => {
+                if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+                    loadMoreFilms();
+                }
+            });
+        }
+
+        function displayFilms(films, containerId = 'filmsGrid', append = false) {
+            const container = document.getElementById(containerId);
+            
+            if (!append) {
+                container.innerHTML = '';
+            }
+
+            if (films.length === 0 && !append) {
                 container.innerHTML = '<p style="color: white; text-align: center; width: 100%; padding: 40px;">Ничего не найдено</p>';
                 return;
             }
 
-            films.forEach(film => {
+            films.forEach((film, index) => {
                 const filmId = film.filmId || film.kinopoiskId;
                 const title = film.nameRu || film.nameEn || 'Без названия';
                 const year = film.year || 'Н/Д';
                 const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-                const poster = film.posterUrlPreview || film.posterUrl || 'https://via.placeholder.com/200x300?text=No+Image';
+                const poster = film.posterUrlPreview || film.posterUrl || '';
 
                 const card = document.createElement('div');
                 card.className = 'film-card';
+                card.style.animationDelay = `${index * 0.05}s`;
                 card.onclick = () => playFilm(filmId, title);
 
                 card.innerHTML = `
@@ -673,9 +795,6 @@
             });
         }
 
-        // ============================================
-        // PLAY FILM
-        // ============================================
         function playFilm(filmId, title) {
             const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=${PLAYER_CONFIG.sharing}&host=${PLAYER_CONFIG.host}&token=${PLAYER_CONFIG.token}`;
             
@@ -683,13 +802,8 @@
             document.getElementById('playerFrame').src = playerUrl;
             document.getElementById('playerContainer').style.display = 'block';
             document.body.style.overflow = 'hidden';
-            
-            console.log(`Playing: ${title} (ID: ${filmId}) via Embess Player`);
         }
 
-        // ============================================
-        // PLAYER CONTROLS
-        // ============================================
         function closePlayer() {
             document.getElementById('playerContainer').style.display = 'none';
             document.getElementById('playerFrame').src = '';
@@ -700,11 +814,9 @@
             document.getElementById('searchView').style.display = 'none';
             document.getElementById('mainView').style.display = 'block';
             document.getElementById('searchInput').value = '';
+            currentCategory = null;
         }
 
-        // ============================================
-        // LOADING INDICATORS
-        // ============================================
         function showLoading() {
             document.getElementById('loading').style.display = 'block';
         }

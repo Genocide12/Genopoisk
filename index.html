@@ -51,8 +51,6 @@
             padding: 15px;
             border-radius: 12px;
             cursor: pointer;
-            text-decoration: none;
-            color: inherit;
         }
         .film-poster {
             width: 80px;
@@ -154,7 +152,7 @@
                 const films = data.films || [];
                 if (films.length > 0) {
                     const randomFilm = films[Math.floor(Math.random() * films.length)];
-                    window.location.href = `player.html?id=${randomFilm.filmId || randomFilm.kinopoiskId}&title=${encodeURIComponent(randomFilm.nameRu || randomFilm.nameEn)}`;
+                    openPlayer(randomFilm.filmId || randomFilm.kinopoiskId, randomFilm.nameRu || randomFilm.nameEn);
                 }
             } catch (error) {
                 showError('Ошибка загрузки');
@@ -171,9 +169,9 @@
                 const rating = film.rating || 'Н/Д';
                 const poster = film.posterUrlPreview || '';
 
-                const card = document.createElement('a');
+                const card = document.createElement('div');
                 card.className = 'film-card';
-                card.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+                card.onclick = () => openPlayer(filmId, title);
                 card.innerHTML = `
                     <img class="film-poster" src="${poster}" alt="${title}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%22120%22%3E%3Crect fill=%22%23667eea%22 width=%22100%25%22 height=%22100%25%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2230%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22white%22%3E🎬%3C/text%3E%3C/svg%3E'">
                     <div class="film-info">
@@ -183,6 +181,12 @@
                 `;
                 container.appendChild(card);
             });
+        }
+
+        function openPlayer(filmId, title) {
+            // Используем JavaScript навигацию вместо <a href>
+            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+            window.location.href = `${baseUrl}player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
         }
 
         function showLoading() {

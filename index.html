@@ -823,8 +823,7 @@
         }
 
         function playFilm(filmId, title) {
-            const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=${PLAYER_CONFIG.sharing}&host=${PLAYER_CONFIG.host}&token=${PLAYER_CONFIG.token}`;
-            document.getElementById('playerTitle').textContent = title;
+  const playerUrl = `https://api.embess.ws/embed/kp/${filmId}`;            document.getElementById('playerTitle').textContent = title;
             document.getElementById('playerFrame').src = playerUrl;
             document.getElementById('playerContainer').style.display = 'block';
             document.body.style.overflow = 'hidden';

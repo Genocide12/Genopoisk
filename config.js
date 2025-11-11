@@ -3,8 +3,8 @@
 // Для продакшена используйте переменные окружения Vercel
 
 const CONFIG = {
-    API_KEY: '26d2222a-3f07-492d-a17e-80fdc91e2fe9',
-    API_BASE: 'https://kinopoiskapiunofficial.tech/api',
+    API_KEY: '33b1e3bd-2643-4ac1-8eb4-6b7392c5e913',
+        API_BASE: 'https://kinopoiskapiunofficial.tech/api',
     PLAYER: {
         host: 'kinotut.me',
         token: '0926b7296919955c8f9d1559ec54505a',

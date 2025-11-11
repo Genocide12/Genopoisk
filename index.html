@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="Genopoisk - Поиск и просмотр фильмов онлайн. Источник данных: Кинопоиск API. Плеер: Embess">
-    <meta name="author" content="Genopoisk Team">
+    <meta name="author" content="Genocide Team">
     <meta name="data-source" content="Kinopoisk Unofficial API - kinopoiskapiunofficial.tech">
     <meta name="video-source" content="Embess Player - api.embess.ws">
     <title>🎬 Genopoisk</title>
@@ -54,9 +54,12 @@
             animation: fadeIn 0.8s ease-in;
         }
 
-        /* Hide title in Telegram */
         .tg-webapp .header h1 {
             display: none;
+        }
+
+        .tg-webapp .header p {
+            display: none !important;
         }
 
         .header h1 {
@@ -75,6 +78,27 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+        }
+
+        .tg-back-button {
+            display: none;
+            position: fixed;
+            top: calc(env(safe-area-inset-top, 0px) + 10px);
+            left: 15px;
+            z-index: 999;
+            background: rgba(255,255,255,0.95);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            color: #333;
+            font-weight: 500;
+        }
+
+        .tg-webapp .tg-back-button {
+            display: block;
         }
 
         .search-box {
@@ -187,13 +211,6 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            opacity: 0;
-            animation: fadeInCard 0.5s ease-in forwards;
-        }
-
-        @keyframes fadeInCard {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
         }
 
         .film-card:hover {
@@ -473,6 +490,8 @@
     </style>
 </head>
 <body>
+    <button class="tg-back-button" onclick="handleTelegramBack()">← Назад</button>
+
     <div class="container" id="mainView">
         <div class="header">
             <h1>🎬 KinoPlayer</h1>
@@ -545,19 +564,28 @@
         console.log('%cFilm Metadata: Kinopoisk Unofficial API', 'color: #764ba2;');
         console.log('%cVideo Player: Embess', 'color: #764ba2;');
         
-        // Telegram WebApp detection and setup
+        let isTelegramWebApp = false;
+        
         (function() {
             try {
                 const tg = window.Telegram?.WebApp;
                 if (tg) {
+                    isTelegramWebApp = true;
                     document.body.classList.add('tg-webapp');
                     tg.ready();
                     tg.expand();
                     tg.disableVerticalSwipes?.();
                     tg.setHeaderColor?.('#667eea');
                     tg.setBackgroundColor?.('#667eea');
+                    
+                    // Fix scroll issues in Telegram
+                    document.documentElement.style.overflow = 'auto';
+                    document.body.style.overflow = 'auto';
+                    document.body.style.position = 'relative';
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.log('Not in Telegram WebApp');
+            }
 
             let lastTouchEnd = 0;
             document.addEventListener('touchend', function (event) {
@@ -586,7 +614,6 @@
         let hasMore = true;
         let searchTimeout = null;
 
-        // Live search with debounce
         document.getElementById('searchInput').addEventListener('input', function(e) {
             const query = e.target.value.trim();
             
@@ -690,6 +717,11 @@
                     </div>
                 </div>
             `;
+            
+            // Scroll to preview
+            setTimeout(() => {
+                preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         }
 
         async function loadMoreFilms() {
@@ -710,7 +742,7 @@
                     maxPages = 13;
                 } else if (currentCategory === 'new') {
                     url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=2024&yearTo=2025&page=${currentPage}`;
-                    maxPages = 5;
+                    maxPages = 20;
                     
                     if (currentPage === 1) {
                         document.getElementById('qualityWarning').innerHTML = `
@@ -750,11 +782,14 @@
         }
 
         function setupInfiniteScroll() {
-            window.addEventListener('scroll', () => {
+            const scrollHandler = () => {
                 if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
                     loadMoreFilms();
                 }
-            });
+            };
+            
+            window.removeEventListener('scroll', scrollHandler);
+            window.addEventListener('scroll', scrollHandler);
         }
 
         function displayFilms(films, containerId = 'filmsGrid', append = false) {
@@ -769,7 +804,7 @@
                 return;
             }
 
-            films.forEach((film, index) => {
+            films.forEach((film) => {
                 const filmId = film.filmId || film.kinopoiskId;
                 const title = film.nameRu || film.nameEn || 'Без названия';
                 const year = film.year || 'Н/Д';
@@ -778,7 +813,6 @@
 
                 const card = document.createElement('div');
                 card.className = 'film-card';
-                card.style.animationDelay = `${index * 0.05}s`;
                 card.onclick = () => playFilm(filmId, title);
 
                 card.innerHTML = `
@@ -814,7 +848,22 @@
             document.getElementById('searchView').style.display = 'none';
             document.getElementById('mainView').style.display = 'block';
             document.getElementById('searchInput').value = '';
+            document.getElementById('randomPreview').innerHTML = '';
+            document.getElementById('filmsGrid').innerHTML = '';
+            document.getElementById('qualityWarning').innerHTML = '';
             currentCategory = null;
+        }
+
+        function handleTelegramBack() {
+            if (document.getElementById('playerContainer').style.display === 'block') {
+                closePlayer();
+            } else if (document.getElementById('searchView').style.display === 'block' || 
+                       document.getElementById('randomPreview').innerHTML !== '' ||
+                       document.getElementById('filmsGrid').innerHTML !== '') {
+                goBack();
+            } else if (isTelegramWebApp && window.Telegram?.WebApp) {
+                window.Telegram.WebApp.close();
+            }
         }
 
         function showLoading() {

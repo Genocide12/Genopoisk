@@ -2,71 +2,55 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Плеер</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; overflow: hidden; }
-        .player-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 15px;
-            background: rgba(0,0,0,0.8);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 1001;
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
         }
-        .back-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 18px;
-            cursor: pointer;
-        }
-        .player-title {
-            color: white;
-            font-size: 16px;
-            flex: 1;
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
         }
         .player-frame {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             border: none;
         }
     </style>
 </head>
 <body>
-    <div class="player-header">
-        <button class="back-btn" onclick="goBack()">←</button>
-        <div class="player-title" id="playerTitle"></div>
-    </div>
-    <iframe class="player-frame" id="playerFrame" allowfullscreen></iframe>
+    <iframe class="player-frame" id="playerFrame" allowfullscreen allow="autoplay; fullscreen"></iframe>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+        tg.disableVerticalSwipes();
+        
+        // Кнопка "Назад" Telegram
         tg.BackButton.show();
-        tg.BackButton.onClick(() => goBack());
+        tg.BackButton.onClick(() => {
+            window.location.href = 'index.html';
+        });
 
+        // Получаем параметры
         const params = new URLSearchParams(window.location.search);
         const filmId = params.get('id');
         const title = params.get('title') || 'Фильм';
 
-        document.getElementById('playerTitle').textContent = title;
-        document.getElementById('playerFrame').src = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
+        // Устанавливаем заголовок
+        document.title = title;
 
-        function goBack() {
-            window.location.href = 'index.html';
-        }
+        // Загружаем плеер
+        document.getElementById('playerFrame').src = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
     </script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Плеер</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -10,47 +10,97 @@
             margin: 0; 
             padding: 0; 
             box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent;
         }
         html, body {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             overflow: hidden;
             background: #000;
+            position: fixed;
+            touch-action: none;
+        }
+        .player-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
         }
         .player-frame {
             position: absolute;
-            top: 0;
+            top: -60px; /* Компенсация для заголовка плеера */
             left: 0;
             width: 100%;
-            height: 100%;
+            height: calc(100% + 60px);
             border: none;
+            display: block;
+        }
+        .controls-overlay {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 999999;
+            background: rgba(0,0,0,0.6);
+            border-radius: 20px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 12px;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <iframe class="player-frame" id="playerFrame" allowfullscreen allow="autoplay; fullscreen"></iframe>
+    <div class="player-container">
+        <iframe class="player-frame" id="playerFrame" 
+                allowfullscreen 
+                allow="autoplay; fullscreen; picture-in-picture; encrypted-media" 
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox"
+                frameborder="0"
+                scrolling="no"></iframe>
+    </div>
+    <div class="controls-overlay" id="hint">
+        Нажми ⬅️ для выхода
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
+        tg.ready();
         tg.expand();
         tg.disableVerticalSwipes();
+        tg.enableClosingConfirmation();
+        tg.setHeaderColor('#000000');
+        tg.setBackgroundColor('#000000');
         
-        // Кнопка "Назад" Telegram
+        // Кнопка "Назад"
         tg.BackButton.show();
         tg.BackButton.onClick(() => {
-            window.location.href = 'index.html';
+            if (confirm('Вернуться к списку фильмов?')) {
+                window.location.href = 'index.html';
+            }
         });
 
-        // Получаем параметры
+        // Параметры
         const params = new URLSearchParams(window.location.search);
         const filmId = params.get('id');
         const title = params.get('title') || 'Фильм';
-
-        // Устанавливаем заголовок
         document.title = title;
 
         // Загружаем плеер
-        document.getElementById('playerFrame').src = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
+        const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=false&host=kinotut.me&token=0926b7296919955c8f9d1559ec54505a`;
+        document.getElementById('playerFrame').src = playerUrl;
+
+        // Скрываем подсказку через 3 секунды
+        setTimeout(() => {
+            document.getElementById('hint').style.display = 'none';
+        }, 3000);
+
+        // Блокируем жесты выхода
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
     </script>
 </body>
 </html>

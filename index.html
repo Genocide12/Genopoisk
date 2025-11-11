@@ -617,13 +617,19 @@
         let searchTimeout = null;
 
         async function apiGet(url) {
-            const fullUrl = isTelegramWebApp ? CORS_PROXY + encodeURIComponent(url) : url;
-            const res = await fetch(fullUrl, {
-                headers: isTelegramWebApp ? {} : {'X-API-KEY': API_KEY}
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
-        }
+    try {
+        const res = await fetch(url, {
+            headers: {
+                'X-API-KEY': API_KEY
+            }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
+}
 
         function searchFilms() {
             const q = document.getElementById('searchInput').value.trim();
@@ -647,7 +653,7 @@
             if (isTelegramWebApp && telegramBackButton) telegramBackButton.show();
             try {
                 const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
-        const data = await apiGet(url + `&X-API-KEY=${API_KEY}`);                const films = data.films || data.items || [];
+                const data = await apiGet(url);
                 document.getElementById('searchResults').innerHTML = '';
                 displayFilms(films.slice(0, 30), 'searchResults');
             } catch (error) {
@@ -678,7 +684,7 @@
             showLoading();
             try {
                 const randomPage = Math.floor(Math.random() * 10) + 1;
-                const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}&X-API-KEY=${API_KEY}`;
+                const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}=${API_KEY}`;
                 const data = await apiGet(url);
                 const films = data.items || data.films || [];
                 if (films.length > 0) {
@@ -735,13 +741,13 @@
                 let maxPages = 20;
                 
                 if (currentCategory === 'popular') {
-                    url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}&X-API-KEY=${API_KEY}`;
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}=${API_KEY}`;
                     maxPages = 5;
                 } else if (currentCategory === 'top250') {
-                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}&X-API-KEY=${API_KEY}`;
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}=${API_KEY}`;
                     maxPages = 13;
                 } else if (currentCategory === 'new') {
-                    url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=2024&yearTo=2025&page=${currentPage}&X-API-KEY=${API_KEY}`;
+                    url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=2024&yearTo=2025&page=${currentPage}=${API_KEY}`;
                     maxPages = 20;
                     if (currentPage === 1) {
                         document.getElementById('qualityWarning').innerHTML = `

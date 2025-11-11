@@ -1,119 +1,717 @@
-<meta name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="description" content="KinoPlayer - просмотр фильмов онлайн. Источник данных: Кинопоиск API. Плеер: Embess">
+    <meta name="author" content="Genopoisk Team">
+    <meta name="data-source" content="Kinopoisk Unofficial API - kinopoiskapiunofficial.tech">
+    <meta name="video-source" content="Embess Player - api.embess.ws">
+    <title>🎬 KinoPlayer</title>
+    
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- 
+        DATA SOURCES:
+        - Film metadata: Kinopoisk Unofficial API (kinopoiskapiunofficial.tech)
+        - Video player: Embess (api.embess.ws)
+        - Posters & images: Kinopoisk CDN
+        
+        DISCLAIMER:
+        This application is for educational purposes only.
+        All content rights belong to their respective owners.
+    -->
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-<!-- Telegram WebApp SDK (не критично, но улучшает встраивание) -->
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+        :root {
+            --tg-bg: var(--tg-theme-bg-color, #667eea);
+            --tg-text: var(--tg-theme-text-color, #ffffff);
+        }
 
-<style>
-  /* Базовый reset для мобилок и телеграм-клиента */
-  html, body {
-    width: 100%;
-    height: 100%;
-    overflow-x: hidden;       /* убирает горизонтальный скролл */
-    -webkit-text-size-adjust: 100%;
-    touch-action: manipulation;
-    overscroll-behavior: none;
-    background: #5e55b3;      /* запасной фон под градиент */
-  }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+            -webkit-text-size-adjust: 100%;
+            touch-action: manipulation;
+            overscroll-behavior: none;
+        }
 
-  /* Контейнер ограничиваем и центрируем; на мобильных — полная ширина */
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: clamp(12px, 2.8vw, 20px);
-  }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--tg-text);
+            min-height: 100vh;
+        }
 
-  /* Сетка категорий и карточек: безопасные размеры без выпадения за край */
-  .categories {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(140px, 1fr));
-    gap: clamp(10px, 2vw, 20px);
-  }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: clamp(12px, 2.8vw, 20px);
+        }
 
-  .category-card {
-    padding: clamp(12px, 2.2vw, 24px);
-    border-radius: 14px;
-  }
+        .header {
+            text-align: center;
+            padding: clamp(20px, 4vw, 30px) 0;
+            color: white;
+            animation: fadeIn 0.8s ease-in;
+        }
 
-  .category-icon { font-size: clamp(22px, 5.5vw, 36px); }
-  .category-title { font-size: clamp(12px, 3.6vw, 18px); }
+        .header h1 {
+            font-size: clamp(1.5rem, 5vw, 2.5rem);
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
 
-  .search-box { max-width: min(680px, 100%); margin: clamp(10px, 2.5vw, 24px) auto; }
-  .search-input {
-    width: 100%;
-    padding: clamp(12px, 3.6vw, 18px) clamp(14px, 3.8vw, 20px);
-    border-radius: 999px;
-    font-size: clamp(14px, 3.8vw, 16px);
-  }
-  .search-button {
-    padding: clamp(8px, 2.8vw, 12px) clamp(14px, 3.8vw, 24px);
-    font-size: clamp(12px, 3.8vw, 14px);
-    border-radius: 999px;
-  }
+        .header p {
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+            opacity: 0.9;
+        }
 
-  .films-grid {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(180px, 1fr));
-    gap: clamp(10px, 2vw, 24px);
-  }
+        .search-box {
+            position: relative;
+            max-width: min(600px, 100%);
+            margin: clamp(15px, 4vw, 30px) auto;
+            animation: slideDown 0.6s ease-out;
+        }
 
-  .film-card { border-radius: 14px; }
-  .film-poster {
-    width: 100%;
-    height: clamp(200px, 46vw, 300px);
-    object-fit: cover;
-  }
-  .film-title { font-size: clamp(12px, 3.6vw, 16px); }
-  .film-details { font-size: clamp(11px, 3.2vw, 14px); }
+        .search-input {
+            width: 100%;
+            padding: clamp(14px, 3.6vw, 18px) clamp(50px, 10vw, 60px) clamp(14px, 3.6vw, 18px) clamp(16px, 4vw, 20px);
+            font-size: clamp(14px, 3.8vw, 16px);
+            border: none;
+            border-radius: 50px;
+            outline: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
 
-  /* Плеер с учетом safe-area (вырез iPhone) */
-  .player-container {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .player-header {
-    padding: clamp(8px, 2.5vw + env(safe-area-inset-top), 16px) clamp(10px, 3vw, 20px);
-  }
-  .close-button { font-size: clamp(13px, 3.8vw, 16px); }
+        .search-input:focus {
+            transform: scale(1.02);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
 
-  /* Телефонный портрет: 1 колонка карточек, компактные кнопки */
-  @media (max-width: 480px) {
-    .categories {
-      grid-template-columns: repeat(2, 1fr);
-    }
-    .films-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-    .film-poster { height: 46vw; }
-    .header h1 { font-size: 20px; }
-  }
+        .search-button {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: clamp(10px, 2.8vw, 12px) clamp(18px, 4vw, 25px);
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: clamp(12px, 3.2vw, 14px);
+            transition: all 0.3s ease;
+        }
 
-  /* Небольшие мобильные/внутри Telegram WebApp */
-  @media (max-width: 360px) {
-    .categories {
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .films-grid {
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-  }
+        .search-button:hover {
+            transform: translateY(-50%) scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
 
-  /* Планшеты */
-  @media (min-width: 481px) and (max-width: 900px) {
-    .categories {
-      grid-template-columns: repeat(3, 1fr);
-    }
-    .films-grid {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
+        .search-button:active {
+            transform: translateY(-50%) scale(0.98);
+        }
 
-  /* Телеграм-темная тема (если SDK передаст тему) */
-  :root {
-    --tg-bg: var(--tg-theme-bg-color, #5e55b3);
-    --tg-text: var(--tg-theme-text-color, #ffffff);
-  }
-  body { background: var(--tg-bg); color: var(--tg-text); }
-</style>
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: clamp(12px, 2.5vw, 20px);
+            margin: clamp(20px, 4vw, 30px) 0;
+            animation: fadeIn 1s ease-in;
+        }
+
+        .category-card {
+            background: white;
+            padding: clamp(18px, 4vw, 30px);
+            border-radius: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .category-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+        }
+
+        .category-card:active {
+            transform: translateY(-5px) scale(0.98);
+        }
+
+        .category-icon {
+            font-size: clamp(2rem, 6vw, 3rem);
+            margin-bottom: clamp(8px, 2vw, 15px);
+        }
+
+        .category-title {
+            font-size: clamp(0.9rem, 3.6vw, 1.3rem);
+            font-weight: bold;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
+            margin: 50px 0;
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: clamp(40px, 10vw, 50px);
+            height: clamp(40px, 10vw, 50px);
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        .films-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: clamp(15px, 3vw, 25px);
+            margin-top: clamp(20px, 4vw, 30px);
+        }
+
+        .film-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .film-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+        }
+
+        .film-card:active {
+            transform: translateY(-5px);
+        }
+
+        .film-poster {
+            width: 100%;
+            height: clamp(240px, 50vw, 300px);
+            object-fit: cover;
+        }
+
+        .film-info {
+            padding: clamp(12px, 3vw, 15px);
+        }
+
+        .film-title {
+            font-size: clamp(0.9rem, 3.6vw, 1rem);
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .film-details {
+            font-size: clamp(0.75rem, 3.2vw, 0.85rem);
+            color: #666;
+        }
+
+        .player-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease-in;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .player-header {
+            background: rgba(255,255,255,0.1);
+            padding: clamp(12px, 3vw, 15px) clamp(15px, 3.5vw, 20px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .player-title {
+            color: white;
+            font-size: clamp(1rem, 3.8vw, 1.2rem);
+            font-weight: bold;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+
+        .close-button {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: clamp(8px, 2.5vw, 10px) clamp(16px, 4vw, 20px);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: clamp(0.9rem, 3.6vw, 1rem);
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .close-button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.05);
+        }
+
+        .close-button:active {
+            transform: scale(0.95);
+        }
+
+        .player-iframe {
+            width: 100%;
+            height: calc(100% - clamp(50px, 12vw, 60px));
+            border: none;
+        }
+
+        .back-button {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: clamp(10px, 3vw, 12px) clamp(20px, 5vw, 24px);
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: clamp(0.9rem, 3.6vw, 1rem);
+            margin: clamp(15px, 3.5vw, 20px) 0;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.05);
+        }
+
+        .back-button:active {
+            transform: scale(0.95);
+        }
+
+        .footer {
+            text-align: center;
+            padding: clamp(25px, 5vw, 30px) clamp(15px, 4vw, 20px);
+            color: rgba(255,255,255,0.7);
+            font-size: clamp(0.75rem, 3vw, 0.85rem);
+            margin-top: clamp(40px, 8vw, 50px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .footer a {
+            color: rgba(255,255,255,0.9);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer a:hover {
+            color: white;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Mobile phones (portrait) */
+        @media (max-width: 480px) {
+            .categories {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .films-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .film-poster {
+                height: 48vw;
+            }
+
+            .header h1 {
+                font-size: 1.8rem;
+            }
+        }
+
+        /* Very small screens / Telegram WebApp */
+        @media (max-width: 360px) {
+            .categories {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+
+            .category-card {
+                padding: 15px;
+            }
+
+            .films-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+
+            .search-input {
+                padding-right: 45px;
+            }
+
+            .search-button {
+                padding: 8px 15px;
+                font-size: 11px;
+            }
+        }
+
+        /* Tablets */
+        @media (min-width: 481px) and (max-width: 900px) {
+            .categories {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .films-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        /* Large desktops */
+        @media (min-width: 1200px) {
+            .films-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="mainView">
+        <div class="header">
+            <h1>🎬 KinoPlayer</h1>
+            <p>Поиск и просмотр фильмов онлайн</p>
+        </div>
+
+        <div class="search-box">
+            <input type="text" class="search-input" id="searchInput" placeholder="Поиск фильмов...">
+            <button class="search-button" onclick="searchFilms()">Поиск</button>
+        </div>
+
+        <div class="categories">
+            <div class="category-card" onclick="loadCategory('popular')">
+                <div class="category-icon">🔥</div>
+                <div class="category-title">Популярные</div>
+            </div>
+
+            <div class="category-card" onclick="loadCategory('top250')">
+                <div class="category-icon">⭐</div>
+                <div class="category-title">Топ 250</div>
+            </div>
+
+            <div class="category-card" onclick="loadCategory('new')">
+                <div class="category-icon">🎬</div>
+                <div class="category-title">Новинки</div>
+            </div>
+
+            <div class="category-card" onclick="loadCategory('random')">
+                <div class="category-icon">🎯</div>
+                <div class="category-title">Случайный</div>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Загрузка...</p>
+        </div>
+
+        <div class="films-grid" id="filmsGrid"></div>
+        
+        <div class="footer">
+            <p>Powered by <a href="https://kinopoiskapiunofficial.tech" target="_blank">Kinopoisk API</a> & <a href="https://api.embess.ws" target="_blank">Embess Player</a></p>
+            <p style="font-size: 0.75rem; margin-top: 10px; opacity: 0.6;">
+                Все права на контент принадлежат правообладателям. Данное приложение создано исключительно в образовательных целях.
+            </p>
+        </div>
+    </div>
+
+    <div class="container" id="searchView" style="display: none;">
+        <button class="back-button" onclick="goBack()">← Назад к поиску</button>
+        <div class="loading" id="searchLoading">
+            <div class="spinner"></div>
+            <p>Поиск...</p>
+        </div>
+        <div class="films-grid" id="searchResults"></div>
+    </div>
+
+    <div class="player-container" id="playerContainer">
+        <div class="player-header">
+            <div class="player-title" id="playerTitle"></div>
+            <button class="close-button" onclick="closePlayer()">✕ Закрыть</button>
+        </div>
+        <iframe class="player-iframe" id="playerFrame" allowfullscreen></iframe>
+    </div>
+
+    <script>
+        // ============================================
+        // DATA SOURCES ATTRIBUTION
+        // ============================================
+        console.log('%c🎬 KinoPlayer - Data Sources', 'font-size: 16px; font-weight: bold; color: #667eea;');
+        console.log('%cFilm Metadata API: Kinopoisk Unofficial API', 'color: #764ba2;');
+        console.log('%cAPI URL: https://kinopoiskapiunofficial.tech', 'color: #666;');
+        console.log('%cVideo Player: Embess', 'color: #764ba2;');
+        console.log('%cPlayer URL: https://api.embess.ws', 'color: #666;');
+        console.log('%c\nDisclaimer: All content rights belong to their respective owners.', 'font-style: italic; color: #999;');
+        console.log('%cThis application is for educational purposes only.', 'font-style: italic; color: #999;');
+        
+        // ============================================
+        // TELEGRAM WEBAPP INTEGRATION
+        // ============================================
+        (function() {
+            try {
+                const tg = window.Telegram?.WebApp;
+                if (tg) {
+                    tg.ready();
+                    tg.expand();
+                    tg.disableVerticalSwipes?.();
+                    tg.setHeaderColor?.('#667eea');
+                    tg.setBackgroundColor?.('#667eea');
+                }
+            } catch(e) {
+                console.log('Not running in Telegram WebApp');
+            }
+
+            // Prevent double-tap zoom on mobile
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function (event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, { passive: false });
+
+            // Prevent horizontal scroll
+            window.addEventListener('scroll', () => {
+                if (window.scrollX !== 0) {
+                    window.scrollTo(0, window.scrollY);
+                }
+            });
+
+            // Fix viewport on orientation change
+            const fixViewport = () => {
+                const meta = document.querySelector('meta[name="viewport"]');
+                if (meta) {
+                    meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+                }
+            };
+            
+            window.addEventListener('orientationchange', () => setTimeout(fixViewport, 300));
+            window.addEventListener('resize', () => setTimeout(fixViewport, 100));
+        })();
+        
+        // ============================================
+        // API CONFIGURATION
+        // ============================================
+        const API_KEY = '0ff3d355-f1d5-42c2-bb06-df482ee5b65b';
+        const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+        
+        const PLAYER_CONFIG = {
+            host: 'kinotut.me',
+            token: '0926b7296919955c8f9d1559ec54505a',
+            sharing: false
+        };
+
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchFilms();
+            }
+        });
+
+        // ============================================
+        // CATEGORY LOADING
+        // ============================================
+        async function loadCategory(category) {
+            showLoading();
+            try {
+                let url = '';
+                if (category === 'popular') {
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=1`;
+                } else if (category === 'top250') {
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=1`;
+                } else if (category === 'new') {
+                    const currentYear = new Date().getFullYear();
+                    const currentMonth = new Date().toLocaleString('en-US', { month: 'LONG' }).toUpperCase();
+                    url = `${API_BASE}/v2.2/films/premieres?year=${currentYear}&month=${currentMonth}`;
+                } else if (category === 'random') {
+                    const randomPage = Math.floor(Math.random() * 10) + 1;
+                    url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: { 'X-API-KEY': API_KEY }
+                });
+
+                const data = await response.json();
+                const films = data.films || data.items || [];
+                
+                if (category === 'random' && films.length > 0) {
+                    const randomFilm = films[Math.floor(Math.random() * films.length)];
+                    playFilm(randomFilm.filmId || randomFilm.kinopoiskId, randomFilm.nameRu || randomFilm.nameEn);
+                } else {
+                    displayFilms(films.slice(0, 20));
+                }
+            } catch (error) {
+                console.error('Error loading category:', error);
+                alert('Ошибка загрузки данных. Попробуйте снова.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // ============================================
+        // SEARCH FUNCTIONALITY
+        // ============================================
+        async function searchFilms() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            document.getElementById('mainView').style.display = 'none';
+            document.getElementById('searchView').style.display = 'block';
+            document.getElementById('searchLoading').style.display = 'block';
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}`,
+                    { headers: { 'X-API-KEY': API_KEY } }
+                );
+
+                const data = await response.json();
+                const films = data.films || [];
+                
+                document.getElementById('searchResults').innerHTML = '';
+                displayFilms(films.slice(0, 20), 'searchResults');
+            } catch (error) {
+                console.error('Error searching:', error);
+                alert('Ошибка поиска. Попробуйте снова.');
+            } finally {
+                document.getElementById('searchLoading').style.display = 'none';
+            }
+        }
+
+        // ============================================
+        // DISPLAY FILMS
+        // ============================================
+        function displayFilms(films, containerId = 'filmsGrid') {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            if (films.length === 0) {
+                container.innerHTML = '<p style="color: white; text-align: center; width: 100%; padding: 40px;">Ничего не найдено</p>';
+                return;
+            }
+
+            films.forEach(film => {
+                const filmId = film.filmId || film.kinopoiskId;
+                const title = film.nameRu || film.nameEn || 'Без названия';
+                const year = film.year || 'Н/Д';
+                const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+                const poster = film.posterUrlPreview || film.posterUrl || 'https://via.placeholder.com/200x300?text=No+Image';
+
+                const card = document.createElement('div');
+                card.className = 'film-card';
+                card.onclick = () => playFilm(filmId, title);
+
+                card.innerHTML = `
+                    <img src="${poster}" alt="${title}" class="film-poster" onerror="this.src='https://via.placeholder.com/200x300?text=No+Image'">
+                    <div class="film-info">
+                        <div class="film-title">${title}</div>
+                        <div class="film-details">
+                            ${year} • ⭐ ${rating}
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // ============================================
+        // PLAY FILM
+        // ============================================
+        function playFilm(filmId, title) {
+            const playerUrl = `https://api.embess.ws/embed/kp/${filmId}?sharing=${PLAYER_CONFIG.sharing}&host=${PLAYER_CONFIG.host}&token=${PLAYER_CONFIG.token}`;
+            
+            document.getElementById('playerTitle').textContent = title;
+            document.getElementById('playerFrame').src = playerUrl;
+            document.getElementById('playerContainer').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            console.log(`Playing: ${title} (ID: ${filmId}) via Embess Player`);
+        }
+
+        // ============================================
+        // PLAYER CONTROLS
+        // ============================================
+        function closePlayer() {
+            document.getElementById('playerContainer').style.display = 'none';
+            document.getElementById('playerFrame').src = '';
+            document.body.style.overflow = 'auto';
+        }
+
+        function goBack() {
+            document.getElementById('searchView').style.display = 'none';
+            document.getElementById('mainView').style.display = 'block';
+            document.getElementById('searchInput').value = '';
+        }
+
+        // ============================================
+        // LOADING INDICATORS
+        // ============================================
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

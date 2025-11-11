@@ -684,7 +684,7 @@
             showLoading();
             try {
                 const randomPage = Math.floor(Math.random() * 10) + 1;
-                const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}=${API_KEY}`;
+                const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}`;
                 const data = await apiGet(url);
                 const films = data.items || data.films || [];
                 if (films.length > 0) {

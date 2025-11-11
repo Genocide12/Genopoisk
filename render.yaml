@@ -1,0 +1,6 @@
+services:
+  - type: worker
+    name: kinobot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python kinobot.py

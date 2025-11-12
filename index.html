@@ -17,7 +17,7 @@
     @keyframes fadeInUp {
       from {
         opacity: 0;
-        transform: translateY(30px);
+        transform: translateY(15px);
       }
       to {
         opacity: 1;
@@ -227,7 +227,7 @@
       transition: all 0.3s;
       min-width: 0;
       opacity: 0;
-      animation: fadeInUp 0.6s ease forwards;
+      animation: fadeInUp 0.3s ease forwards;
     }
     .tg-film-card:hover {
       background: #E8EAED;
@@ -454,12 +454,12 @@
         const poster = film.posterUrlPreview || film.posterUrl || '';
         const card = document.createElement('div');
         card.className = 'tg-film-card';
-        card.style.animationDelay = `${animationDelay + (index * 0.05)}s`;
+        card.style.animationDelay = `${animationDelay + (index * 0.02)}s`;
         card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display="none"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
         card.onclick = () => openPlayer(filmId, title);
         grid.appendChild(card);
       });
-      animationDelay += films.length * 0.05;
+      animationDelay += films.length * 0.02;
     }
     
     function openPlayer(filmId, title) {

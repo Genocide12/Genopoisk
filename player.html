@@ -124,7 +124,7 @@
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
     
     function openInBrowser() {
-      const currentUrl = `https://api.embess.ws/embed/kp/${kid}`;
+      const currentUrl = `https://genopoisk.vercel.app/player.html?id=${kid}&title=${encodeURIComponent(title)}`;
       window.open(currentUrl, '_blank');
     }
     

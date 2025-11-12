@@ -11,8 +11,6 @@
     .top-btns { gap:12px; display:flex; }
     .btn { background:rgba(255,255,255,0.14); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500; transition:background 0.2s; }
     .btn:active { background:rgba(70,120,220,0.24); }
-    .btn-download { background:#09d97c; }
-    .btn-download:active { background:#0ea66a; }
     .btn-close { background:#f33; }
     .btn-close:active { background:#b22; }
     .player-main { flex:1; display:flex; align-items:center; justify-content:center; position:relative; background:#000; }
@@ -24,7 +22,6 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="top-btns">
-      <a class="btn btn-download" id="downloadBtn" href="#" download target="_blank">📥 Скачать</a>
       <button class="btn" id="fullscreenBtn">⛶ Полный экран</button>
       <button class="btn btn-close" onclick="closePlayer()">✕</button>
     </div>
@@ -48,20 +45,18 @@
     video.poster = poster;
     document.getElementById('sourceMp4').src = url;
     video.load();
-    const downloadBtn = document.getElementById('downloadBtn');
-    downloadBtn.href = url;
-    downloadBtn.download = `${title}.mp4`;
     // Fullscreen cross-browser
     function launchFullscreen(elem){
       if(elem.requestFullscreen){elem.requestFullscreen();}
       else if(elem.webkitRequestFullscreen){elem.webkitRequestFullscreen();} // Safari
       else if(elem.msRequestFullscreen){elem.msRequestFullscreen();}
+      else if(window.innerWidth<540 && video.webkitEnterFullscreen){ video.webkitEnterFullscreen(); }
     }
     document.getElementById('fullscreenBtn').onclick = ()=> launchFullscreen(video);
     // Закрытие (возврат)
     function closePlayer(){ window.history.back(); }
     // Safari/iOS: разрешить тап по видео для fullscreen gesture
-    video.onclick = () => { if(document.fullscreenElement==null && video.requestFullscreen){ video.requestFullscreen(); } };
+    video.onclick = () => { if(document.fullscreenElement==null && (video.requestFullscreen||video.webkitEnterFullscreen)){ launchFullscreen(video); } };
     // Telegram WEBAPP
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');

@@ -23,20 +23,6 @@
       color: var(--tg-text);
       font-size: 15px;
     }
-    .tg-header {
-      padding: 18px 18px 6px 18px;
-      background: var(--tg-bg);
-      border-bottom: 1px solid var(--tg-border);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .tg-header .tg-title {
-      font-weight: 700;
-      font-size: 21px;
-      color: var(--tg-text);
-      letter-spacing: 0.02em;
-    }
     .tg-main-block {
       text-align: center;
       margin: 24px 0 18px 0;
@@ -214,9 +200,6 @@
   </style>
 </head>
 <body>
-  <div class="tg-header">
-    <span class="tg-title">Genopoisk MiniApp</span>
-  </div>
   <div class="tg-main-block">
     <div class="main-title">Genopoisk — Смотри фильмы в хорошем качестве ✨ 🎬</div>
     <div class="main-sub">Каталог лучших фильмов, онлайн-поиск и просмотр без лишней рекламы!</div>
@@ -278,6 +261,8 @@
       currentPage = 1;
       hasMore = true;
       clearFilms();
+      document.getElementById('tg-search-results').innerHTML = '';
+      document.getElementById('tg-film-grid').style.display = '';
       showLoader();
       await loadMoreFilms();
     }
@@ -328,6 +313,7 @@
       const val = e.target.value.trim();
       if (!val || val.length < 2) {
         document.getElementById('tg-search-results').innerHTML = '';
+        document.getElementById('tg-film-grid').style.display = '';
         return;
       }
       searchTimeout = setTimeout(async () => {
@@ -336,6 +322,7 @@
         const res = await apiGet(url);
         const results = res.films || res.items || [];
         displayFilms(results, true);
+        document.getElementById('tg-film-grid').style.display = 'none';
         hideLoader();
       }, 450);
     });

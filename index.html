@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
   <title>Genopoisk MiniApp</title>
   <style>
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
     html, body {
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -14,7 +19,9 @@
       -ms-user-select: none;
       padding: 0;
       margin: 0;
-      background: #F6F7F8;
+      background: linear-gradient(-45deg, #e3f2fd, #f3e5f5, #e8f5e9, #fff3e0);
+      background-size: 400% 400%;
+      animation: gradientMove 15s ease infinite;
       min-height: 100vh;
       font-family: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
       color: #222;
@@ -28,17 +35,17 @@
     }
     .tg-main-block {
       text-align: center;
-      margin: 24px 0 18px 0;
-      padding: 18px 0 20px 0;
+      margin: 24px auto 18px auto;
+      padding: 22px 0 24px 0;
       background: linear-gradient(115deg,#007aff18,#f6f8fa);
       border-radius: 20px;
-      max-width: 540px;
-      margin-left: auto; margin-right:auto;
+      max-width: 100%;
+      width: 96%;
       box-shadow:0 2px 12px #2221;
       border: 1px solid #E6E6EA;
     }
     .tg-main-block .main-title{
-      font-size: 2.1rem;
+      font-size: 2.3rem;
       font-weight: bold;
       color:#222;
       margin-bottom: 0.6em;
@@ -47,19 +54,14 @@
       position: relative;
     }
     .tg-main-block .main-sub {
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       color:#444;
       background:#fff8;
       border-radius:7px;
-      padding:7px 16px;
+      padding:8px 18px;
       display:inline-block;
       margin-top:.3em;
       box-shadow:0 1px 8px #2222;
-    }
-    .tg-main-block:after { 
-      content:'🎬✨';
-      font-size:2em;
-      position:absolute; right:3%; top:10%; opacity:0.24; pointer-events:none;
     }
     .tg-disclaimer {
       font-size: 13px;
@@ -78,14 +80,23 @@
     }
     .tg-disclaimer a { color: #007AFF; text-decoration:underline; }
     .tg-search-row {
-      max-width:480px;
+      max-width:620px;
       margin:0 auto 24px auto;
       text-align:center;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:center;
+      padding:0 12px;
     }
     .tg-search-row input[type="search"] {
-      width: 95%; max-width:340px; font-size: 1.1em;
-      padding: 10px 16px; border-radius: 13px; border: 1px solid #8F9AA3;
-      box-shadow: 0 3px 13px #2222; margin: 0 auto;
+      flex:1;
+      max-width:480px;
+      font-size: 1.15em;
+      padding: 12px 18px;
+      border-radius: 13px;
+      border: 1px solid #8F9AA3;
+      box-shadow: 0 3px 13px #2222;
       background: #fff;
       transition:border .23s,box-shadow .23s;
       outline:none;
@@ -95,6 +106,19 @@
     .tg-search-row input[type="search"]:focus {
       border: 1.5px solid #007AFF; box-shadow: 0 7px 18px #86b7fa3b;
     }
+    .tg-search-btn {
+      background: #007AFF;
+      color:#fff;
+      border:none;
+      padding:12px 24px;
+      border-radius:13px;
+      font-size:1.05em;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow: 0 3px 13px #2222;
+      transition:background .2s;
+    }
+    .tg-search-btn:active { background:#0056cc; }
     .tg-action-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -146,13 +170,13 @@
     .tg-film-grid {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
-      gap: 12px;
+      gap: 10px;
       margin-top: 18px;
     }
     .tg-film-card {
       background: #F1F3F6;
-      border-radius: 10px;
-      padding: 7px 5px 9px 5px;
+      border-radius: 8px;
+      padding: 6px 4px 7px 4px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -160,37 +184,56 @@
       border: 1px solid #E6E6EA;
       box-shadow: 0 1px 6px rgba(34,34,34,0.06);
       transition: background 0.2s;
-      min-height: 148px;
+      min-height: 135px;
       min-width: 0;
     }
     .tg-film-card:hover {
       background: #E8EAED;
     }
     .tg-film-poster {
-      width: 69px;
-      height: 104px;
+      width: 65px;
+      height: 98px;
       background: #eee;
-      border-radius: 6px;
+      border-radius: 5px;
       object-fit: cover;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
     .tg-film-title {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       color: #222;
       text-align: center;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
       white-space: normal;
-      max-width: 99px;
+      max-width: 95px;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height:1.2;
     }
     .tg-film-details {
-      font-size: 11px;
+      font-size: 10px;
       color: #8F9AA3;
       margin-bottom: 1px;
       text-align: center;
-      min-height: 13px;
+      min-height: 12px;
+    }
+    .tg-loader {
+      margin: 28px auto 0 auto;
+      text-align: center;
+      color: #8F9AA3;
+    }
+    .spinner {
+      border: 3px solid rgba(0,0,0,0.1);
+      border-top: 3px solid #007AFF;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
     @media (max-width: 980px) {
       .tg-film-grid { grid-template-columns: repeat(6, 1fr); }
@@ -203,22 +246,24 @@
     }
     @media (max-width: 480px) {
       .tg-film-grid { grid-template-columns: repeat(2, 1fr); }
+      .tg-action-row { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 360px) {
-      .tg-main-block .main-title {font-size:1.1em;}
+      .tg-main-block .main-title {font-size:1.3em;}
       .tg-film-title { font-size:11px; }
-      .tg-film-grid { grid-template-columns: 1fr; gap: 7px; }
+      .tg-film-grid { gap: 7px; }
       .tg-action-row { grid-template-columns: 1fr; gap: 8px; }
     }
   </style>
 </head>
 <body>
   <div class="tg-main-block">
-    <div class="main-title">Genopoisk — Смотри фильмы в хорошем качестве ✨ 🎬</div>
+    <div class="main-title">Genopoisk — Смотри фильмы в хорошем качестве</div>
     <div class="main-sub">Каталог лучших фильмов, онлайн-поиск и просмотр без лишней рекламы!</div>
   </div>
   <div class="tg-search-row">
     <input type="search" id="tg-search" placeholder="🔍 Поиск по названию..." autocomplete="off" />
+    <button class="tg-search-btn" onclick="triggerSearch()">Найти</button>
   </div>
   <div class="tg-action-row">
     <div class="tg-action-card" onclick="loadCategory('popular')">
@@ -305,7 +350,7 @@
     }
     function displayFilms(films, isSearch) {
       const grid = isSearch ? document.getElementById('tg-search-results') : document.getElementById('tg-film-grid');
-      grid.innerHTML = '';
+      if(isSearch) grid.innerHTML = '';
       films.forEach(film => {
         const filmId = film.filmId || film.kinopoiskId;
         const title = film.nameRu || film.nameEn || 'Без названия';
@@ -314,7 +359,7 @@
         const poster = film.posterUrlPreview || film.posterUrl || '';
         const card = document.createElement('div');
         card.className = 'tg-film-card';
-        card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display=\"none\"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
+        card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display="none"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
         card.onclick = () => openPlayer(filmId, title);
         grid.appendChild(card);
       });
@@ -322,12 +367,12 @@
     function openPlayer(filmId, title) {
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
-    // Поиск
+    // Поиск (срабатывает после 3 символов)
     let searchTimeout;
     document.getElementById('tg-search').addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
       const val = e.target.value.trim();
-      if (!val || val.length < 2) {
+      if (!val || val.length < 3) {
         document.getElementById('tg-search-results').innerHTML = '';
         document.getElementById('tg-film-grid').style.display = '';
         return;
@@ -342,6 +387,12 @@
         hideLoader();
       }, 450);
     });
+    function triggerSearch() {
+      const val = document.getElementById('tg-search').value.trim();
+      if(val.length >= 3) {
+        document.getElementById('tg-search').dispatchEvent(new Event('input'));
+      }
+    }
     // Бесконечная прокрутка
     let scrollTimeout;
     window.addEventListener('scroll', () => {

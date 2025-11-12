@@ -39,15 +39,16 @@
     }
     .miniapp-arrow {
       position: fixed;
-      top: 8px;
+      top: 12px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 32px;
+      font-size: 36px;
       color: #007AFF;
       z-index: 99999;
-      animation: blink 1.2s ease-in-out infinite;
+      animation: blink 1s ease-in-out infinite;
       pointer-events: none;
       display: none;
+      text-shadow: 0 2px 8px rgba(0,122,255,0.4);
     }
     .tg-main-block {
       text-align: center;
@@ -104,7 +105,7 @@
       justify-content:center;
     }
     .tg-zoom-control .zoom-icon {
-      font-size:20px;
+      font-size:22px;
       color:#007AFF;
     }
     .tg-zoom-control input[type="range"] {
@@ -190,16 +191,6 @@
       box-shadow: 0 1px 8px rgba(34,34,34,0.04);
       border: 1px solid #E6E6EA;
     }
-    .tg-section-title {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    .tg-section-desc {
-      font-size: 13px;
-      color: #8F9AA3;
-      margin-bottom: 10px;
-    }
     .tg-film-grid {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
@@ -223,8 +214,8 @@
       background: #E8EAED;
     }
     .tg-film-poster {
-      width: 114px;
-      height: 171px;
+      width: 137px;
+      height: 205px;
       background: #eee;
       border-radius: 5px;
       object-fit: cover;
@@ -232,7 +223,7 @@
       transition: all 0.3s;
     }
     .tg-film-title {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 500;
       color: #222;
       text-align: center;
@@ -273,8 +264,8 @@
     }
     @media (max-width: 768px) {
       .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
-      .tg-film-poster { width: 65px !important; height: 98px !important; }
-      .tg-film-title { font-size: 13px !important; }
+      .tg-film-poster { width: 78px !important; height: 117px !important; }
+      .tg-film-title { font-size: 14px !important; }
       .tg-film-details { font-size: 10px !important; }
       .tg-film-card { min-height: 135px !important; }
     }
@@ -283,7 +274,7 @@
     }
     @media (max-width: 360px) {
       .tg-main-block .main-title {font-size:1.3em;}
-      .tg-film-title { font-size:11px !important; }
+      .tg-film-title { font-size:12px !important; }
       .tg-action-row { grid-template-columns: 1fr; gap: 8px; }
     }
   </style>
@@ -301,6 +292,7 @@
   <div class="tg-zoom-control">
     <span class="zoom-icon">🔍</span>
     <input type="range" id="zoomSlider" min="0" max="3" value="0" step="1">
+    <span class="zoom-icon">🔎</span>
   </div>
   <div class="tg-action-row">
     <div class="tg-action-card" onclick="loadCategory('popular')">
@@ -321,8 +313,6 @@
     </div>
   </div>
   <div class="tg-section">
-    <div class="tg-section-title">Каталог фильмов</div>
-    <div class="tg-section-desc">Прокрутите вниз для загрузки новых фильмов. Кликните по любому, чтобы смотреть.</div>
     <div id="tg-loader" class="tg-loader" style="display:none;">
       <div class="spinner"></div>
       <div>Загрузка...</div>
@@ -341,17 +331,14 @@
     let isLoading = false;
     let hasMore = true;
     
-    // Определить mini app
     function isTelegramMiniApp() {
       return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
     }
     
-    // Показать стрелку только в mini app
     if(isTelegramMiniApp()) {
       const arrow = document.getElementById('miniappArrow');
       arrow.style.display = 'block';
       
-      // Скрыть при любом взаимодействии
       const hideArrow = () => {
         arrow.style.display = 'none';
         document.removeEventListener('click', hideArrow);
@@ -363,13 +350,12 @@
       document.addEventListener('scroll', hideArrow);
     }
     
-    // Масштабирование для десктопа
     const zoomSlider = document.getElementById('zoomSlider');
     const zoomSettings = [
-      { cols: 8, posterW: 114, posterH: 171, titleSize: 15, detailsSize: 12 },  // 175%
-      { cols: 6, posterW: 163, posterH: 245, titleSize: 17, detailsSize: 14 },  // 250%
-      { cols: 4, posterW: 195, posterH: 293, titleSize: 19, detailsSize: 15 },  // 300%
-      { cols: 2, posterW: 260, posterH: 390, titleSize: 21, detailsSize: 16 }   // 400%
+      { cols: 8, posterW: 137, posterH: 205, titleSize: 16, detailsSize: 12 },
+      { cols: 6, posterW: 195, posterH: 293, titleSize: 18, detailsSize: 14 },
+      { cols: 4, posterW: 234, posterH: 351, titleSize: 20, detailsSize: 15 },
+      { cols: 2, posterW: 312, posterH: 468, titleSize: 22, detailsSize: 16 }
     ];
     
     zoomSlider?.addEventListener('input', function() {
@@ -457,7 +443,6 @@
     function openPlayer(filmId, title) {
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
-    // Поиск (срабатывает после 3 символов)
     let searchTimeout;
     document.getElementById('tg-search').addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
@@ -483,7 +468,6 @@
         document.getElementById('tg-search').dispatchEvent(new Event('input'));
       }
     }
-    // Бесконечная прокрутка
     let scrollTimeout;
     window.addEventListener('scroll', () => {
       clearTimeout(scrollTimeout);
@@ -495,7 +479,6 @@
         }
       }, 100);
     });
-    // Telegram WebApp integration
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#F6F7F8');
     window.Telegram?.WebApp?.setBackgroundColor?.('#F6F7F8');

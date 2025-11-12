@@ -30,6 +30,12 @@
     }
     html {
       scroll-behavior: auto;
+      overflow-y: scroll;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    html::-webkit-scrollbar {
+      display: none;
     }
     html, body {
       -webkit-user-select: none;
@@ -48,7 +54,6 @@
       color: #222;
       font-size: 15px;
       overflow-x:hidden;
-      overflow-y: scroll;
     }
     *, *:after, *:before {
       -webkit-user-select: none!important;
@@ -81,6 +86,10 @@
       width: 96%;
       box-shadow:0 2px 12px #2221;
       border: 1px solid #E6E6EA;
+      transition: transform 0.1s;
+    }
+    .tg-main-block:active {
+      transform: scale(0.98);
     }
     .tg-main-block .main-title{
       font-size: 2.3rem;
@@ -153,7 +162,7 @@
       border: 1px solid #8F9AA3;
       box-shadow: 0 3px 13px #2222;
       background: #fff;
-      transition:border .23s,box-shadow .23s;
+      transition:all .2s;
       outline:none;
       -webkit-user-select: text!important;
       user-select: text!important;
@@ -171,9 +180,12 @@
       font-weight:600;
       cursor:pointer;
       box-shadow: 0 3px 13px #2222;
-      transition:background .2s;
+      transition:all .15s;
     }
-    .tg-search-btn:active { background:#0056cc; }
+    .tg-search-btn:active { 
+      background:#0056cc;
+      transform: scale(0.95);
+    }
     .tg-action-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -190,10 +202,15 @@
       align-items: center;
       border: 1px solid #E6E6EA;
       cursor: pointer;
-      transition: box-shadow 0.2s;
+      transition: all 0.15s;
     }
     .tg-action-card:hover {
       box-shadow: 0 4px 24px rgba(34,34,34,0.09);
+      transform: translateY(-2px);
+    }
+    .tg-action-card:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 8px rgba(34,34,34,0.04);
     }
     .tg-action-icon {
       font-size: 24px;
@@ -218,28 +235,24 @@
       margin-top: 18px;
     }
     
-    /* Zoom level 0 (default) */
     .tg-film-grid { grid-template-columns: repeat(8, 1fr); }
     .tg-film-card { min-height: 230px; }
     .tg-film-poster { width: 137px; height: 205px; }
     .tg-film-title { font-size: 16px; }
     .tg-film-details { font-size: 12px; }
     
-    /* Zoom level 1 */
     body.zoom-1 .tg-film-grid { grid-template-columns: repeat(6, 1fr); }
     body.zoom-1 .tg-film-card { min-height: 330px; }
     body.zoom-1 .tg-film-poster { width: 195px; height: 293px; }
     body.zoom-1 .tg-film-title { font-size: 18px; }
     body.zoom-1 .tg-film-details { font-size: 14px; }
     
-    /* Zoom level 2 */
     body.zoom-2 .tg-film-grid { grid-template-columns: repeat(4, 1fr); }
     body.zoom-2 .tg-film-card { min-height: 390px; }
     body.zoom-2 .tg-film-poster { width: 234px; height: 351px; }
     body.zoom-2 .tg-film-title { font-size: 20px; }
     body.zoom-2 .tg-film-details { font-size: 15px; }
     
-    /* Zoom level 3 */
     body.zoom-3 .tg-film-grid { grid-template-columns: repeat(2, 1fr); }
     body.zoom-3 .tg-film-card { min-height: 520px; }
     body.zoom-3 .tg-film-poster { width: 312px; height: 468px; }
@@ -256,13 +269,18 @@
       cursor: pointer;
       border: 1px solid #E6E6EA;
       box-shadow: 0 1px 6px rgba(34,34,34,0.06);
-      transition: all 0.3s;
+      transition: all 0.2s;
       min-width: 0;
       opacity: 0;
       animation: fadeInUp 0.3s ease forwards;
     }
     .tg-film-card:hover {
       background: #E8EAED;
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(34,34,34,0.12);
+    }
+    .tg-film-card:active {
+      transform: scale(0.97);
     }
     .tg-film-poster {
       background: #eee;
@@ -310,6 +328,7 @@
       .tg-zoom-control { display:flex !important; }
     }
     @media (max-width: 768px) {
+      .tg-zoom-control { display:none !important; }
       .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
       .tg-film-poster { width: 90px !important; height: 135px !important; }
       .tg-film-title { font-size: 16px !important; }
@@ -408,6 +427,7 @@
     }
     
     function applyZoomLevel(level) {
+      if(window.innerWidth <= 768) return;
       document.body.className = document.body.className.replace(/zoom-\d/g, '');
       if(level > 0) {
         document.body.classList.add(`zoom-${level}`);
@@ -415,7 +435,7 @@
     }
     
     const zoomSlider = document.getElementById('zoomSlider');
-    if(zoomSlider) {
+    if(zoomSlider && window.innerWidth > 768) {
       zoomSlider.value = currentZoomLevel;
       applyZoomLevel(currentZoomLevel);
       

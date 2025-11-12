@@ -3,455 +3,343 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Genopoisk - Поиск и просмотр фильмов</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <title>Genopoisk MiniApp</title>
   <style>
-    * {
-      margin: 0;
+    :root {
+      --tg-bg: #F6F7F8;
+      --tg-accent: #007AFF;
+      --tg-text: #222;
+      --tg-grey: #F1F3F6;
+      --tg-border: #E6E6EA;
+      --tg-subtle: #8F9AA3;
+      --tg-error: #FF3B30;
+    }
+    html, body {
       padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #fff;
+      margin: 0;
+      background: var(--tg-bg);
       min-height: 100vh;
+      font-family: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      color: var(--tg-text);
+      font-size: 15px;
     }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
+    .tg-header {
+      padding: 18px 18px 6px 18px;
+      background: var(--tg-bg);
+      border-bottom: 1px solid var(--tg-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
-    
-    .header {
+    .tg-header .tg-title {
+      font-weight: 700;
+      font-size: 21px;
+      color: var(--tg-text);
+      letter-spacing: 0.02em;
+    }
+    .tg-balance {
       text-align: center;
-      padding: 25px 0;
+      margin: 28px 0 18px 0;
     }
-    
-    .header h1 {
-      font-size: 2.5rem;
+    .tg-balance-amount {
+      font-size: 38px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--tg-text);
+    }
+    .tg-balance-label {
+      font-size: 17px;
+      color: var(--tg-subtle);
+    }
+    .tg-action-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 0 12px 24px 12px;
+    }
+    .tg-action-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(34,34,34,0.04);
+      padding: 18px 0 14px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid var(--tg-border);
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+    .tg-action-card:hover {
+      box-shadow: 0 4px 24px rgba(34,34,34,0.09);
+    }
+    .tg-action-icon {
+      font-size: 24px;
+      margin-bottom: 9px;
+    }
+    .tg-action-title {
+      font-size: 14px;
+      color: var(--tg-text);
+      font-weight: 500;
+    }
+    .tg-section {
+      margin: 18px 12px 0 12px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 1px 8px rgba(34,34,34,0.04);
+      border: 1px solid var(--tg-border);
+    }
+    .tg-section-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .tg-section-desc {
+      font-size: 13px;
+      color: var(--tg-subtle);
       margin-bottom: 10px;
     }
-    
-    .header p {
-      font-size: 1.1rem;
-      opacity: 0.9;
-    }
-    
-    .categories {
+    .tg-film-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin: 30px 0;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
     }
-    
-    .categories button {
-      background: #fff;
-      color: #333;
-      border: none;
-      padding: 20px;
-      border-radius: 15px;
-      font-size: 1.1rem;
-      font-weight: bold;
+    .tg-film-card {
+      background: var(--tg-grey);
+      border-radius: 10px;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+      border: 1px solid var(--tg-border);
+      box-shadow: 0 1px 6px rgba(34,34,34,0.06);
+      transition: background 0.2s;
+      min-height: 253px;
     }
-    
-    .categories button:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    }
-    
-    #loading {
-      text-align: center;
-      padding: 40px;
-      font-size: 1.2rem;
-    }
-    
-    .spinner {
-      border: 4px solid rgba(255,255,255,0.3);
-      border-top: 4px solid #fff;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 20px auto;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    
-    .random-preview {
-      background: #fff;
-      color: #333;
-      border-radius: 20px;
-      padding: 30px;
-      margin: 30px 0;
-      text-align: center;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    }
-    
-    .random-preview h3 {
-      font-size: 1.8rem;
-      margin-bottom: 15px;
-    }
-    
-    .random-preview .film-meta {
-      font-size: 1.1rem;
-      color: #666;
-      margin: 15px 0;
-    }
-    
-    .random-preview button {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #fff;
-      border: none;
-      padding: 15px 40px;
-      font-size: 1.1rem;
-      border-radius: 30px;
-      cursor: pointer;
-      margin-top: 20px;
-      transition: all 0.3s;
-    }
-    
-    .random-preview button:hover {
-      transform: scale(1.05);
-      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-    }
-    
-    .films-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 20px;
-      margin-top: 30px;
-    }
-    
-    .film-card {
-      background: #fff;
-      border-radius: 15px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    }
-    
-    .film-card:hover {
-      transform: translateY(-10px);
-      box-shadow: 0 15px 40px rgba(0,0,0,0.2);
-    }
-    
-    .film-poster {
-      width: 100%;
-      height: 270px;
+    .tg-film-poster {
+      width: 96px;
+      height: 147px;
+      background: #eee;
+      border-radius: 7px;
       object-fit: cover;
+      margin-bottom: 10px;
     }
-    
-    .film-info {
-      padding: 15px;
-      color: #333;
-    }
-    
-    .film-title {
-      font-size: 1rem;
-      font-weight: bold;
-      margin-bottom: 8px;
+    .tg-film-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--tg-text);
+      text-align: center;
+      margin-bottom: 5px;
+      white-space: normal;
+      max-width: 144px;
       overflow: hidden;
       text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
     }
-    
-    .film-details {
-      font-size: 0.85rem;
-      color: #666;
-    }
-    
-    #playerContainer {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.95);
-      z-index: 1000;
-    }
-    
-    .player-header {
-      background: rgba(255,255,255,0.1);
-      padding: 15px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    
-    #playerTitle {
-      color: #fff;
-      font-weight: bold;
-      font-size: 1.2rem;
-    }
-    
-    .player-header button {
-      background: rgba(255,255,255,0.2);
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1.1rem;
-    }
-    
-    #playerFrame {
-      width: 100%;
-      height: calc(100% - 60px);
-      border: none;
-    }
-    
-    footer {
+    .tg-film-details {
+      font-size: 12px;
+      color: var(--tg-subtle);
+      margin-bottom: 2px;
       text-align: center;
-      padding: 30px;
-      margin-top: 40px;
-      opacity: 0.8;
+      min-height: 16px;
     }
-    
-    @media (max-width: 768px) {
-      .categories {
+    .tg-loader {
+      margin: 28px auto 0 auto;
+      text-align: center;
+      color: var(--tg-subtle);
+    }
+    .tg-player-modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(40,46,53,0.94);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: fadein 0.14s ease-in;
+    }
+    .tg-player-close {
+      background: var(--tg-error);
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      font-size: 14px;
+      padding: 12px 29px;
+      margin-bottom: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 8px rgba(130,24,32,0.06);
+    }
+    .tg-player-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 16px;
+      margin-top: 6px;
+    }
+    .tg-player-frame {
+      border-radius: 18px;
+      border: none;
+      width: 85vw;
+      height: 44vh;
+      background: #222;
+      min-width: 280px;
+      max-width: 480px;
+      min-height: 200px;
+      max-height: 520px;
+    }
+    @media (max-width: 520px) {
+      .tg-player-frame {
+        width: 97vw;
+        height: 51vw;
+      }
+      .tg-header, .tg-section {
+        padding-left: 9px;
+        padding-right: 9px;
+      }
+      .tg-action-row {
         grid-template-columns: repeat(2, 1fr);
       }
-      
-      .films-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
     }
+    @media (max-width: 360px) {
+      .tg-film-title { font-size: 13px; }
+      .tg-player-title { font-size: 15px; }
+      .tg-action-row { grid-template-columns: 1fr; gap: 8px; }
+    }
+    @keyframes fadein { from { opacity: 0;} to { opacity: 1;} }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🏭 Genopoisk</h1>
-      <p>Поиск и просмотр фильмов онлайн</p>
-    </div>
-    
-    <div class="categories">
-      <button onclick="loadCategory('popular')">🔥 Популярные</button>
-      <button onclick="loadCategory('top250')">⭐ Топ 250</button>
-      <button onclick="loadCategory('new')">🎬 Новинки</button>
-      <button onclick="loadCategory('random')">🎯 Случайный</button>
-    </div>
-    
-    <div id="loading" style="display:none;">
-      <div class="spinner"></div>
-      <p>Загрузка...</p>
-    </div>
-    
-    <div id="randomPreview"></div>
-    <div id="filmsGrid" class="films-grid"></div>
+  <div class="tg-header">
+    <span class="tg-title">Genopoisk MiniApp</span>
   </div>
-  
-  <div id="playerContainer" style="display:none;">
-    <div class="player-header">
-      <div id="playerTitle"></div>
-      <button onclick="closePlayer()">✕ Закрыть</button>
-    </div>
-    <iframe id="playerFrame"></iframe>
+  <div class="tg-balance">
+    <div class="tg-balance-amount" id="tg-balance-main">Фильмы 2025</div>
+    <div class="tg-balance-label">Выберите категорию для просмотра</div>
   </div>
-  
-  <footer>
-    <p>Powered by Kinopoisk API</p>
-  </footer>
-  
+  <div class="tg-action-row">
+    <div class="tg-action-card" onclick="loadCategory('popular')">
+      <div class="tg-action-icon">🔥</div>
+      <div class="tg-action-title">Популярные</div>
+    </div>
+    <div class="tg-action-card" onclick="loadCategory('top250')">
+      <div class="tg-action-icon">⭐</div>
+      <div class="tg-action-title">Топ 250</div>
+    </div>
+    <div class="tg-action-card" onclick="loadCategory('new')">
+      <div class="tg-action-icon">🎬</div>
+      <div class="tg-action-title">Новинки</div>
+    </div>
+    <div class="tg-action-card" onclick="loadCategory('random')">
+      <div class="tg-action-icon">🎯</div>
+      <div class="tg-action-title">Случайный</div>
+    </div>
+  </div>
+  <div class="tg-section">
+    <div class="tg-section-title">Каталог фильмов</div>
+    <div class="tg-section-desc">Прокрутите вниз для загрузки новых фильмов. Кликните по любому, чтобы смотреть.</div>
+    <div id="tg-loader" class="tg-loader" style="display:none;">Загрузка...</div>
+    <div id="tg-film-grid" class="tg-film-grid"></div>
+  </div>
+  <div id="tgPlayerModal" class="tg-player-modal" style="display:none;">
+    <button class="tg-player-close" onclick="closePlayerModal()">Закрыть</button>
+    <div class="tg-player-title" id="tgPlayerTitle"></div>
+    <iframe id="tgPlayerFrame" class="tg-player-frame" allowfullscreen></iframe>
+  </div>
   <script>
-    // API Configuration
     const API_KEY = '33b1e3bd-2643-4ac1-8eb4-6b7392c5e913';
     const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
-    
-    let currentPage = 1;
     let currentCategory = null;
+    let currentPage = 1;
     let isLoading = false;
     let hasMore = true;
-    
-    // API Helper
+
+    function showLoader() { document.getElementById('tg-loader').style.display = 'block'; }
+    function hideLoader() { document.getElementById('tg-loader').style.display = 'none'; }
+    function clearFilms() { document.getElementById('tg-film-grid').innerHTML = ''; }
+
     async function apiGet(url) {
       try {
-        const res = await fetch(url, {
-          headers: { 'X-API-KEY': API_KEY }
-        });
+        const res = await fetch(url, { headers: { 'X-API-KEY': API_KEY }});
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
-      } catch (error) {
-        console.error('API Error:', error);
-        throw error;
+      } catch (err) {
+        alert('Ошибка API: ' + err.message);
+        hideLoader();
+        return { items: [] };
       }
     }
-    
-    // Load Category
+
     async function loadCategory(category) {
       currentCategory = category;
       currentPage = 1;
       hasMore = true;
-      document.getElementById('filmsGrid').innerHTML = '';
-      document.getElementById('randomPreview').innerHTML = '';
-      
-      if (category === 'random') {
-        await loadRandomFilm();
-      } else {
-        await loadMoreFilms();
-      }
+      clearFilms();
+      showLoader();
+      await loadMoreFilms();
     }
-    
-    // Load Random Film
-    async function loadRandomFilm() {
-      showLoading();
-      try {
-        const randomPage = Math.floor(Math.random() * 5) + 1;
-        const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${randomPage}`;
-        const data = await apiGet(url);
-        const films = data.items || data.films || [];
-        
-        if (films.length > 0) {
-          const randomFilm = films[Math.floor(Math.random() * films.length)];
-          displayRandomFilm(randomFilm);
-        }
-      } catch (error) {
-        alert('Ошибка загрузки: ' + error.message);
-      } finally {
-        hideLoading();
-      }
-    }
-    
-    // Display Random Film
-    function displayRandomFilm(film) {
-      const filmId = film.filmId || film.kinopoiskId;
-      const title = film.nameRu || film.nameEn || 'Без названия';
-      const year = film.year || 'Н/Д';
-      const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-      const genres = (film.genres || []).map(g => typeof g === 'object' ? g.genre : g).join(', ') || 'Н/Д';
-      
-      const preview = document.getElementById('randomPreview');
-      preview.innerHTML = `
-        <div class="random-preview">
-          <h3>${title}</h3>
-          <div class="film-meta">
-            <div>📅 ${year}</div>
-            <div>⭐ Рейтинг: ${rating}</div>
-            <div>🎭 Жанры: ${genres}</div>
-          </div>
-          <button onclick="playFilm(${filmId}, '${title.replace(/'/g, "\\'")}')">Смотреть</button>
-        </div>
-      `;
-    }
-    
-    // Load More Films
     async function loadMoreFilms() {
       if (isLoading || !hasMore) return;
-      
       isLoading = true;
-      showLoading();
-      
-      try {
-        let url = '';
-        const currentYear = new Date().getFullYear();
-        
-        if (currentCategory === 'popular') {
-          url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}`;
-        } else if (currentCategory === 'top250') {
-          url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}`;
-        } else if (currentCategory === 'new') {
-          url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${currentPage}`;
-        }
-        
-        const data = await apiGet(url);
-        const films = data.items || data.films || [];
-        
-        if (films.length > 0) {
-          displayFilms(films);
-          currentPage++;
-        } else {
-          hasMore = false;
-        }
-      } catch (error) {
-        if (currentPage === 1) {
-          alert('Ошибка: ' + error.message);
-        }
-      } finally {
-        isLoading = false;
-        hideLoading();
+      showLoader();
+      let url='';
+      const currentYear = new Date().getFullYear();
+      if (currentCategory === 'popular') url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}`;
+      else if (currentCategory === 'top250') url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}`;
+      else if (currentCategory === 'new') url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${currentPage}`;
+      else if (currentCategory === 'random') {
+        url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${Math.floor(Math.random()*4)+1}`;
       }
+      const data = await apiGet(url);
+      const films = data.items || data.films || [];
+      if (films.length>0) {
+        displayFilms(films);
+        currentPage++;
+        hasMore = true;
+      } else {
+        hasMore = false;
+      }
+      isLoading = false;
+      hideLoader();
     }
-    
-    // Display Films
     function displayFilms(films) {
-      const container = document.getElementById('filmsGrid');
-      
+      const grid=document.getElementById('tg-film-grid');
       films.forEach(film => {
         const filmId = film.filmId || film.kinopoiskId;
         const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
         const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
         const poster = film.posterUrlPreview || film.posterUrl || '';
-        
         const card = document.createElement('div');
-        card.className = 'film-card';
-        card.innerHTML = `
-          <img src="${poster}" class="film-poster" onerror="this.style.display='none'" alt="${title}">
-          <div class="film-info">
-            <div class="film-title">${title}</div>
-            <div class="film-details">${year} • ⭐ ${rating}</div>
-          </div>
-        `;
-        card.onclick = () => playFilm(filmId, title);
-        container.appendChild(card);
+        card.className = 'tg-film-card';
+        card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display=\"none\"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
+        card.onclick = () => openPlayerModal(filmId,title);
+        grid.appendChild(card);
       });
     }
-    
-    // Play Film
-    function playFilm(filmId, title) {
-      filmId = String(filmId).trim();
-      if (!filmId || filmId === 'undefined' || !filmId.match(/^\d+$/)) {
-        alert('Ошибка: недопустимый ID фильма');
-        return;
-      }
-      
-      const playerFrame = document.getElementById('playerFrame');
-      playerFrame.src = '';
-      
-      setTimeout(() => {
-        playerFrame.src = `https://api.embess.ws/embed/kp/${filmId}`;
-        document.getElementById('playerTitle').textContent = title;
-        document.getElementById('playerContainer').style.display = 'block';
-        document.body.style.overflow = 'hidden';
-      }, 50);
+    function openPlayerModal(filmId,title){
+      const mod=document.getElementById('tgPlayerModal');
+      document.getElementById('tgPlayerFrame').src = `https://api.embess.ws/embed/kp/${filmId}`;
+      document.getElementById('tgPlayerTitle').textContent = title;
+      mod.style.display='flex';
+      document.body.style.overflow='hidden';
     }
-    
-    // Close Player
-    function closePlayer() {
-      document.getElementById('playerFrame').src = '';
-      document.getElementById('playerContainer').style.display = 'none';
-      document.body.style.overflow = 'auto';
+    function closePlayerModal(){
+      document.getElementById('tgPlayerFrame').src='';
+      document.getElementById('tgPlayerModal').style.display='none';
+      document.body.style.overflow='auto';
     }
-    
-    // Loading
-    function showLoading() {
-      document.getElementById('loading').style.display = 'block';
-    }
-    
-    function hideLoading() {
-      document.getElementById('loading').style.display = 'none';
-    }
-    
-    // Infinite Scroll
     window.addEventListener('scroll', () => {
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
-        if (currentCategory && currentCategory !== 'random') {
-          loadMoreFilms();
-        }
+      if ((window.innerHeight+window.scrollY) >= document.body.offsetHeight - 520) {
+        if (currentCategory && currentCategory !== 'random') loadMoreFilms();
       }
     });
+    window.Telegram?.WebApp?.expand?.();
+    window.Telegram?.WebApp?.setHeaderColor?.('#F6F7F8');
+    window.Telegram?.WebApp?.setBackgroundColor?.('#F6F7F8');
   </script>
 </body>
 </html>

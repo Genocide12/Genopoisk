@@ -2,345 +2,67 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Genopoisk Player</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Видеоплеер Genopoisk</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      background: #000;
-      font-family: system-ui, -apple-system, sans-serif;
-      overflow: hidden;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .player-header {
-      background: rgba(0,0,0,0.9);
-      padding: 12px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #fff;
-      z-index: 100;
-    }
-    .player-title {
-      font-size: 16px;
-      font-weight: 600;
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      margin-right: 12px;
-    }
-    .player-controls-top {
-      display: flex;
-      gap: 10px;
-    }
-    .btn {
-      background: rgba(255,255,255,0.15);
-      border: none;
-      color: #fff;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-      transition: background 0.2s;
-      font-weight: 500;
-    }
-    .btn:hover {
-      background: rgba(255,255,255,0.25);
-    }
-    .btn-download {
-      background: #007AFF;
-    }
-    .btn-download:hover {
-      background: #0051D5;
-    }
-    .btn-close {
-      background: #FF3B30;
-    }
-    .btn-close:hover {
-      background: #D62C21;
-    }
-    .video-container {
-      flex: 1;
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #000;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      max-height: 100vh;
-      object-fit: contain;
-    }
-    .video-controls {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-      padding: 40px 20px 20px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      opacity: 0;
-      transition: opacity 0.3s;
-      z-index: 50;
-    }
-    .video-container:hover .video-controls,
-    .video-controls.show {
-      opacity: 1;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: rgba(255,255,255,0.3);
-      border-radius: 3px;
-      cursor: pointer;
-      position: relative;
-    }
-    .progress-filled {
-      height: 100%;
-      background: #007AFF;
-      border-radius: 3px;
-      width: 0;
-      transition: width 0.1s;
-    }
-    .controls-bottom {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      color: #fff;
-    }
-    .play-btn {
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 28px;
-      cursor: pointer;
-      padding: 0;
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .time {
-      font-size: 14px;
-      min-width: 100px;
-    }
-    .volume-control {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 1;
-    }
-    .volume-slider {
-      width: 80px;
-      height: 4px;
-      -webkit-appearance: none;
-      background: rgba(255,255,255,0.3);
-      border-radius: 2px;
-      outline: none;
-    }
-    .volume-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      background: #fff;
-      border-radius: 50%;
-      cursor: pointer;
-    }
-    .fullscreen-btn {
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 24px;
-      cursor: pointer;
-      padding: 0;
-    }
-    .loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #fff;
-      font-size: 18px;
-      display: none;
-    }
-    .spinner {
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top: 3px solid #fff;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 10px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    @media (max-width: 520px) {
-      .player-title { font-size: 14px; }
-      .btn { padding: 6px 12px; font-size: 12px; }
-      .volume-control { display: none; }
-    }
+    body { background:#000; margin:0; height:100vh; display:flex; flex-direction:column; font-family:system-ui,sans-serif; }
+    .player-header { display:flex; align-items:center; justify-content:space-between; padding:16px 14px; color:#fff; background:#101014; z-index:10; }
+    .title { font-size:17px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+    .top-btns { gap:12px; display:flex; }
+    .btn { background:rgba(255,255,255,0.14); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500; transition:background 0.2s; }
+    .btn:active { background:rgba(70,120,220,0.24); }
+    .btn-download { background:#09d97c; }
+    .btn-download:active { background:#0ea66a; }
+    .btn-close { background:#f33; }
+    .btn-close:active { background:#b22; }
+    .player-main { flex:1; display:flex; align-items:center; justify-content:center; position:relative; background:#000; }
+    video { background:#000; width:96vw; max-width:560px; max-height:72vh; border-radius:13px; box-shadow:0 1px 12px #0003; }
+    @media(max-width:540px){ video { width:99vw; } .player-header{padding:7px 8px;} .btn{font-size:13px;} }
   </style>
 </head>
 <body>
   <div class="player-header">
-    <div class="player-title" id="videoTitle">Загрузка...</div>
-    <div class="player-controls-top">
-      <button class="btn btn-download" id="downloadBtn" style="display:none;">📥 Скачать</button>
+    <span class="title" id="videoTitle">Загрузка...</span>
+    <div class="top-btns">
+      <a class="btn btn-download" id="downloadBtn" href="#" download target="_blank">📥 Скачать</a>
       <button class="btn" id="fullscreenBtn">⛶ Полный экран</button>
-      <button class="btn btn-close" onclick="closePlayer()">✕ Закрыть</button>
+      <button class="btn btn-close" onclick="closePlayer()">✕</button>
     </div>
   </div>
-  
-  <div class="video-container" id="videoContainer">
-    <div class="loading" id="loading">
-      <div class="spinner"></div>
-      <div>Загрузка видео...</div>
-    </div>
-    <video id="videoPlayer" preload="metadata" playsinline></video>
-    <div class="video-controls" id="videoControls">
-      <div class="progress-bar" id="progressBar">
-        <div class="progress-filled" id="progressFilled"></div>
-      </div>
-      <div class="controls-bottom">
-        <button class="play-btn" id="playBtn">▶️</button>
-        <div class="time" id="timeDisplay">0:00 / 0:00</div>
-        <div class="volume-control">
-          <span>🔊</span>
-          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100">
-        </div>
-        <button class="fullscreen-btn" id="fullscreenBtnBottom">⛶</button>
-      </div>
-    </div>
+  <div class="player-main">
+    <video id="videoPlayer" controls preload="metadata" poster="" playsinline>
+      <source id="sourceMp4" src="" type="video/mp4" />
+      Ваш браузер не поддерживает видео.
+    </video>
   </div>
-
   <script>
-    // Получаем параметры из URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const filmId = urlParams.get('id');
-    const filmTitle = urlParams.get('title') || 'Фильм';
-    
-    document.getElementById('videoTitle').textContent = decodeURIComponent(filmTitle);
-    
+    // Пример mp4-файла — подставьте сюда свой url или используйте демо
+    const DEMO_URL = "https://www.w3schools.com/html/mov_bbb.mp4";
+    const DEMO_POSTER = "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217";
+    const params = new URLSearchParams(location.search);
+    const title = params.get("title") || "Demo Movie";
+    const url = params.get("src") || DEMO_URL;
+    const poster = params.get("poster") || DEMO_POSTER;
+    document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const video = document.getElementById('videoPlayer');
-    const playBtn = document.getElementById('playBtn');
-    const progressBar = document.getElementById('progressBar');
-    const progressFilled = document.getElementById('progressFilled');
-    const timeDisplay = document.getElementById('timeDisplay');
-    const volumeSlider = document.getElementById('volumeSlider');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const fullscreenBtnBottom = document.getElementById('fullscreenBtnBottom');
-    const videoContainer = document.getElementById('videoContainer');
-    const videoControls = document.getElementById('videoControls');
-    const loading = document.getElementById('loading');
+    video.poster = poster;
+    document.getElementById('sourceMp4').src = url;
+    video.load();
     const downloadBtn = document.getElementById('downloadBtn');
-    
-    // Загружаем видео через iframe API (для демонстрации)
-    // В реальном проекте нужен прямой URL к видеофайлу
-    if (filmId) {
-      // Для embess используем iframe (напрямую видео недоступно)
-      // Альтернатива: получить прямую ссылку через backend
-      const embedUrl = `https://api.embess.ws/embed/kp/${filmId}`;
-      
-      // Создаем iframe вместо video для текущей реализации
-      const iframe = document.createElement('iframe');
-      iframe.src = embedUrl;
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
-      iframe.style.border = 'none';
-      iframe.allowFullscreen = true;
-      
-      videoContainer.innerHTML = '';
-      videoContainer.appendChild(iframe);
-      loading.style.display = 'none';
-    } else {
-      alert('ID фильма не указан');
+    downloadBtn.href = url;
+    downloadBtn.download = `${title}.mp4`;
+    // Fullscreen cross-browser
+    function launchFullscreen(elem){
+      if(elem.requestFullscreen){elem.requestFullscreen();}
+      else if(elem.webkitRequestFullscreen){elem.webkitRequestFullscreen();} // Safari
+      else if(elem.msRequestFullscreen){elem.msRequestFullscreen();}
     }
-    
-    // Функции управления плеером (для HTML5 video)
-    function togglePlay() {
-      if (video.paused) {
-        video.play();
-        playBtn.textContent = '⏸️';
-      } else {
-        video.pause();
-        playBtn.textContent = '▶️';
-      }
-    }
-    
-    function updateProgress() {
-      const percent = (video.currentTime / video.duration) * 100;
-      progressFilled.style.width = `${percent}%`;
-      
-      const current = formatTime(video.currentTime);
-      const duration = formatTime(video.duration);
-      timeDisplay.textContent = `${current} / ${duration}`;
-    }
-    
-    function formatTime(seconds) {
-      if (isNaN(seconds)) return '0:00';
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-    
-    function seek(e) {
-      const rect = progressBar.getBoundingClientRect();
-      const percent = (e.clientX - rect.left) / rect.width;
-      video.currentTime = percent * video.duration;
-    }
-    
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        videoContainer.requestFullscreen().catch(err => {
-          console.error('Fullscreen error:', err);
-        });
-      } else {
-        document.exitFullscreen();
-      }
-    }
-    
-    function closePlayer() {
-      window.history.back();
-    }
-    
-    // События
-    playBtn?.addEventListener('click', togglePlay);
-    video?.addEventListener('click', togglePlay);
-    video?.addEventListener('timeupdate', updateProgress);
-    progressBar?.addEventListener('click', seek);
-    volumeSlider?.addEventListener('input', (e) => {
-      video.volume = e.target.value / 100;
-    });
-    fullscreenBtn?.addEventListener('click', toggleFullscreen);
-    fullscreenBtnBottom?.addEventListener('click', toggleFullscreen);
-    
-    // Показываем контролы при движении мыши
-    let controlsTimeout;
-    videoContainer.addEventListener('mousemove', () => {
-      videoControls.classList.add('show');
-      clearTimeout(controlsTimeout);
-      controlsTimeout = setTimeout(() => {
-        if (!video.paused) {
-          videoControls.classList.remove('show');
-        }
-      }, 3000);
-    });
-    
-    // Telegram WebApp integration
+    document.getElementById('fullscreenBtn').onclick = ()=> launchFullscreen(video);
+    // Закрытие (возврат)
+    function closePlayer(){ window.history.back(); }
+    // Safari/iOS: разрешить тап по видео для fullscreen gesture
+    video.onclick = () => { if(document.fullscreenElement==null && video.requestFullscreen){ video.requestFullscreen(); } };
+    // Telegram WEBAPP
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');
     window.Telegram?.WebApp?.setBackgroundColor?.('#000000');

@@ -251,6 +251,113 @@
   <div class="tg-disclaimer">
     Этот сервис помогает находить и делиться ссылками на видео, которые уже доступны в интернете, при этом сам сервис не загружает и не хранит копии видео у себя. Если вы правообладатель, отправьте уведомление на наш <a href="mailto:s.teiv@mail.ru">адрес</a> для претензий, указав прямую ссылку на спорный материал, описание объекта и подтверждение ваших прав.
   </div>
-  <script>/* ... остальной код без изменений ... */</script>
+  <script>
+    const API_KEY = '33b1e3bd-2643-4ac1-8eb4-6b7392c5e913';
+    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+    let currentCategory = null;
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
+    function showLoader() { document.getElementById('tg-loader').style.display = 'block'; }
+    function hideLoader() { document.getElementById('tg-loader').style.display = 'none'; }
+    function clearFilms() { document.getElementById('tg-film-grid').innerHTML = ''; }
+    async function apiGet(url) {
+      try {
+        const res = await fetch(url, { headers: { 'X-API-KEY': API_KEY } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        alert('Ошибка API: ' + err.message);
+        hideLoader();
+        return { items: [] };
+      }
+    }
+    async function loadCategory(category) {
+      currentCategory = category;
+      currentPage = 1;
+      hasMore = true;
+      clearFilms();
+      document.getElementById('tg-search-results').innerHTML = '';
+      document.getElementById('tg-film-grid').style.display = '';
+      showLoader();
+      await loadMoreFilms();
+    }
+    async function loadMoreFilms() {
+      if (isLoading || !hasMore) return;
+      isLoading = true;
+      showLoader();
+      let url = '';
+      const currentYear = new Date().getFullYear();
+      if (currentCategory === 'popular') url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}`;
+      else if (currentCategory === 'top250') url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}`;
+      else if (currentCategory === 'new') url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${currentPage}`;
+      else if (currentCategory === 'random') url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${Math.floor(Math.random()*4)+1}`;
+      const data = await apiGet(url);
+      const films = data.items || data.films || [];
+      if (films.length > 0) {
+        displayFilms(films, false);
+        currentPage++;
+      } else {
+        hasMore = false;
+      }
+      isLoading = false;
+      hideLoader();
+    }
+    function displayFilms(films, isSearch) {
+      const grid = isSearch ? document.getElementById('tg-search-results') : document.getElementById('tg-film-grid');
+      grid.innerHTML = '';
+      films.forEach(film => {
+        const filmId = film.filmId || film.kinopoiskId;
+        const title = film.nameRu || film.nameEn || 'Без названия';
+        const year = film.year || 'Н/Д';
+        const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+        const poster = film.posterUrlPreview || film.posterUrl || '';
+        const card = document.createElement('div');
+        card.className = 'tg-film-card';
+        card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display=\"none\"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
+        card.onclick = () => openPlayer(filmId, title);
+        grid.appendChild(card);
+      });
+    }
+    function openPlayer(filmId, title) {
+      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+    }
+    // Поиск
+    let searchTimeout;
+    document.getElementById('tg-search').addEventListener('input', function(e) {
+      clearTimeout(searchTimeout);
+      const val = e.target.value.trim();
+      if (!val || val.length < 2) {
+        document.getElementById('tg-search-results').innerHTML = '';
+        document.getElementById('tg-film-grid').style.display = '';
+        return;
+      }
+      searchTimeout = setTimeout(async () => {
+        showLoader();
+        const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(val)}&page=1`;
+        const res = await apiGet(url);
+        const results = res.films || res.items || [];
+        displayFilms(results, true);
+        document.getElementById('tg-film-grid').style.display = 'none';
+        hideLoader();
+      }, 450);
+    });
+    // Бесконечная прокрутка
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const threshold = document.body.offsetHeight - 300;
+        if (scrollPosition >= threshold && currentCategory && currentCategory !== 'random') {
+          loadMoreFilms();
+        }
+      }, 100);
+    });
+    // Telegram WebApp integration
+    window.Telegram?.WebApp?.expand?.();
+    window.Telegram?.WebApp?.setHeaderColor?.('#F6F7F8');
+    window.Telegram?.WebApp?.setBackgroundColor?.('#F6F7F8');
+  </script>
 </body>
 </html>

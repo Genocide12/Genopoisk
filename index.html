@@ -226,6 +226,7 @@
       box-shadow: 0 1px 6px rgba(34,34,34,0.06);
       transition: all 0.3s;
       min-width: 0;
+      min-height: 230px;
       opacity: 0;
       animation: fadeInUp 0.3s ease forwards;
     }
@@ -446,6 +447,9 @@
         animationDelay = 0;
       }
       
+      const scrollBefore = window.scrollY;
+      const heightBefore = document.body.scrollHeight;
+      
       films.forEach((film, index) => {
         const filmId = film.filmId || film.kinopoiskId;
         const title = film.nameRu || film.nameEn || 'Без названия';
@@ -460,6 +464,14 @@
         grid.appendChild(card);
       });
       animationDelay += films.length * 0.02;
+      
+      requestAnimationFrame(() => {
+        const heightAfter = document.body.scrollHeight;
+        const heightDiff = heightAfter - heightBefore;
+        if (heightDiff > 0 && scrollBefore > 100) {
+          window.scrollTo(0, scrollBefore);
+        }
+      });
     }
     
     function openPlayer(filmId, title) {
@@ -495,11 +507,11 @@
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
         const scrollPosition = window.innerHeight + window.scrollY;
-        const threshold = document.body.offsetHeight - 500;
-        if (scrollPosition >= threshold && currentCategory && currentCategory !== 'random') {
+        const threshold = document.body.offsetHeight - 800;
+        if (scrollPosition >= threshold && currentCategory && currentCategory !== 'random' && !isLoading) {
           loadMoreFilms();
         }
-      }, 100);
+      }, 150);
     });
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#F6F7F8');

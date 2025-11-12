@@ -12,15 +12,14 @@
     .btn:active { background:rgba(50,150,225,0.23); }
     .btn-close { background:#f33; }
     .btn-close:active { background:#a00; }
-    .player-main { flex:1; display:flex; align-items:center; justify-content:center; background:#000; }
-    .player-iframe { border:none; width:98vw; max-width:660px; height:70vh; border-radius:16px; box-shadow: 0 0 30px #0005; background:#111; }
-    @media(max-width:540px){ .player-iframe{width:99vw;height:63vw;max-width:100vw;} .player-header{padding:7px 8px;font-size:14px;} }
+    .hide-mobile { display:inline-block; }
+    @media(max-width:540px){ .player-iframe{width:99vw;height:63vw;max-width:100vw;} .player-header{padding:7px 8px;font-size:14px;} .hide-mobile{display:none !important;} }
   </style>
 </head>
 <body>
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
-    <button class="btn" id="fullscreenBtn">⛶ Полный экран</button>
+    <button class="btn hide-mobile" id="fullscreenBtn">⛶ Полный экран</button>
     <button class="btn btn-close" onclick="window.history.back()">✕</button>
   </div>
   <div class="player-main">
@@ -34,13 +33,23 @@
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-    // Полный экран — фокус для любого устройства
-    function enterFullscreen() {
+    // Определить, MiniApp ли это (Telegram), либо mobile
+    function isMobile() {
+      return window.innerWidth <= 540 || (/Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent));
+    }
+    function isTelegramMiniApp() {
+      return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
+    }
+    // Скрыть fullscreenBtn если mobile или MiniApp (дополнительно к CSS)
+    if(isMobile() || isTelegramMiniApp()) {
+      document.getElementById('fullscreenBtn').style.display = 'none';
+    }
+    // Полный экран
+    document.getElementById('fullscreenBtn').onclick = function() {
       if (iframe.requestFullscreen) { iframe.requestFullscreen(); }
       else if (iframe.webkitRequestFullscreen) { iframe.webkitRequestFullscreen(); }
       else if (iframe.msRequestFullscreen) { iframe.msRequestFullscreen(); }
     }
-    document.getElementById('fullscreenBtn').onclick = enterFullscreen;
     // Telegram WebApp поддержка
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');

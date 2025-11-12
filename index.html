@@ -235,29 +235,33 @@
       margin-top: 18px;
     }
     
+    /* Zoom level 0 (default) */
     .tg-film-grid { grid-template-columns: repeat(8, 1fr); }
     .tg-film-card { min-height: 230px; }
     .tg-film-poster { width: 137px; height: 205px; }
     .tg-film-title { font-size: 16px; }
     .tg-film-details { font-size: 12px; }
     
+    /* Zoom level 1 */
     body.zoom-1 .tg-film-grid { grid-template-columns: repeat(6, 1fr); }
     body.zoom-1 .tg-film-card { min-height: 330px; }
     body.zoom-1 .tg-film-poster { width: 195px; height: 293px; }
     body.zoom-1 .tg-film-title { font-size: 18px; }
     body.zoom-1 .tg-film-details { font-size: 14px; }
     
+    /* Zoom level 2 */
     body.zoom-2 .tg-film-grid { grid-template-columns: repeat(4, 1fr); }
     body.zoom-2 .tg-film-card { min-height: 390px; }
     body.zoom-2 .tg-film-poster { width: 234px; height: 351px; }
     body.zoom-2 .tg-film-title { font-size: 20px; }
     body.zoom-2 .tg-film-details { font-size: 15px; }
     
-    body.zoom-3 .tg-film-grid { grid-template-columns: repeat(2, 1fr); }
-    body.zoom-3 .tg-film-card { min-height: 520px; }
-    body.zoom-3 .tg-film-poster { width: 312px; height: 468px; }
-    body.zoom-3 .tg-film-title { font-size: 22px; }
-    body.zoom-3 .tg-film-details { font-size: 16px; }
+    /* Zoom level 3 - 3 карточки в ряд */
+    body.zoom-3 .tg-film-grid { grid-template-columns: repeat(3, 1fr); }
+    body.zoom-3 .tg-film-card { min-height: 420px; }
+    body.zoom-3 .tg-film-poster { width: 260px; height: 390px; }
+    body.zoom-3 .tg-film-title { font-size: 20px; }
+    body.zoom-3 .tg-film-details { font-size: 15px; }
     
     .tg-film-card {
       background: #F1F3F6;

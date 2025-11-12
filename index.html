@@ -14,6 +14,20 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.3; }
     }
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes arrowFade {
+      0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    }
     html, body {
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -45,10 +59,13 @@
       font-size: 36px;
       color: #007AFF;
       z-index: 99999;
-      animation: blink 1s ease-in-out infinite;
       pointer-events: none;
       display: none;
       text-shadow: 0 2px 8px rgba(0,122,255,0.4);
+      animation: blink 1s ease-in-out infinite;
+    }
+    .miniapp-arrow.fadeout {
+      animation: arrowFade 0.5s ease forwards;
     }
     .tg-main-block {
       text-align: center;
@@ -209,6 +226,8 @@
       box-shadow: 0 1px 6px rgba(34,34,34,0.06);
       transition: all 0.3s;
       min-width: 0;
+      opacity: 0;
+      animation: fadeInUp 0.6s ease forwards;
     }
     .tg-film-card:hover {
       background: #E8EAED;
@@ -335,19 +354,14 @@
       return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
     }
     
+    // Стрелка для mini app - исчезает через 3 секунды
+    const arrow = document.getElementById('miniappArrow');
     if(isTelegramMiniApp()) {
-      const arrow = document.getElementById('miniappArrow');
       arrow.style.display = 'block';
-      
-      const hideArrow = () => {
-        arrow.style.display = 'none';
-        document.removeEventListener('click', hideArrow);
-        document.removeEventListener('touchstart', hideArrow);
-        document.removeEventListener('scroll', hideArrow);
-      };
-      document.addEventListener('click', hideArrow);
-      document.addEventListener('touchstart', hideArrow);
-      document.addEventListener('scroll', hideArrow);
+      setTimeout(() => {
+        arrow.classList.add('fadeout');
+        setTimeout(() => arrow.style.display = 'none', 500);
+      }, 3000);
     }
     
     const zoomSlider = document.getElementById('zoomSlider');
@@ -424,10 +438,16 @@
       isLoading = false;
       hideLoader();
     }
+    
+    let animationDelay = 0;
     function displayFilms(films, isSearch) {
       const grid = isSearch ? document.getElementById('tg-search-results') : document.getElementById('tg-film-grid');
-      if(isSearch) grid.innerHTML = '';
-      films.forEach(film => {
+      if(isSearch) {
+        grid.innerHTML = '';
+        animationDelay = 0;
+      }
+      
+      films.forEach((film, index) => {
         const filmId = film.filmId || film.kinopoiskId;
         const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
@@ -435,11 +455,14 @@
         const poster = film.posterUrlPreview || film.posterUrl || '';
         const card = document.createElement('div');
         card.className = 'tg-film-card';
+        card.style.animationDelay = `${animationDelay + (index * 0.05)}s`;
         card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display="none"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
         card.onclick = () => openPlayer(filmId, title);
         grid.appendChild(card);
       });
+      animationDelay += films.length * 0.05;
     }
+    
     function openPlayer(filmId, title) {
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
@@ -473,7 +496,7 @@
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
         const scrollPosition = window.innerHeight + window.scrollY;
-        const threshold = document.body.offsetHeight - 300;
+        const threshold = document.body.offsetHeight - 500;
         if (scrollPosition >= threshold && currentCategory && currentCategory !== 'random') {
           loadMoreFilms();
         }

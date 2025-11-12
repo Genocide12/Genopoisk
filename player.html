@@ -84,18 +84,20 @@
       top:50%;
       left:50%;
       transform:translate(-50%,-50%);
-      background:rgba(0,0,0,0.85);
+      background:rgba(0,0,0,0.88);
       color:#fff;
-      padding:16px 24px;
-      border-radius:12px;
-      font-size:16px;
+      padding:18px 26px;
+      border-radius:14px;
+      font-size:15px;
       font-weight:500;
       z-index:9999;
       pointer-events:none;
-      box-shadow:0 4px 20px rgba(0,0,0,0.6);
+      box-shadow:0 4px 20px rgba(0,0,0,0.7);
       display:none;
+      text-align:center;
+      line-height:1.5;
     }
-    @media(max-width:540px){
+    @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
     }
@@ -111,7 +113,7 @@
   </div>
   <div class="player-main">
     <iframe id="playerIframe" class="player-iframe" allowfullscreen></iframe>
-    <div id="mobileHint" class="mobile-hint">Полный экран на кнопке внизу ▶️</div>
+    <div id="mobileHint" class="mobile-hint">Полный экран на кнопке внизу ⛶<br><br>через 10 сек</div>
   </div>
   <script>
     const params = new URLSearchParams(window.location.search);
@@ -126,7 +128,6 @@
       window.open(currentUrl, '_blank');
     }
     
-    // Показать подсказку только на мобильных на 2 секунды
     function isMobile() {
       return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
     }
@@ -136,10 +137,9 @@
       hint.style.display = 'block';
       setTimeout(() => {
         hint.style.display = 'none';
-      }, 2000);
+      }, 10000);
     }
     
-    // Telegram WebApp поддержка
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');
     window.Telegram?.WebApp?.setBackgroundColor?.('#000000');

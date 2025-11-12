@@ -5,22 +5,81 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Genopoisk Плеер</title>
   <style>
-    body { margin:0; background:#000; height:100vh; font-family:system-ui,sans-serif; }
-    .player-header { display:flex; align-items:center; justify-content:space-between; color:#fff; background:#101014; padding:14px 10px; }
-    .title { font-size:17px; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .btn { background:rgba(255,255,255,0.14); color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500; }
-    .btn:active { background:rgba(50,150,225,0.23); }
-    .btn-close { background:#f33; }
+    html, body {
+      margin:0;
+      padding:0;
+      background:#000;
+      width:100vw;
+      height:100vh;
+      min-height:100vh;
+      min-width:100vw;
+      font-family:system-ui,sans-serif;
+      overflow:hidden;
+    }
+    .player-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      color:#fff;
+      background:#101014;
+      padding:14px 10px;
+      height:52px;
+      font-size:17px;
+      font-weight:600;
+      box-sizing:border-box;
+    }
+    .title {
+      font-size:17px;
+      font-weight:600;
+      flex:1;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .btn-close {
+      background:#f33;
+      color:#fff;
+      border:none;
+      padding:8px 14px;
+      border-radius:8px;
+      font-size:15px;
+      font-weight:500;
+      cursor:pointer;
+      margin-left:10px;
+    }
     .btn-close:active { background:#a00; }
-    .hide-mobile { display:inline-block; }
-    @media(max-width:540px){ .player-iframe{width:99vw;height:63vw;max-width:100vw;} .player-header{padding:7px 8px;font-size:14px;} .hide-mobile{display:none !important;} }
+    .player-main {
+      width:100vw;
+      height:calc(100vh - 52px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#000;
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+    }
+    .player-iframe {
+      width:100vw;
+      height:100%;
+      max-width:100vw;
+      max-height:100%;
+      border:none;
+      display:block;
+      background:#111;
+      border-radius:0;
+    }
+    @media(max-width:540px){
+      .player-header{padding:9px 4px;font-size:14px; height:41px;}
+      .player-main{height:calc(100vh - 41px);}
+      .player-iframe{width:100vw;max-width:100vw;height:100%;max-height:100%;border-radius:0;}
+    }
   </style>
 </head>
 <body>
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
-    <button class="btn hide-mobile" id="fullscreenBtn">⛶ Полный экран</button>
-    <button class="btn btn-close" onclick="window.history.back()">✕</button>
+    <button class="btn-close" onclick="window.history.back()">✕</button>
   </div>
   <div class="player-main">
     <iframe id="playerIframe" class="player-iframe" allowfullscreen></iframe>
@@ -33,23 +92,6 @@
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-    // Определить, MiniApp ли это (Telegram), либо mobile
-    function isMobile() {
-      return window.innerWidth <= 540 || (/Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent));
-    }
-    function isTelegramMiniApp() {
-      return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
-    }
-    // Скрыть fullscreenBtn если mobile или MiniApp (дополнительно к CSS)
-    if(isMobile() || isTelegramMiniApp()) {
-      document.getElementById('fullscreenBtn').style.display = 'none';
-    }
-    // Полный экран
-    document.getElementById('fullscreenBtn').onclick = function() {
-      if (iframe.requestFullscreen) { iframe.requestFullscreen(); }
-      else if (iframe.webkitRequestFullscreen) { iframe.webkitRequestFullscreen(); }
-      else if (iframe.msRequestFullscreen) { iframe.msRequestFullscreen(); }
-    }
     // Telegram WebApp поддержка
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');

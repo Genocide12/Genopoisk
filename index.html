@@ -343,7 +343,7 @@
     Этот сервис помогает находить и делиться ссылками на видео, которые уже доступны в интернете, при этом сам сервис не загружает и не хранит копии видео у себя. Если вы правообладатель, отправьте уведомление на наш <a href="mailto:s.teiv@mail.ru">адрес</a> для претензий, указав прямую ссылку на спорный материал, описание объекта и подтверждение ваших прав.
   </div>
   <script>
-    const API_KEY = '33b1e3bd-2643-4ac1-8eb4-6b7392c5e913';
+    const API_KEY = '26d2222a-3f07-492d-a17e-80fdc91e2fe9';
     const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
     let currentCategory = null;
     let currentPage = 1;
@@ -354,7 +354,6 @@
       return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
     }
     
-    // Стрелка для mini app - исчезает через 3 секунды
     const arrow = document.getElementById('miniappArrow');
     if(isTelegramMiniApp()) {
       arrow.style.display = 'block';

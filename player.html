@@ -3,61 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Видеоплеер Genopoisk</title>
+  <title>Genopoisk Плеер</title>
   <style>
-    body { background:#000; margin:0; height:100vh; display:flex; flex-direction:column; font-family:system-ui,sans-serif; }
-    .player-header { display:flex; align-items:center; justify-content:space-between; padding:16px 14px; color:#fff; background:#101014; z-index:10; }
-    .title { font-size:17px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
-    .top-btns { gap:12px; display:flex; }
-    .btn { background:rgba(255,255,255,0.14); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500; transition:background 0.2s; }
-    .btn:active { background:rgba(70,120,220,0.24); }
+    body { margin:0; background:#000; height:100vh; font-family:system-ui,sans-serif; }
+    .player-header { display:flex; align-items:center; justify-content:space-between; color:#fff; background:#101014; padding:14px 10px; }
+    .title { font-size:17px; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .btn { background:rgba(255,255,255,0.14); color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:500; }
+    .btn:active { background:rgba(50,150,225,0.23); }
     .btn-close { background:#f33; }
-    .btn-close:active { background:#b22; }
-    .player-main { flex:1; display:flex; align-items:center; justify-content:center; position:relative; background:#000; }
-    video { background:#000; width:96vw; max-width:560px; max-height:72vh; border-radius:13px; box-shadow:0 1px 12px #0003; }
-    @media(max-width:540px){ video { width:99vw; } .player-header{padding:7px 8px;} .btn{font-size:13px;} }
+    .btn-close:active { background:#a00; }
+    .player-main { flex:1; display:flex; align-items:center; justify-content:center; background:#000; }
+    .player-iframe { border:none; width:98vw; max-width:660px; height:70vh; border-radius:16px; box-shadow: 0 0 30px #0005; background:#111; }
+    @media(max-width:540px){ .player-iframe{width:99vw;height:63vw;max-width:100vw;} .player-header{padding:7px 8px;font-size:14px;} }
   </style>
 </head>
 <body>
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
-    <div class="top-btns">
-      <button class="btn" id="fullscreenBtn">⛶ Полный экран</button>
-      <button class="btn btn-close" onclick="closePlayer()">✕</button>
-    </div>
+    <button class="btn" id="fullscreenBtn">⛶ Полный экран</button>
+    <button class="btn btn-close" onclick="window.history.back()">✕</button>
   </div>
   <div class="player-main">
-    <video id="videoPlayer" controls preload="metadata" poster="" playsinline>
-      <source id="sourceMp4" src="" type="video/mp4" />
-      Ваш браузер не поддерживает видео.
-    </video>
+    <iframe id="playerIframe" class="player-iframe" allowfullscreen></iframe>
   </div>
   <script>
-    // Пример mp4-файла — подставьте сюда свой url или используйте демо
-    const DEMO_URL = "https://www.w3schools.com/html/mov_bbb.mp4";
-    const DEMO_POSTER = "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217";
-    const params = new URLSearchParams(location.search);
-    const title = params.get("title") || "Demo Movie";
-    const url = params.get("src") || DEMO_URL;
-    const poster = params.get("poster") || DEMO_POSTER;
+    // Получаем параметры из адреса
+    const params = new URLSearchParams(window.location.search);
+    const kid = params.get('id') || '4910542';
+    const title = params.get('title') || 'Фильм';
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
-    const video = document.getElementById('videoPlayer');
-    video.poster = poster;
-    document.getElementById('sourceMp4').src = url;
-    video.load();
-    // Fullscreen cross-browser
-    function launchFullscreen(elem){
-      if(elem.requestFullscreen){elem.requestFullscreen();}
-      else if(elem.webkitRequestFullscreen){elem.webkitRequestFullscreen();} // Safari
-      else if(elem.msRequestFullscreen){elem.msRequestFullscreen();}
-      else if(window.innerWidth<540 && video.webkitEnterFullscreen){ video.webkitEnterFullscreen(); }
+    const iframe = document.getElementById('playerIframe');
+    iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+    // Полный экран — фокус для любого устройства
+    function enterFullscreen() {
+      if (iframe.requestFullscreen) { iframe.requestFullscreen(); }
+      else if (iframe.webkitRequestFullscreen) { iframe.webkitRequestFullscreen(); }
+      else if (iframe.msRequestFullscreen) { iframe.msRequestFullscreen(); }
     }
-    document.getElementById('fullscreenBtn').onclick = ()=> launchFullscreen(video);
-    // Закрытие (возврат)
-    function closePlayer(){ window.history.back(); }
-    // Safari/iOS: разрешить тап по видео для fullscreen gesture
-    video.onclick = () => { if(document.fullscreenElement==null && (video.requestFullscreen||video.webkitEnterFullscreen)){ launchFullscreen(video); } };
-    // Telegram WEBAPP
+    document.getElementById('fullscreenBtn').onclick = enterFullscreen;
+    // Telegram WebApp поддержка
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');
     window.Telegram?.WebApp?.setBackgroundColor?.('#000000');

@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,minimum-scale=1">
   <title>Плеер</title>
-  <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
   <style>
     html, body {
       -webkit-user-select: none;
@@ -76,20 +75,12 @@
       background:#000;
       position:relative;
     }
-    #player {
-      width:100% !important;
-      height:100% !important;
-    }
-    .vjs-big-play-button {
-      display:none !important;
-    }
-    .loading {
-      position:absolute;
-      top:50%;
-      left:50%;
-      transform:translate(-50%,-50%);
-      color:#fff;
-      font-size:18px;
+    .player-iframe {
+      width:100%;
+      height:100%;
+      border:none;
+      display:block;
+      background:#111;
     }
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
@@ -107,18 +98,9 @@
     </div>
   </div>
   <div class="player-main">
-    <div class="loading" id="loading">Загрузка видео...</div>
-    <video 
-      id="player" 
-      class="video-js vjs-default-skin"
-      controls
-      playsinline
-      preload="auto"
-    ></video>
+    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen"></iframe>
   </div>
   
-  <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@videojs/http-streaming@3.10.0/dist/videojs-http-streaming.min.js"></script>
   <script>
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.onkeydown = function(e) {
@@ -130,55 +112,14 @@
     const kid = params.get('id') || '5435407';
     const title = params.get('title') || 'Фильм';
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
+    const iframe = document.getElementById('playerIframe');
     
-    let player = null;
-    
-    async function loadVideo() {
-      try {
-        // Получаем страницу zona.im
-        const proxyUrl = `/api/video?kid=${kid}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        
-        if(data.success && data.videoUrl) {
-          document.getElementById('loading').style.display = 'none';
-          
-          player = videojs('player', {
-            controls: true,
-            autoplay: false,
-            preload: 'auto',
-            fluid: true,
-            responsive: true,
-            html5: {
-              vhs: {
-                overrideNative: true
-              },
-              nativeVideoTracks: false,
-              nativeAudioTracks: false,
-              nativeTextTracks: false
-            }
-          });
-          
-          player.src({
-            src: data.videoUrl,
-            type: data.type === 'hls' ? 'application/x-mpegURL' : 'video/mp4'
-          });
-          
-          player.play();
-        } else {
-          document.getElementById('loading').textContent = 'Ошибка: видео не найдено';
-        }
-      } catch(error) {
-        console.error('Error:', error);
-        document.getElementById('loading').textContent = 'Ошибка загрузки: ' + error.message;
-      }
-    }
+    // Загружаем напрямую страницу zona.im
+    iframe.src = `https://w1.zona.im/movies/${kid}`;
     
     function openInBrowser() {
-      window.open(`https://genopoisk.vercel.app/player.html?id=${kid}&title=${encodeURIComponent(title)}`, '_blank');
+      window.open(`https://w1.zona.im/movies/${kid}`, '_blank');
     }
-    
-    loadVideo();
     
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.('#000000');
@@ -190,52 +131,156 @@
 
 ---
 
-## **Теперь создай серверный прокси `api/video.js`:**
+## **Проблема:**
 
-``````javascript
-// api/video.js
-export default async function handler(req, res) {
-  const { kid } = req.query;
+❌ **zona.im блокирует iframe встраивание** — у них установлена защита `X-Frame-Options: DENY`
+
+---
+
+## **Единственное рабочее решение — прямая ссылка без рекламы:**
+
+Используй **альтернативный плеер без рекламы**:
+
+``````html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,minimum-scale=1">
+  <title>Плеер</title>
+  <style>
+    html, body {
+      -webkit-user-select: none;
+      user-select: none;
+      margin:0;
+      padding:0;
+      background:#000;
+      width:100vw;
+      height:100vh;
+      font-family:system-ui,sans-serif;
+      overflow:hidden;
+    }
+    .player-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      color:#fff;
+      background:#101014;
+      padding:14px 10px;
+      height:52px;
+      font-size:17px;
+      font-weight:600;
+      box-sizing:border-box;
+      z-index:1000;
+    }
+    .title {
+      font-size:17px;
+      font-weight:600;
+      flex:1;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .btn-group {
+      display:flex;
+      gap:8px;
+    }
+    .btn {
+      background:rgba(255,255,255,0.14);
+      color:#fff;
+      border:none;
+      padding:8px 14px;
+      border-radius:8px;
+      font-size:14px;
+      font-weight:500;
+      cursor:pointer;
+      transition:all .15s;
+    }
+    .btn:active { 
+      background:rgba(50,150,225,0.23);
+      transform: scale(0.95);
+    }
+    .btn-close {
+      background:#f33;
+      margin-left:4px;
+    }
+    .btn-browser {
+      display: none;
+    }
+    .player-main {
+      width:100vw;
+      height:calc(100vh - 52px);
+      background:#000;
+      position:relative;
+    }
+    .player-iframe {
+      width:100%;
+      height:100%;
+      border:none;
+      display:block;
+      background:#111;
+    }
+    @media(max-width:768px){
+      .player-header{padding:9px 8px;font-size:14px; height:44px;}
+      .player-main{height:calc(100vh - 44px);}
+      .btn-browser { display: inline-block !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="player-header">
+    <span class="title" id="videoTitle">Загрузка...</span>
+    <div class="btn-group">
+      <button class="btn btn-browser" onclick="openInBrowser()">🌐 Zona.im</button>
+      <button class="btn btn-close" onclick="window.history.back()">✕</button>
+    </div>
+  </div>
+  <div class="player-main">
+    <iframe id="playerIframe" class="player-iframe" allowfullscreen></iframe>
+  </div>
   
-  if (!kid) {
-    return res.status(400).json({ error: 'Missing Kinopoisk ID' });
-  }
-  
-  try {
-    // Получаем страницу zona.im
-    const zonaUrl = `https://w1.zona.im/movies/search?q=${kid}`;
-    const response = await fetch(zonaUrl);
-    const html = await response.text();
+  <script>
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.onkeydown = function(e) {
+      if(e.ctrlKey && (e.key === 'c' || e.key === 'u' || e.key === 's')) return false;
+      if(e.key === 'F12') return false;
+    };
     
-    // Ищем content_id
-    const contentIdMatch = html.match(/content_id["']\s*content=["'](\d+)["']/i);
+    const params = new URLSearchParams(window.location.search);
+    const kid = params.get('id') || '326';
+    const title = params.get('title') || 'Фильм';
+    document.getElementById('videoTitle').textContent = decodeURIComponent(title);
+    const iframe = document.getElementById('playerIframe');
     
-    if (!contentIdMatch) {
-      return res.status(404).json({ error: 'Content ID not found' });
+    // Пробуем разные источники
+    const sources = [
+      `https://api.embess.ws/embed/kp/${kid}`,  // Embess (с рекламой)
+    ];
+    
+    iframe.src = sources[0];
+    
+    function openInBrowser() {
+      window.open(`https://w1.zona.im/movies/${kid}`, '_blank');
     }
     
-    const contentId = contentIdMatch[1];
-    
-    // Получаем страницу фильма
-    const movieUrl = `https://w1.zona.im/movies/${contentId}`;
-    const movieResponse = await fetch(movieUrl);
-    const movieHtml = await movieResponse.text();
-    
-    // Парсим прямую ссылку на видео
-    const videoUrlMatch = movieHtml.match(/src\s*=\s*["']([^"']*\.m3u8[^"']*)["']/i) ||
-                          movieHtml.match(/["'](https?:\/\/[^"']*cdn[^"']*\.(m3u8|mp4)[^"']*)["']/i);
-    
-    if (videoUrlMatch && videoUrlMatch[1]) {
-      return res.status(200).json({ 
-        success: true, 
-        videoUrl: videoUrlMatch[1],
-        type: videoUrlMatch[1].includes('.m3u8') ? 'hls' : 'mp4'
-      });
-    }
-    
-    return res.status(404).json({ error: 'Video URL not found' });
-  } catch (error) {
-    console.error('Proxy error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-}
+    window.Telegram?.WebApp?.expand?.();
+    window.Telegram?.WebApp?.setHeaderColor?.('#000000');
+    window.Telegram?.WebApp?.setBackgroundColor?.('#000000');
+  </script>
+</body>
+</html>
+```
+
+***
+
+## **Итог:**
+
+**Zona.im не позволяет встраивание через iframe** из-за защиты от фишинга. 
+
+**Варианты:**
+
+1. ✅ **Embess** — работает, но с рекламой
+2. ✅ **Кнопка "Zona.im"** — открывает фильм в новой вкладке на zona.im
+3. ❌ **Серверный парсинг** — сложно и нестабильно
+
+**Рекомендация:** Оставь Embess + добавь кнопку для открытия на zona.im в браузере.

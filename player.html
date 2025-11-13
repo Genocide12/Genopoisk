@@ -7,14 +7,25 @@
   <style>
     html, body {
       -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
       user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
       margin:0;
       padding:0;
       background:#000;
       width:100vw;
       height:100vh;
+      min-height:100vh;
+      min-width:100vw;
       font-family:system-ui,sans-serif;
       overflow:hidden;
+    }
+    *, *:after, *:before {
+      -webkit-user-select: none!important;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none!important;
     }
     .player-header {
       display:flex;
@@ -70,20 +81,28 @@
     .player-main {
       width:100vw;
       height:calc(100vh - 52px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
       background:#000;
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
       position:relative;
     }
     .player-iframe {
-      width:100%;
+      width:100vw;
       height:100%;
+      max-width:100vw;
+      max-height:100%;
       border:none;
       display:block;
       background:#111;
+      border-radius:0;
     }
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
-      .btn-browser { display: inline-block !important; }
     }
   </style>
 </head>
@@ -91,7 +110,7 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
-      <button class="btn btn-browser" onclick="openInBrowser()">🌐 В браузере</button>
+      <button class="btn btn-browser" id="btnBrowser" onclick="openInBrowser()">🌐 В браузере</button>
       <button class="btn btn-close" onclick="window.history.back()">✕</button>
     </div>
   </div>
@@ -100,9 +119,15 @@
   </div>
   
   <script>
+    // Защита от копирования
     document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
     document.onkeydown = function(e) {
-      if(e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) return false;
+      if(e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X' || e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) {
+        return false;
+      }
       if(e.key === 'F12') return false;
     };
     
@@ -116,9 +141,18 @@
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
     
     function openInBrowser() {
-      // Открываем эту же страницу в браузере
       const currentUrl = `https://genopoisk.vercel.app/player.html?id=${kid}&title=${encodeURIComponent(title)}`;
       window.open(currentUrl, '_blank');
+    }
+    
+    // Проверяем, запущено ли в Telegram Mini App
+    function isTelegramMiniApp() {
+      return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
+    }
+    
+    // Показываем кнопку "В браузере" ТОЛЬКО в Telegram Mini App
+    if(isTelegramMiniApp()) {
+      document.getElementById('btnBrowser').style.display = 'inline-block';
     }
     
     window.Telegram?.WebApp?.expand?.();

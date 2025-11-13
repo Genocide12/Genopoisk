@@ -34,6 +34,41 @@
       0% { opacity: 1; transform: translateX(-50%) translateY(0); }
       100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
     }
+    @keyframes buttonRipple {
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7);
+      }
+      50% {
+        transform: scale(1);
+      }
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 15px rgba(0, 122, 255, 0);
+      }
+    }
+    @keyframes colorPulse {
+      0%, 100% {
+        background: #007AFF;
+      }
+      50% {
+        background: linear-gradient(135deg, #007AFF, #00D4FF);
+      }
+    }
+    @keyframes cardTap {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(34,34,34,0.04);
+      }
+      50% {
+        transform: scale(0.92);
+        box-shadow: 0 0 20px rgba(0, 122, 255, 0.4);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(34,34,34,0.04);
+      }
+    }
     html {
       scroll-behavior: auto;
       overflow-y: scroll;
@@ -92,10 +127,7 @@
       width: 96%;
       box-shadow:0 2px 12px #2221;
       border: 1px solid #E6E6EA;
-      transition: transform 0.1s;
-    }
-    .tg-main-block:active {
-      transform: scale(0.98);
+      pointer-events: none;
     }
     .tg-main-block .main-title{
       font-size: 2.3rem;
@@ -118,20 +150,34 @@
     }
     .tg-disclaimer {
       font-size: 13px;
-      color: #888;
+      color: #666;
       margin: 20px 0 0 0;
       width: 100vw;
       box-sizing: border-box;
       background: #fff7;
       border-radius: 0;
-      padding: 12px 2vw 16px 2vw;
+      padding: 16px 3vw 18px 3vw;
       border-top:1.5px solid #eaeaea;
       box-shadow:0 -2px 14px #2221;
-      line-height: 1.55;
+      line-height: 1.65;
       text-align:center;
       left:0; right:0;
     }
-    .tg-disclaimer a { color: #007AFF; text-decoration:underline; }
+    .tg-disclaimer strong {
+      color: #222;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .tg-disclaimer a { 
+      color: #007AFF; 
+      text-decoration:none;
+      font-weight: 500;
+      border-bottom: 1px solid #007AFF;
+    }
+    .tg-disclaimer a:hover {
+      border-bottom: 2px solid #007AFF;
+    }
     .tg-zoom-control {
       display:none;
       align-items:center;
@@ -187,10 +233,11 @@
       cursor:pointer;
       box-shadow: 0 3px 13px #2222;
       transition:all .15s;
+      position: relative;
+      overflow: hidden;
     }
     .tg-search-btn:active { 
-      background:#0056cc;
-      transform: scale(0.95);
+      animation: buttonRipple 0.4s ease-out, colorPulse 0.4s ease-out;
     }
     .tg-action-row {
       display: grid;
@@ -209,18 +256,26 @@
       border: 1px solid #E6E6EA;
       cursor: pointer;
       transition: all 0.15s;
+      position: relative;
+      overflow: hidden;
     }
     .tg-action-card:hover {
       box-shadow: 0 4px 24px rgba(34,34,34,0.09);
       transform: translateY(-2px);
     }
     .tg-action-card:active {
-      transform: scale(0.95);
-      box-shadow: 0 2px 8px rgba(34,34,34,0.04);
+      animation: cardTap 0.3s ease-out;
+    }
+    .tg-action-card.tap-effect {
+      animation: cardTap 0.3s ease-out;
     }
     .tg-action-icon {
       font-size: 24px;
       margin-bottom: 9px;
+      transition: transform 0.2s;
+    }
+    .tg-action-card:active .tg-action-icon {
+      transform: scale(1.2) rotate(10deg);
     }
     .tg-action-title {
       font-size: 14px;
@@ -408,7 +463,9 @@
     <div id="tg-search-results" class="tg-film-grid" style="margin-top:10px;"></div>
   </div>
   <div class="tg-disclaimer">
-    Этот сервис помогает находить и делиться ссылками на видео, которые уже доступны в интернете, при этом сам сервис не загружает и не хранит копии видео у себя. Если вы правообладатель, отправьте уведомление на наш <a href="mailto:s.teiv@mail.ru">адрес</a> для претензий, указав прямую ссылку на спорный материал, описание объекта и подтверждение ваших прав.
+    <strong>Genopoisk не является онлайн-кинотеатром или видеохостингом.</strong>
+    Genopoisk — веб-приложение для поиска информации о фильмах, созданное исключительно в образовательных и информационных целях.<br><br>
+    По всем вопросам: <a href="https://github.com/Genocide12/Genopoisk/issues/new" target="_blank">github.com/Genocide12/Genopoisk/issues/new</a>
   </div>
   <script>
     const API_KEY = '26d2222a-3f07-492d-a17e-80fdc91e2fe9';

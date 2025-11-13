@@ -91,7 +91,7 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
-      <button class="btn btn-browser" onclick="openInBrowser()">🌐 Zona.im</button>
+      <button class="btn btn-browser" onclick="openInBrowser()">🌐 В браузере</button>
       <button class="btn btn-close" onclick="window.history.back()">✕</button>
     </div>
   </div>
@@ -107,17 +107,18 @@
     };
     
     const params = new URLSearchParams(window.location.search);
-    const kid = params.get('id') || '5435407';
+    const kid = params.get('id') || '326';
     const title = params.get('title') || 'Фильм';
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
     
-    // Используем Embess (работает стабильно с Kinopoisk ID)
+    // Используем Embess плеер
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
     
     function openInBrowser() {
-      // Открываем zona.im в новой вкладке (zona блокирует iframe)
-      window.open(`https://w1.zona.im/movies/embed/${kid}`, '_blank');
+      // Открываем эту же страницу в браузере
+      const currentUrl = `https://genopoisk.vercel.app/player.html?id=${kid}&title=${encodeURIComponent(title)}`;
+      window.open(currentUrl, '_blank');
     }
     
     window.Telegram?.WebApp?.expand?.();

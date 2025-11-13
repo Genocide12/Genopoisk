@@ -289,6 +289,10 @@
       padding: 18px;
       box-shadow: 0 1px 8px rgba(34,34,34,0.04);
       border: 1px solid #E6E6EA;
+      display: none;
+    }
+    .tg-section.active {
+      display: block;
     }
     .tg-film-grid {
       display: grid;
@@ -454,7 +458,7 @@
       <div class="tg-action-title">Случайный</div>
     </div>
   </div>
-  <div class="tg-section">
+  <div class="tg-section" id="tg-section">
     <div id="tg-loader" class="tg-loader" style="display:none;">
       <div class="spinner"></div>
       <div>Загрузка...</div>
@@ -509,7 +513,10 @@
       });
     }
     
-    function showLoader() { document.getElementById('tg-loader').style.display = 'block'; }
+    function showLoader() { 
+      document.getElementById('tg-section').classList.add('active');
+      document.getElementById('tg-loader').style.display = 'block'; 
+    }
     function hideLoader() { document.getElementById('tg-loader').style.display = 'none'; }
     function clearFilms() { document.getElementById('tg-film-grid').innerHTML = ''; }
     
@@ -601,6 +608,9 @@
       if (!val || val.length < 2) {
         document.getElementById('tg-search-results').innerHTML = '';
         document.getElementById('tg-film-grid').style.display = '';
+        if (!currentCategory) {
+          document.getElementById('tg-section').classList.remove('active');
+        }
         return;
       }
       

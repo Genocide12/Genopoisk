@@ -509,42 +509,6 @@
       return apiRequest("/v1.4/movie/random", {});
     }
 
-    // === Проверка доступности фильма в Embess ===
-    async function isEmbessAvailable(kpId) {
-      if (!kpId) return false;
-
-      try {
-        const res = await fetch(`https://api.embess.ws/embed/kp/${kpId}`, {
-          method: "GET"
-        });
-
-        if (!res.ok) return false;
-
-        const html = await res.text();
-        const lower = html.toLowerCase();
-
-        if (lower.includes("к сожалению, видео недоступно") ||
-            lower.includes("video недоступно")) {
-          return false;
-        }
-
-        return true;
-      } catch (e) {
-        console.error("embess check error", e);
-        return false;
-      }
-    }
-
-    async function filterPlayableMovies(docs) {
-      const checks = await Promise.all(
-        docs.map(async (movie) => {
-          const ok = await isEmbessAvailable(movie.id);
-          return ok ? movie : null;
-        })
-      );
-      return checks.filter(Boolean);
-    }
-
     // === Рендер фильмов ===
     function renderMovies(container, docs) {
       if (!container) return;
@@ -631,9 +595,7 @@
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
         const docs = data.docs || data.items || [];
-        const playable = await filterPlayableMovies(docs);
-
-        renderMovies(filmsGrid, playable);
+        renderMovies(filmsGrid, docs);
       } catch (e) {
         showError("Не удалось загрузить популярные фильмы");
       } finally {
@@ -659,9 +621,7 @@
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
         const docs = data.docs || data.items || [];
-        const playable = await filterPlayableMovies(docs);
-
-        renderMovies(filmsGrid, playable);
+        renderMovies(filmsGrid, docs);
       } catch (e) {
         showError("Не удалось загрузить топ 250");
       } finally {
@@ -689,9 +649,7 @@
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
         const docs = data.docs || data.items || [];
-        const playable = await filterPlayableMovies(docs);
-
-        renderMovies(filmsGrid, playable);
+        renderMovies(filmsGrid, docs);
       } catch (e) {
         showError("Не удалось загрузить новинки");
       } finally {
@@ -711,9 +669,7 @@
           : movie.docs || movie.items || [movie];
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-        const playable = await filterPlayableMovies(docs);
-
-        renderMovies(filmsGrid, playable);
+        renderMovies(filmsGrid, docs);
       } catch (e) {
         showError("Не удалось получить случайный фильм");
       } finally {
@@ -744,10 +700,9 @@
         showLoader();
         const data = await searchMoviesByName(value, 1, 24);
         const docs = data.docs || data.items || [];
-        const playable = await filterPlayableMovies(docs);
 
         if (filmsGrid) filmsGrid.innerHTML = "";
-        renderMovies(searchResultsGrid || filmsGrid, playable);
+        renderMovies(searchResultsGrid || filmsGrid, docs);
       } catch (e) {
         showError("Ошибка при выполнении поиска");
       } finally {

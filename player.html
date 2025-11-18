@@ -124,7 +124,8 @@
     document.addEventListener('cut', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
     document.onkeydown = function(e) {
-      if(e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X' || e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) {
+      if(e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X' ||
+                       e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) {
         return false;
       }
       if(e.key === 'F12') return false;

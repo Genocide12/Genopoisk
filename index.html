@@ -21,14 +21,8 @@
       50% { opacity: 0.3; }
     }
     @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(15px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     @keyframes arrowFade {
       0% { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -39,35 +33,20 @@
         transform: scale(0.95);
         box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7);
       }
-      50% {
-        transform: scale(1);
-      }
+      50% { transform: scale(1); }
       100% {
         transform: scale(0.95);
         box-shadow: 0 0 0 15px rgba(0, 122, 255, 0);
       }
     }
     @keyframes colorPulse {
-      0%, 100% {
-        background: #007AFF;
-      }
-      50% {
-        background: linear-gradient(135deg, #007AFF, #00D4FF);
-      }
+      0%, 100% { background: #007AFF; }
+      50% { background: linear-gradient(135deg, #007AFF, #00D4FF); }
     }
     @keyframes cardTap {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 2px 8px rgba(34,34,34,0.04);
-      }
-      50% {
-        transform: scale(0.92);
-        box-shadow: 0 0 20px rgba(0, 122, 255, 0.4);
-      }
-      100% {
-        transform: scale(1);
-        box-shadow: 0 2px 8px rgba(34,34,34,0.04);
-      }
+      0% { transform: scale(1); box-shadow: 0 2px 8px rgba(34,34,34,0.04); }
+      50% { transform: scale(0.92); box-shadow: 0 0 20px rgba(0, 122, 255, 0.4); }
+      100% { transform: scale(1); box-shadow: 0 2px 8px rgba(34,34,34,0.04); }
     }
     html {
       scroll-behavior: auto;
@@ -75,9 +54,7 @@
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
-    html::-webkit-scrollbar {
-      display: none;
-    }
+    html::-webkit-scrollbar { display: none; }
     html, body {
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -186,10 +163,7 @@
       max-width:400px;
       justify-content:center;
     }
-    .tg-zoom-control .zoom-icon {
-      font-size:22px;
-      color:#007AFF;
-    }
+    .tg-zoom-control .zoom-icon { font-size:22px; color:#007AFF; }
     .tg-zoom-control input[type="range"] {
       flex:1;
       max-width:280px;
@@ -220,7 +194,8 @@
       user-select: text!important;
     }
     .tg-search-row input[type="search"]:focus {
-      border: 1.5px solid #007AFF; box-shadow: 0 7px 18px #86b7fa3b;
+      border: 1.5px solid #007AFF;
+      box-shadow: 0 7px 18px #86b7fa3b;
     }
     .tg-search-btn {
       background: #007AFF;
@@ -263,12 +238,8 @@
       box-shadow: 0 4px 24px rgba(34,34,34,0.09);
       transform: translateY(-2px);
     }
-    .tg-action-card:active {
-      animation: cardTap 0.3s ease-out;
-    }
-    .tg-action-card.tap-effect {
-      animation: cardTap 0.3s ease-out;
-    }
+    .tg-action-card:active { animation: cardTap 0.3s ease-out; }
+    .tg-action-card.tap-effect { animation: cardTap 0.3s ease-out; }
     .tg-action-icon {
       font-size: 24px;
       margin-bottom: 9px;
@@ -291,9 +262,7 @@
       border: 1px solid #E6E6EA;
       display: none;
     }
-    .tg-section.active {
-      display: block;
-    }
+    .tg-section.active { display: block; }
     .tg-film-grid {
       display: grid;
       gap: 10px;
@@ -344,9 +313,7 @@
       transform: translateY(-3px);
       box-shadow: 0 4px 12px rgba(34,34,34,0.12);
     }
-    .tg-film-card:active {
-      transform: scale(0.97);
-    }
+    .tg-film-card:active { transform: scale(0.97); }
     .tg-film-poster {
       background: #eee;
       border-radius: 5px;
@@ -486,7 +453,6 @@
 
     let currentCategory = "popular";
 
-    // === UI-хелперы ===
     function showSection() {
       if (tgSection) tgSection.classList.add("active");
     }
@@ -527,7 +493,6 @@
       return res.json();
     }
 
-    // === Обёртки над эндпоинтами ===
     async function searchMoviesByName(query, page = 1, limit = 24) {
       return apiRequest("/v1.4/movie/search", { query, page, limit });
     }
@@ -542,6 +507,42 @@
 
     async function getRandomMovie() {
       return apiRequest("/v1.4/movie/random", {});
+    }
+
+    // === Проверка доступности фильма в Embess ===
+    async function isEmbessAvailable(kpId) {
+      if (!kpId) return false;
+
+      try {
+        const res = await fetch(`https://api.embess.ws/embed/kp/${kpId}`, {
+          method: "GET"
+        });
+
+        if (!res.ok) return false;
+
+        const html = await res.text();
+        const lower = html.toLowerCase();
+
+        if (lower.includes("к сожалению, видео недоступно") ||
+            lower.includes("video недоступно")) {
+          return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.error("embess check error", e);
+        return false;
+      }
+    }
+
+    async function filterPlayableMovies(docs) {
+      const checks = await Promise.all(
+        docs.map(async (movie) => {
+          const ok = await isEmbessAvailable(movie.id);
+          return ok ? movie : null;
+        })
+      );
+      return checks.filter(Boolean);
     }
 
     // === Рендер фильмов ===
@@ -598,7 +599,6 @@
           <div class="tg-film-details">${subtitleParts.join(" • ")}</div>
         `;
 
-        // Клик по карточке — в плеер
         card.addEventListener("click", () => {
           if (!movie.id) return;
           const url = `player.html?id=${encodeURIComponent(
@@ -630,7 +630,10 @@
         );
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-        renderMovies(filmsGrid, data.docs || data.items || []);
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
       } catch (e) {
         showError("Не удалось загрузить популярные фильмы");
       } finally {
@@ -655,7 +658,10 @@
         );
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-        renderMovies(filmsGrid, data.docs || data.items || []);
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
       } catch (e) {
         showError("Не удалось загрузить топ 250");
       } finally {
@@ -682,7 +688,10 @@
         );
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-        renderMovies(filmsGrid, data.docs || data.items || []);
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
       } catch (e) {
         showError("Не удалось загрузить новинки");
       } finally {
@@ -702,7 +711,9 @@
           : movie.docs || movie.items || [movie];
 
         if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-        renderMovies(filmsGrid, docs);
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
       } catch (e) {
         showError("Не удалось получить случайный фильм");
       } finally {
@@ -710,7 +721,6 @@
       }
     }
 
-    // Обёртка для onclick="loadCategory('...')"
     async function loadCategory(category) {
       if (category === "popular") return loadPopular();
       if (category === "top250")  return loadTop250();
@@ -733,9 +743,11 @@
       try {
         showLoader();
         const data = await searchMoviesByName(value, 1, 24);
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
 
         if (filmsGrid) filmsGrid.innerHTML = "";
-        renderMovies(searchResultsGrid || filmsGrid, data.docs || data.items || []);
+        renderMovies(searchResultsGrid || filmsGrid, playable);
       } catch (e) {
         showError("Ошибка при выполнении поиска");
       } finally {
@@ -743,12 +755,10 @@
       }
     }
 
-    // Для кнопки «Найти» (onclick="triggerSearch()")
     function triggerSearch() {
       handleSearch();
     }
 
-    // Enter в поле поиска
     if (tgSearchInput) {
       tgSearchInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
@@ -757,7 +767,6 @@
       });
     }
 
-    // Зум (если нужен)
     const zoomSlider = document.getElementById("zoomSlider");
     if (zoomSlider) {
       zoomSlider.addEventListener("input", (e) => {
@@ -767,7 +776,6 @@
       });
     }
 
-    // Стартовая загрузка
     loadPopular();
   </script>
 </body>

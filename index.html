@@ -476,52 +476,32 @@
   const API_KEY = "CRDEV06-M84M476-HQX2THM-RHFSWX0";
   const API_BASE = "https://api.poiskkino.dev";
 
-  // === Ссылки на элементы интерфейса (подгони id под свой HTML) ===
-  const searchInput   = document.getElementById("search-input");
-  const searchButton  = document.getElementById("search-button");
-
-  const btnPopular    = document.getElementById("btn-popular");
-  const btnTop250     = document.getElementById("btn-top250");
-  const btnNew        = document.getElementById("btn-new");
-  const btnRandom     = document.getElementById("btn-random");
-
-  const moviesContainer = document.getElementById("movies");
-  const loader          = document.getElementById("loader");        // оверлей «Загрузка»
-  const errorBanner     = document.getElementById("error-banner");  // блок ошибки
-  const errorText       = document.getElementById("error-text");    // сам текст ошибки
-  const gridTitle       = document.getElementById("grid-title");    // заголовок списка
-  const gridCounter     = document.getElementById("grid-counter");  // счётчик фильмов
+  // === Элементы текущего интерфейса (tg-*) ===
+  const tgSearchInput      = document.getElementById("tg-search");
+  const tgSection          = document.getElementById("tg-section");
+  const tgLoader           = document.getElementById("tg-loader");
+  const filmsGrid          = document.getElementById("tg-film-grid");
+  const searchResultsGrid  = document.getElementById("tg-search-results");
 
   let currentCategory = "popular";
 
-  // === Вспомогательные функции UI ===
+  // === UI-хелперы ===
 
-  function setActiveChip(button) {
-    const chips = [btnPopular, btnTop250, btnNew, btnRandom].filter(Boolean);
-    chips.forEach((btn) => btn.classList.remove("chip-active"));
-    if (button) {
-      button.classList.add("chip-active");
-    }
+  function showSection() {
+    if (tgSection) tgSection.classList.add("active");
   }
 
   function showLoader() {
-    if (loader) loader.classList.remove("hidden");
+    if (tgLoader) tgLoader.style.display = "block";
   }
 
   function hideLoader() {
-    if (loader) loader.classList.add("hidden");
+    if (tgLoader) tgLoader.style.display = "none";
   }
 
   function showError(message) {
-    if (!errorBanner || !errorText) {
-      console.error(message || "Ошибка загрузки данных");
-      return;
-    }
-    errorText.textContent = message || "Ошибка загрузки данных";
-    errorBanner.classList.remove("hidden");
-    setTimeout(() => {
-      errorBanner.classList.add("hidden");
-    }, 3500);
+    console.error(message || "Ошибка загрузки данных");
+    // Можно дописать вывод ошибки в DOM, если захочешь
   }
 
   // === Базовый запрос к PoiskKino API ===
@@ -548,16 +528,15 @@
     return res.json();
   }
 
-  // === Обертки над эндпоинтами ===
+  // === Обёртки над эндпоинтами ===
+
   // Поиск по названию
   async function searchMoviesByName(query, page = 1, limit = 24) {
-    // Эндпоинт и схема параметров повторяют kinopoisk.dev (/v1.4/movie/search)
     return apiRequest("/v1.4/movie/search", { query, page, limit });
   }
 
-  // Список фильмов с фильтрами (под популярные/топ/новинки)
+  // Список фильмов (популярные / топ / новинки)
   async function getMoviesList(filters = {}, page = 1, limit = 24) {
-    // Совместимо с /v1.4/movie kinopoisk.dev: фильтры через query-параметры
     return apiRequest("/v1.4/movie", {
       page,
       limit,
@@ -567,48 +546,39 @@
 
   // Случайный фильм
   async function getRandomMovie() {
-    // По аналогии с random у kinopoisk.dev (v1.4/v1.3/random)
+    // Если вдруг будет 404 — попробуй поменять на /v1.3/movie/random
     return apiRequest("/v1.4/movie/random", {});
   }
 
-  // === Рендер фильмов (подстроить под твою вёрстку карточки) ===
-  function getRatingClass(value) {
-    if (value === null || value === undefined) return "rating-mid";
-    if (value >= 7.5) return "rating-high";
-    if (value >= 5.5) return "rating-mid";
-    return "rating-low";
-  }
+  // === Рендер фильмов в существующую сетку tg-film-grid ===
 
-  function renderMovies(docs) {
-    if (!moviesContainer) return;
+  function renderMovies(container, docs) {
+    if (!container) return;
 
-    moviesContainer.innerHTML = "";
+    container.innerHTML = "";
 
     if (!docs || !docs.length) {
       const empty = document.createElement("div");
-      empty.style.padding = "10px 12px 6px";
-      empty.style.fontSize = "0.88rem";
-      empty.style.color = "#9ca3af";
-      empty.textContent =
-        "Ничего не найдено. Попробуйте изменить запрос или категорию.";
-      moviesContainer.appendChild(empty);
-      if (gridCounter) gridCounter.textContent = "0 найдено";
+      empty.className = "tg-film-details";
+      empty.style.gridColumn = "1 / -1";
+      empty.textContent = "Ничего не найдено. Попробуйте изменить запрос или категорию.";
+      container.appendChild(empty);
       return;
     }
 
     docs.forEach((movie) => {
-      // Если у тебя уже есть шаблон карточки в HTML, можешь вместо этого
-      // создавать элемент по своему шаблону и просто подставлять данные.
       const card = document.createElement("div");
-      card.className = "movie-card";
+      card.className = "tg-film-card";
 
       const posterUrl =
         (movie.poster && movie.poster.url) ||
         (movie.backdrop && movie.backdrop.url) ||
-        "https://via.placeholder.com/300x450/020617/4b5563?text=No+Image";
+        "https://via.placeholder.com/300x450/EEEEEE/AAAAAA?text=No+image";
 
       const title =
         movie.name || movie.alternativeName || movie.enName || "Без названия";
+
+      const year = movie.year || "Год неизвестен";
 
       const ratingKp =
         movie.rating && movie.rating.kp != null
@@ -619,51 +589,35 @@
         ? movie.genres.map((g) => g.name).filter(Boolean)
         : [];
 
+      const subtitleParts = [];
+      subtitleParts.push(year);
+      if (genres[0]) subtitleParts.push(genres[0]);
+      if (ratingKp) subtitleParts.push("Рейтинг: " + ratingKp);
+
       card.innerHTML = `
-        <div class="movie-poster-wrap">
-          <img
-            class="movie-poster"
-            src="${posterUrl}"
-            loading="lazy"
-            alt="${String(title).replace(/"/g, "&quot;")}"
-          />
-          <div class="movie-gradient"></div>
-          ${
-            ratingKp
-              ? `
-            <div class="movie-rating-pill">
-              <span class="movie-rating-dot ${getRatingClass(ratingKp)}"></span>
-              <span>${ratingKp}</span>
-            </div>
-          `
-              : ""
-          }
-        </div>
-        <div class="movie-info">
-          <div class="movie-title">${title}</div>
-          <div class="movie-meta">
-            <span class="movie-year">${movie.year || "Год неизвестен"}</span>
-            <span class="movie-genre">${genres[0] || ""}</span>
-          </div>
-        </div>
+        <img
+          class="tg-film-poster"
+          src="${posterUrl}"
+          loading="lazy"
+          alt="${String(title).replace(/"/g, "&quot;")}"
+        />
+        <div class="tg-film-title">${title}</div>
+        <div class="tg-film-details">${subtitleParts.join(" • ")}</div>
       `;
 
-      moviesContainer.appendChild(card);
+      container.appendChild(card);
     });
-
-    if (gridCounter) {
-      gridCounter.textContent = docs.length + " найдено";
-    }
   }
 
-  // === Загрузчики категорий ===
+  // === Категории ===
+
   async function loadPopular() {
     currentCategory = "popular";
-    if (gridTitle) gridTitle.textContent = "Популярные фильмы";
-    setActiveChip(btnPopular);
+    showSection();
 
     try {
       showLoader();
+      // популярные: по рейтингу и кол-ву голосов
       const data = await getMoviesList(
         {
           "rating.kp": "6-10",
@@ -675,9 +629,9 @@
         24
       );
 
-      renderMovies(data.docs || data.items || []);
+      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+      renderMovies(filmsGrid, data.docs || data.items || []);
     } catch (e) {
-      console.error(e);
       showError("Не удалось загрузить популярные фильмы");
     } finally {
       hideLoader();
@@ -686,8 +640,7 @@
 
   async function loadTop250() {
     currentCategory = "top250";
-    if (gridTitle) gridTitle.textContent = "Топ 250 фильмов";
-    setActiveChip(btnTop250);
+    showSection();
 
     try {
       showLoader();
@@ -701,9 +654,9 @@
         24
       );
 
-      renderMovies(data.docs || data.items || []);
+      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+      renderMovies(filmsGrid, data.docs || data.items || []);
     } catch (e) {
-      console.error(e);
       showError("Не удалось загрузить топ 250");
     } finally {
       hideLoader();
@@ -712,8 +665,7 @@
 
   async function loadNew() {
     currentCategory = "new";
-    if (gridTitle) gridTitle.textContent = "Новинки кино";
-    setActiveChip(btnNew);
+    showSection();
 
     const currentYear = new Date().getFullYear();
 
@@ -729,9 +681,9 @@
         24
       );
 
-      renderMovies(data.docs || data.items || []);
+      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+      renderMovies(filmsGrid, data.docs || data.items || []);
     } catch (e) {
-      console.error(e);
       showError("Не удалось загрузить новинки");
     } finally {
       hideLoader();
@@ -740,8 +692,7 @@
 
   async function loadRandom() {
     currentCategory = "random";
-    if (gridTitle) gridTitle.textContent = "Случайный фильм";
-    setActiveChip(btnRandom);
+    showSection();
 
     try {
       showLoader();
@@ -749,82 +700,63 @@
       const docs = Array.isArray(movie)
         ? movie
         : movie.docs || movie.items || [movie];
-      renderMovies(docs);
+
+      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+      renderMovies(filmsGrid, docs);
     } catch (e) {
-      console.error(e);
       showError("Не удалось получить случайный фильм");
     } finally {
       hideLoader();
     }
   }
 
+  // Обёртка для существующих onclick="loadCategory('popular')"
+  async function loadCategory(category) {
+    if (category === "popular") return loadPopular();
+    if (category === "top250")  return loadTop250();
+    if (category === "new")     return loadNew();
+    if (category === "random")  return loadRandom();
+  }
+
+  // === Поиск ===
+
   async function handleSearch() {
-    if (!searchInput) return;
-    const value = searchInput.value.trim();
+    if (!tgSearchInput) return;
+    const value = tgSearchInput.value.trim();
+
+    showSection();
 
     if (!value) {
-      // если пустой запрос — возвращаемся к популярным
+      // Пустой запрос: просто перезагружаем популярные
       await loadPopular();
       return;
     }
 
-    currentCategory = "search";
-    if (gridTitle) gridTitle.textContent = `Результаты поиска: “${value}”`;
-    setActiveChip(null);
-
     try {
       showLoader();
       const data = await searchMoviesByName(value, 1, 24);
-      renderMovies(data.docs || data.items || []);
+
+      // Для поиска используем отдельную сетку, а основную очищаем
+      if (filmsGrid) filmsGrid.innerHTML = "";
+      renderMovies(searchResultsGrid || filmsGrid, data.docs || data.items || []);
     } catch (e) {
-      console.error(e);
       showError("Ошибка при выполнении поиска");
     } finally {
       hideLoader();
     }
   }
 
-  // === Привязка обработчиков к существующим кнопкам ===
-  if (searchButton) {
-    searchButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      handleSearch();
-    });
+  // Обёртка под onclick="triggerSearch()"
+  function triggerSearch() {
+    handleSearch();
   }
 
-  if (searchInput) {
-    searchInput.addEventListener("keydown", (e) => {
+  // Обработка Enter в поле ввода
+  if (tgSearchInput) {
+    tgSearchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
-        handleSearch();
+        triggerSearch();
       }
-    });
-  }
-
-  if (btnPopular) {
-    btnPopular.addEventListener("click", (e) => {
-      e.preventDefault();
-      loadPopular();
-    });
-  }
-
-  if (btnTop250) {
-    btnTop250.addEventListener("click", (e) => {
-      e.preventDefault();
-      loadTop250();
-    });
-  }
-
-  if (btnNew) {
-    btnNew.addEventListener("click", (e) => {
-      e.preventDefault();
-      loadNew();
-    });
-  }
-
-  if (btnRandom) {
-    btnRandom.addEventListener("click", (e) => {
-      e.preventDefault();
-      loadRandom();
     });
   }
 
@@ -833,3 +765,4 @@
 </script>
 </body>
 </html>
+

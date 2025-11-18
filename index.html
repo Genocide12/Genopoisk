@@ -471,298 +471,304 @@
     Genopoisk — веб-приложение для поиска информации о фильмах, созданное исключительно в образовательных и информационных целях.<br><br>
     По всем вопросам: <a href="https://github.com/Genocide12/Genopoisk/issues/new" target="_blank">Оставить обращение</a>
   </div>
-<script>
-  // === Конфиг API ===
-  const API_KEY = "CRDEV06-M84M476-HQX2THM-RHFSWX0";
-  const API_BASE = "https://api.poiskkino.dev";
 
-  // === Элементы текущего интерфейса (tg-*) ===
-  const tgSearchInput      = document.getElementById("tg-search");
-  const tgSection          = document.getElementById("tg-section");
-  const tgLoader           = document.getElementById("tg-loader");
-  const filmsGrid          = document.getElementById("tg-film-grid");
-  const searchResultsGrid  = document.getElementById("tg-search-results");
+  <script>
+    // === Конфиг API ===
+    const API_KEY = "CRDEV06-M84M476-HQX2THM-RHFSWX0";
+    const API_BASE = "https://api.poiskkino.dev";
 
-  let currentCategory = "popular";
+    // === Элементы интерфейса ===
+    const tgSearchInput      = document.getElementById("tg-search");
+    const tgSection          = document.getElementById("tg-section");
+    const tgLoader           = document.getElementById("tg-loader");
+    const filmsGrid          = document.getElementById("tg-film-grid");
+    const searchResultsGrid  = document.getElementById("tg-search-results");
 
-  // === UI-хелперы ===
+    let currentCategory = "popular";
 
-  function showSection() {
-    if (tgSection) tgSection.classList.add("active");
-  }
-
-  function showLoader() {
-    if (tgLoader) tgLoader.style.display = "block";
-  }
-
-  function hideLoader() {
-    if (tgLoader) tgLoader.style.display = "none";
-  }
-
-  function showError(message) {
-    console.error(message || "Ошибка загрузки данных");
-    // Можно дописать вывод ошибки в DOM, если захочешь
-  }
-
-  // === Базовый запрос к PoiskKino API ===
-  async function apiRequest(path, params = {}) {
-    const url = new URL(API_BASE + path);
-
-    Object.entries(params).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === "") return;
-      url.searchParams.set(key, value);
-    });
-
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        "X-API-KEY": API_KEY,
-        "accept": "application/json",
-      },
-    });
-
-    if (!res.ok) {
-      throw new Error("API error " + res.status);
+    // === UI-хелперы ===
+    function showSection() {
+      if (tgSection) tgSection.classList.add("active");
     }
 
-    return res.json();
-  }
-
-  // === Обёртки над эндпоинтами ===
-
-  // Поиск по названию
-  async function searchMoviesByName(query, page = 1, limit = 24) {
-    return apiRequest("/v1.4/movie/search", { query, page, limit });
-  }
-
-  // Список фильмов (популярные / топ / новинки)
-  async function getMoviesList(filters = {}, page = 1, limit = 24) {
-    return apiRequest("/v1.4/movie", {
-      page,
-      limit,
-      ...filters,
-    });
-  }
-
-  // Случайный фильм
-  async function getRandomMovie() {
-    // Если вдруг будет 404 — попробуй поменять на /v1.3/movie/random
-    return apiRequest("/v1.4/movie/random", {});
-  }
-
-  // === Рендер фильмов в существующую сетку tg-film-grid ===
-
-  function renderMovies(container, docs) {
-    if (!container) return;
-
-    container.innerHTML = "";
-
-    if (!docs || !docs.length) {
-      const empty = document.createElement("div");
-      empty.className = "tg-film-details";
-      empty.style.gridColumn = "1 / -1";
-      empty.textContent = "Ничего не найдено. Попробуйте изменить запрос или категорию.";
-      container.appendChild(empty);
-      return;
+    function showLoader() {
+      if (tgLoader) tgLoader.style.display = "block";
     }
 
-    docs.forEach((movie) => {
-      const card = document.createElement("div");
-      card.className = "tg-film-card";
+    function hideLoader() {
+      if (tgLoader) tgLoader.style.display = "none";
+    }
 
-      const posterUrl =
-        (movie.poster && movie.poster.url) ||
-        (movie.backdrop && movie.backdrop.url) ||
-        "https://via.placeholder.com/300x450/EEEEEE/AAAAAA?text=No+image";
+    function showError(message) {
+      console.error(message || "Ошибка загрузки данных");
+    }
 
-      const title =
-        movie.name || movie.alternativeName || movie.enName || "Без названия";
+    // === Базовый запрос к PoiskKino API ===
+    async function apiRequest(path, params = {}) {
+      const url = new URL(API_BASE + path);
 
-      const year = movie.year || "Год неизвестен";
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        url.searchParams.set(key, value);
+      });
 
-      const ratingKp =
-        movie.rating && movie.rating.kp != null
-          ? Number(movie.rating.kp.toFixed(1))
-          : null;
-
-      const genres = Array.isArray(movie.genres)
-        ? movie.genres.map((g) => g.name).filter(Boolean)
-        : [];
-
-      const subtitleParts = [];
-      subtitleParts.push(year);
-      if (genres[0]) subtitleParts.push(genres[0]);
-      if (ratingKp) subtitleParts.push("Рейтинг: " + ratingKp);
-
-      card.innerHTML = `
-        <img
-          class="tg-film-poster"
-          src="${posterUrl}"
-          loading="lazy"
-          alt="${String(title).replace(/"/g, "&quot;")}"
-        />
-        <div class="tg-film-title">${title}</div>
-        <div class="tg-film-details">${subtitleParts.join(" • ")}</div>
-      `;
-
-      container.appendChild(card);
-    });
-  }
-
-  // === Категории ===
-
-  async function loadPopular() {
-    currentCategory = "popular";
-    showSection();
-
-    try {
-      showLoader();
-      // популярные: по рейтингу и кол-ву голосов
-      const data = await getMoviesList(
-        {
-          "rating.kp": "6-10",
-          "votes.kp": "1000-100000000",
-          sortField: "rating.kp",
-          sortType: "-1",
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "X-API-KEY": API_KEY,
+          "accept": "application/json",
         },
-        1,
-        24
-      );
+      });
 
-      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-      renderMovies(filmsGrid, data.docs || data.items || []);
-    } catch (e) {
-      showError("Не удалось загрузить популярные фильмы");
-    } finally {
-      hideLoader();
-    }
-  }
-
-  async function loadTop250() {
-    currentCategory = "top250";
-    showSection();
-
-    try {
-      showLoader();
-      const data = await getMoviesList(
-        {
-          top250: "1-250",
-          sortField: "top250",
-          sortType: "1",
-        },
-        1,
-        24
-      );
-
-      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-      renderMovies(filmsGrid, data.docs || data.items || []);
-    } catch (e) {
-      showError("Не удалось загрузить топ 250");
-    } finally {
-      hideLoader();
-    }
-  }
-
-  async function loadNew() {
-    currentCategory = "new";
-    showSection();
-
-    const currentYear = new Date().getFullYear();
-
-    try {
-      showLoader();
-      const data = await getMoviesList(
-        {
-          year: (currentYear - 1) + "-" + currentYear,
-          sortField: "year",
-          sortType: "-1",
-        },
-        1,
-        24
-      );
-
-      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-      renderMovies(filmsGrid, data.docs || data.items || []);
-    } catch (e) {
-      showError("Не удалось загрузить новинки");
-    } finally {
-      hideLoader();
-    }
-  }
-
-  async function loadRandom() {
-    currentCategory = "random";
-    showSection();
-
-    try {
-      showLoader();
-      const movie = await getRandomMovie();
-      const docs = Array.isArray(movie)
-        ? movie
-        : movie.docs || movie.items || [movie];
-
-      if (searchResultsGrid) searchResultsGrid.innerHTML = "";
-      renderMovies(filmsGrid, docs);
-    } catch (e) {
-      showError("Не удалось получить случайный фильм");
-    } finally {
-      hideLoader();
-    }
-  }
-
-  // Обёртка для существующих onclick="loadCategory('popular')"
-  async function loadCategory(category) {
-    if (category === "popular") return loadPopular();
-    if (category === "top250")  return loadTop250();
-    if (category === "new")     return loadNew();
-    if (category === "random")  return loadRandom();
-  }
-
-  // === Поиск ===
-
-  async function handleSearch() {
-    if (!tgSearchInput) return;
-    const value = tgSearchInput.value.trim();
-
-    showSection();
-
-    if (!value) {
-      // Пустой запрос: просто перезагружаем популярные
-      await loadPopular();
-      return;
-    }
-
-    try {
-      showLoader();
-      const data = await searchMoviesByName(value, 1, 24);
-
-      // Для поиска используем отдельную сетку, а основную очищаем
-      if (filmsGrid) filmsGrid.innerHTML = "";
-      renderMovies(searchResultsGrid || filmsGrid, data.docs || data.items || []);
-    } catch (e) {
-      showError("Ошибка при выполнении поиска");
-    } finally {
-      hideLoader();
-    }
-  }
-
-  // Обёртка под onclick="triggerSearch()"
-  function triggerSearch() {
-    handleSearch();
-  }
-
-  // Обработка Enter в поле ввода
-  if (tgSearchInput) {
-    tgSearchInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        triggerSearch();
+      if (!res.ok) {
+        throw new Error("API error " + res.status);
       }
-    });
-  }
 
-  // === Стартовая загрузка ===
-  loadPopular();
-</script>
+      return res.json();
+    }
+
+    // === Обёртки над эндпоинтами ===
+    async function searchMoviesByName(query, page = 1, limit = 24) {
+      return apiRequest("/v1.4/movie/search", { query, page, limit });
+    }
+
+    async function getMoviesList(filters = {}, page = 1, limit = 24) {
+      return apiRequest("/v1.4/movie", {
+        page,
+        limit,
+        ...filters,
+      });
+    }
+
+    async function getRandomMovie() {
+      return apiRequest("/v1.4/movie/random", {});
+    }
+
+    // === Рендер фильмов ===
+    function renderMovies(container, docs) {
+      if (!container) return;
+
+      container.innerHTML = "";
+
+      if (!docs || !docs.length) {
+        const empty = document.createElement("div");
+        empty.className = "tg-film-details";
+        empty.style.gridColumn = "1 / -1";
+        empty.textContent = "Ничего не найдено. Попробуйте изменить запрос или категорию.";
+        container.appendChild(empty);
+        return;
+      }
+
+      docs.forEach((movie) => {
+        const card = document.createElement("div");
+        card.className = "tg-film-card";
+
+        const posterUrl =
+          (movie.poster && movie.poster.url) ||
+          (movie.backdrop && movie.backdrop.url) ||
+          "https://via.placeholder.com/300x450/EEEEEE/AAAAAA?text=No+image";
+
+        const title =
+          movie.name || movie.alternativeName || movie.enName || "Без названия";
+
+        const year = movie.year || "Год неизвестен";
+
+        const ratingKp =
+          movie.rating && movie.rating.kp != null
+            ? Number(movie.rating.kp.toFixed(1))
+            : null;
+
+        const genres = Array.isArray(movie.genres)
+          ? movie.genres.map((g) => g.name).filter(Boolean)
+          : [];
+
+        const subtitleParts = [];
+        subtitleParts.push(year);
+        if (genres[0]) subtitleParts.push(genres[0]);
+        if (ratingKp) subtitleParts.push("Рейтинг: " + ratingKp);
+
+        card.innerHTML = `
+          <img
+            class="tg-film-poster"
+            src="${posterUrl}"
+            loading="lazy"
+            alt="${String(title).replace(/"/g, "&quot;")}"
+          />
+          <div class="tg-film-title">${title}</div>
+          <div class="tg-film-details">${subtitleParts.join(" • ")}</div>
+        `;
+
+        // Клик по карточке — в плеер
+        card.addEventListener("click", () => {
+          if (!movie.id) return;
+          const url = `player.html?id=${encodeURIComponent(
+            movie.id
+          )}&title=${encodeURIComponent(title)}`;
+          window.location.href = url;
+        });
+
+        container.appendChild(card);
+      });
+    }
+
+    // === Категории ===
+    async function loadPopular() {
+      currentCategory = "popular";
+      showSection();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            "rating.kp": "6-10",
+            "votes.kp": "1000-100000000",
+            sortField: "rating.kp",
+            sortType: "-1",
+          },
+          1,
+          24
+        );
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        renderMovies(filmsGrid, data.docs || data.items || []);
+      } catch (e) {
+        showError("Не удалось загрузить популярные фильмы");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadTop250() {
+      currentCategory = "top250";
+      showSection();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            top250: "1-250",
+            sortField: "top250",
+            sortType: "1",
+          },
+          1,
+          24
+        );
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        renderMovies(filmsGrid, data.docs || data.items || []);
+      } catch (e) {
+        showError("Не удалось загрузить топ 250");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadNew() {
+      currentCategory = "new";
+      showSection();
+
+      const currentYear = new Date().getFullYear();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            year: (currentYear - 1) + "-" + currentYear,
+            sortField: "year",
+            sortType: "-1",
+          },
+          1,
+          24
+        );
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        renderMovies(filmsGrid, data.docs || data.items || []);
+      } catch (e) {
+        showError("Не удалось загрузить новинки");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadRandom() {
+      currentCategory = "random";
+      showSection();
+
+      try {
+        showLoader();
+        const movie = await getRandomMovie();
+        const docs = Array.isArray(movie)
+          ? movie
+          : movie.docs || movie.items || [movie];
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        renderMovies(filmsGrid, docs);
+      } catch (e) {
+        showError("Не удалось получить случайный фильм");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    // Обёртка для onclick="loadCategory('...')"
+    async function loadCategory(category) {
+      if (category === "popular") return loadPopular();
+      if (category === "top250")  return loadTop250();
+      if (category === "new")     return loadNew();
+      if (category === "random")  return loadRandom();
+    }
+
+    // === Поиск ===
+    async function handleSearch() {
+      if (!tgSearchInput) return;
+      const value = tgSearchInput.value.trim();
+
+      showSection();
+
+      if (!value) {
+        await loadPopular();
+        return;
+      }
+
+      try {
+        showLoader();
+        const data = await searchMoviesByName(value, 1, 24);
+
+        if (filmsGrid) filmsGrid.innerHTML = "";
+        renderMovies(searchResultsGrid || filmsGrid, data.docs || data.items || []);
+      } catch (e) {
+        showError("Ошибка при выполнении поиска");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    // Для кнопки «Найти» (onclick="triggerSearch()")
+    function triggerSearch() {
+      handleSearch();
+    }
+
+    // Enter в поле поиска
+    if (tgSearchInput) {
+      tgSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          triggerSearch();
+        }
+      });
+    }
+
+    // Зум (если нужен)
+    const zoomSlider = document.getElementById("zoomSlider");
+    if (zoomSlider) {
+      zoomSlider.addEventListener("input", (e) => {
+        const level = Number(e.target.value);
+        document.body.classList.remove("zoom-0", "zoom-1", "zoom-2", "zoom-3");
+        document.body.classList.add("zoom-" + level);
+      });
+    }
+
+    // Стартовая загрузка
+    loadPopular();
+  </script>
 </body>
 </html>
-

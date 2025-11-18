@@ -2,9 +2,59 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,minimum-scale=1">
-  <title>Плеер</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
+  <meta name="theme-color" content="#007AFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Genopoisk">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <title>Genopoisk MiniApp</title>
   <style>
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes arrowFade {
+      0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    }
+    @keyframes buttonRipple {
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7);
+      }
+      50% { transform: scale(1); }
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 15px rgba(0, 122, 255, 0);
+      }
+    }
+    @keyframes colorPulse {
+      0%, 100% { background: #007AFF; }
+      50% { background: linear-gradient(135deg, #007AFF, #00D4FF); }
+    }
+    @keyframes cardTap {
+      0% { transform: scale(1); box-shadow: 0 2px 8px rgba(34,34,34,0.04); }
+      50% { transform: scale(0.92); box-shadow: 0 0 20px rgba(0, 122, 255, 0.4); }
+      100% { transform: scale(1); box-shadow: 0 2px 8px rgba(34,34,34,0.04); }
+    }
+    html {
+      scroll-behavior: auto;
+      overflow-y: scroll;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    html::-webkit-scrollbar { display: none; }
     html, body {
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -12,152 +62,721 @@
       user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
-      margin:0;
-      padding:0;
-      background:#000;
-      width:100vw;
-      height:100vh;
-      min-height:100vh;
-      min-width:100vw;
-      font-family:system-ui,sans-serif;
-      overflow:hidden;
+      padding: 0;
+      margin: 0;
+      background: linear-gradient(-45deg, #e3f2fd, #f3e5f5, #e8f5e9, #fff3e0);
+      background-size: 400% 400%;
+      animation: gradientMove 15s ease infinite;
+      min-height: 100vh;
+      font-family: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      color: #222;
+      font-size: 15px;
+      overflow-x:hidden;
     }
     *, *:after, *:before {
       -webkit-user-select: none!important;
       -webkit-tap-highlight-color: transparent;
       user-select: none!important;
     }
-    .player-header {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      color:#fff;
-      background:#101014;
-      padding:14px 10px;
-      height:52px;
-      font-size:17px;
-      font-weight:600;
-      box-sizing:border-box;
-      z-index:1000;
-    }
-    .title {
-      font-size:17px;
-      font-weight:600;
-      flex:1;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .btn-group {
-      display:flex;
-      gap:8px;
-    }
-    .btn {
-      background:rgba(255,255,255,0.14);
-      color:#fff;
-      border:none;
-      padding:8px 14px;
-      border-radius:8px;
-      font-size:14px;
-      font-weight:500;
-      cursor:pointer;
-      transition:all .15s;
-    }
-    .btn:active { 
-      background:rgba(50,150,225,0.23);
-      transform: scale(0.95);
-    }
-    .btn-close {
-      background:#f33;
-      margin-left:4px;
-    }
-    .btn-close:active { 
-      background:#a00;
-      transform: scale(0.95);
-    }
-    .btn-browser {
+    .miniapp-arrow {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 36px;
+      color: #007AFF;
+      z-index: 99999;
+      pointer-events: none;
       display: none;
+      text-shadow: 0 2px 8px rgba(0,122,255,0.4);
+      animation: blink 1s ease-in-out infinite;
     }
-    .player-main {
-      width:100vw;
-      height:calc(100vh - 52px);
+    .miniapp-arrow.fadeout {
+      animation: arrowFade 0.5s ease forwards;
+    }
+    .tg-main-block {
+      text-align: center;
+      margin: 24px auto 18px auto;
+      padding: 22px 0 24px 0;
+      background: linear-gradient(115deg,#007aff18,#f6f8fa);
+      border-radius: 20px;
+      max-width: 100%;
+      width: 96%;
+      box-shadow:0 2px 12px #2221;
+      border: 1px solid #E6E6EA;
+      pointer-events: none;
+    }
+    .tg-main-block .main-title{
+      font-size: 2.3rem;
+      font-weight: bold;
+      color:#222;
+      margin-bottom: 0.6em;
+      letter-spacing: 0.04em;
+      text-shadow: 0 1px 0 #fff, 0 0 10px #66aeff4d;
+      position: relative;
+    }
+    .tg-main-block .main-sub {
+      font-size: 1.15rem;
+      color:#444;
+      background:#fff8;
+      border-radius:7px;
+      padding:8px 18px;
+      display:inline-block;
+      margin-top:.3em;
+      box-shadow:0 1px 8px #2222;
+    }
+    .tg-disclaimer {
+      font-size: 13px;
+      color: #666;
+      margin: 20px 0 0 0;
+      width: 100vw;
+      box-sizing: border-box;
+      background: #fff7;
+      border-radius: 0;
+      padding: 16px 3vw 18px 3vw;
+      border-top:1.5px solid #eaeaea;
+      box-shadow:0 -2px 14px #2221;
+      line-height: 1.65;
+      text-align:center;
+      left:0; right:0;
+    }
+    .tg-disclaimer strong {
+      color: #222;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .tg-disclaimer a { 
+      color: #007AFF; 
+      text-decoration:none;
+      font-weight: 500;
+      border-bottom: 1px solid #007AFF;
+    }
+    .tg-disclaimer a:hover {
+      border-bottom: 2px solid #007AFF;
+    }
+    .tg-zoom-control {
+      display:none;
+      align-items:center;
+      gap:12px;
+      margin:0 auto 16px auto;
+      max-width:400px;
+      justify-content:center;
+    }
+    .tg-zoom-control .zoom-icon { font-size:22px; color:#007AFF; }
+    .tg-zoom-control input[type="range"] {
+      flex:1;
+      max-width:280px;
+      cursor:pointer;
+    }
+    .tg-search-row {
+      max-width:620px;
+      margin:0 auto 24px auto;
+      text-align:center;
       display:flex;
+      gap:10px;
       align-items:center;
       justify-content:center;
-      background:#000;
-      margin:0;
-      padding:0;
-      box-sizing:border-box;
-      position:relative;
+      padding:0 12px;
     }
-    .player-iframe {
-      width:100vw;
-      height:100%;
-      max-width:100vw;
-      max-height:100%;
+    .tg-search-row input[type="search"] {
+      flex:1;
+      max-width:480px;
+      font-size: 1.15em;
+      padding: 12px 18px;
+      border-radius: 13px;
+      border: 1px solid #8F9AA3;
+      box-shadow: 0 3px 13px #2222;
+      background: #fff;
+      transition:all .2s;
+      outline:none;
+      -webkit-user-select: text!important;
+      user-select: text!important;
+    }
+    .tg-search-row input[type="search"]:focus {
+      border: 1.5px solid #007AFF;
+      box-shadow: 0 7px 18px #86b7fa3b;
+    }
+    .tg-search-btn {
+      background: #007AFF;
+      color:#fff;
       border:none;
-      display:block;
-      background:#111;
-      border-radius:0;
+      padding:12px 24px;
+      border-radius:13px;
+      font-size:1.05em;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow: 0 3px 13px #2222;
+      transition:all .15s;
+      position: relative;
+      overflow: hidden;
     }
-    @media(max-width:768px){
-      .player-header{padding:9px 8px;font-size:14px; height:44px;}
-      .player-main{height:calc(100vh - 44px);}
+    .tg-search-btn:active { 
+      animation: buttonRipple 0.4s ease-out, colorPulse 0.4s ease-out;
+    }
+    .tg-action-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 0 12px 24px 12px;
+    }
+    .tg-action-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(34,34,34,0.04);
+      padding: 18px 0 14px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid #E6E6EA;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .tg-action-card:hover {
+      box-shadow: 0 4px 24px rgba(34,34,34,0.09);
+      transform: translateY(-2px);
+    }
+    .tg-action-card:active { animation: cardTap 0.3s ease-out; }
+    .tg-action-card.tap-effect { animation: cardTap 0.3s ease-out; }
+    .tg-action-icon {
+      font-size: 24px;
+      margin-bottom: 9px;
+      transition: transform 0.2s;
+    }
+    .tg-action-card:active .tg-action-icon {
+      transform: scale(1.2) rotate(10deg);
+    }
+    .tg-action-title {
+      font-size: 14px;
+      color: #222;
+      font-weight: 500;
+    }
+    .tg-section {
+      margin: 18px 12px 0 12px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 1px 8px rgba(34,34,34,0.04);
+      border: 1px solid #E6E6EA;
+      display: none;
+    }
+    .tg-section.active { display: block; }
+    .tg-film-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    
+    .tg-film-grid { grid-template-columns: repeat(8, 1fr); }
+    .tg-film-card { min-height: 230px; }
+    .tg-film-poster { width: 137px; height: 205px; }
+    .tg-film-title { font-size: 16px; }
+    .tg-film-details { font-size: 12px; }
+    
+    body.zoom-1 .tg-film-grid { grid-template-columns: repeat(6, 1fr); }
+    body.zoom-1 .tg-film-card { min-height: 330px; }
+    body.zoom-1 .tg-film-poster { width: 195px; height: 293px; }
+    body.zoom-1 .tg-film-title { font-size: 18px; }
+    body.zoom-1 .tg-film-details { font-size: 14px; }
+    
+    body.zoom-2 .tg-film-grid { grid-template-columns: repeat(4, 1fr); }
+    body.zoom-2 .tg-film-card { min-height: 390px; }
+    body.zoom-2 .tg-film-poster { width: 234px; height: 351px; }
+    body.zoom-2 .tg-film-title { font-size: 20px; }
+    body.zoom-2 .tg-film-details { font-size: 15px; }
+    
+    body.zoom-3 .tg-film-grid { grid-template-columns: repeat(3, 1fr); }
+    body.zoom-3 .tg-film-card { min-height: 420px; }
+    body.zoom-3 .tg-film-poster { width: 260px; height: 390px; }
+    body.zoom-3 .tg-film-title { font-size: 20px; }
+    body.zoom-3 .tg-film-details { font-size: 15px; }
+    
+    .tg-film-card {
+      background: #F1F3F6;
+      border-radius: 8px;
+      padding: 6px 4px 7px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      border: 1px solid #E6E6EA;
+      box-shadow: 0 1px 6px rgba(34,34,34,0.06);
+      transition: all 0.2s;
+      min-width: 0;
+      opacity: 0;
+      animation: fadeInUp 0.3s ease forwards;
+    }
+    .tg-film-card:hover {
+      background: #E8EAED;
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(34,34,34,0.12);
+    }
+    .tg-film-card:active { transform: scale(0.97); }
+    .tg-film-poster {
+      background: #eee;
+      border-radius: 5px;
+      object-fit: cover;
+      margin-bottom: 5px;
+      transition: all 0.3s;
+    }
+    .tg-film-title {
+      font-weight: 500;
+      color: #222;
+      text-align: center;
+      margin-bottom: 2px;
+      white-space: normal;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height:1.2;
+      transition: all 0.3s;
+    }
+    .tg-film-details {
+      color: #8F9AA3;
+      margin-bottom: 1px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .tg-loader {
+      margin: 28px auto 0 auto;
+      text-align: center;
+      color: #8F9AA3;
+    }
+    .spinner {
+      border: 3px solid rgba(0,0,0,0.1);
+      border-top: 3px solid #007AFF;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @media (min-width: 769px) {
+      .tg-zoom-control { display:flex !important; }
+    }
+    @media (max-width: 768px) {
+      .tg-zoom-control { display:none !important; }
+      .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      .tg-film-poster { width: 103.5px !important; height: 155.25px !important; }
+      .tg-film-title { font-size: 18px !important; }
+      .tg-film-details { font-size: 11px !important; }
+      .tg-film-card { min-height: 180px !important; }
+      body.zoom-1 .tg-film-grid,
+      body.zoom-2 .tg-film-grid,
+      body.zoom-3 .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      body.zoom-1 .tg-film-poster,
+      body.zoom-2 .tg-film-poster,
+      body.zoom-3 .tg-film-poster { width: 103.5px !important; height: 155.25px !important; }
+      body.zoom-1 .tg-film-title,
+      body.zoom-2 .tg-film-title,
+      body.zoom-3 .tg-film-title { font-size: 18px !important; }
+      body.zoom-1 .tg-film-details,
+      body.zoom-2 .tg-film-details,
+      body.zoom-3 .tg-film-details { font-size: 11px !important; }
+      body.zoom-1 .tg-film-card,
+      body.zoom-2 .tg-film-card,
+      body.zoom-3 .tg-film-card { min-height: 180px !important; }
+    }
+    @media (max-width: 480px) {
+      .tg-action-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 360px) {
+      .tg-main-block .main-title {font-size:1.3em;}
+      .tg-film-title { font-size:16px !important; }
+      .tg-action-row { grid-template-columns: 1fr; gap: 8px; }
     }
   </style>
 </head>
 <body>
-  <div class="player-header">
-    <span class="title" id="videoTitle">Загрузка...</span>
-    <div class="btn-group">
-      <button class="btn btn-browser" id="btnBrowser" onclick="openInBrowser()">🌐 В браузере</button>
-      <button class="btn btn-close" onclick="window.history.back()">✕</button>
+  <div class="miniapp-arrow" id="miniappArrow">⬆</div>
+  <div class="tg-main-block">
+    <div class="main-title">Genopoisk — Смотри фильмы в хорошем качестве</div>
+    <div class="main-sub">Каталог лучших фильмов, онлайн-поиск и просмотр без лишней рекламы!</div>
+  </div>
+  <div class="tg-search-row">
+    <input type="search" id="tg-search" placeholder="🔍 Поиск по названию..." autocomplete="off" />
+    <button class="tg-search-btn" onclick="triggerSearch()">Найти</button>
+  </div>
+  <div class="tg-zoom-control">
+    <span class="zoom-icon">🔍</span>
+    <input type="range" id="zoomSlider" min="0" max="3" value="0" step="1">
+    <span class="zoom-icon">🔎</span>
+  </div>
+  <div class="tg-action-row">
+    <div class="tg-action-card" onclick="loadCategory('popular')">
+      <div class="tg-action-icon">🔥</div>
+      <div class="tg-action-title">Популярные</div>
+    </div>
+    <div class="tg-action-card" onclick="loadCategory('top250')">
+      <div class="tg-action-icon">⭐</div>
+      <div class="tg-action-title">Топ 250</div>
+    </div>
+    <div class="tg-action-card" onclick="loadCategory('new')">
+      <div class="tg-action-icon">🎬</div>
+      <div class="tg-action-title">Новинки</div>
+    </div>
+    <div class="tg-action-card" onclick="loadCategory('random')">
+      <div class="tg-action-icon">🎯</div>
+      <div class="tg-action-title">Случайный</div>
     </div>
   </div>
-  <div class="player-main">
-    <iframe id="playerIframe" class="player-iframe" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>
+  <div class="tg-section" id="tg-section">
+    <div id="tg-loader" class="tg-loader" style="display:none;">
+      <div class="spinner"></div>
+      <div>Загрузка...</div>
+    </div>
+    <div id="tg-film-grid" class="tg-film-grid"></div>
+    <div id="tg-search-results" class="tg-film-grid" style="margin-top:10px;"></div>
   </div>
-  
+  <div class="tg-disclaimer">
+    <strong>Genopoisk не является онлайн-кинотеатром или видеохостингом.</strong>
+    Genopoisk — веб-приложение для поиска информации о фильмах, созданное исключительно в образовательных и информационных целях.<br><br>
+    По всем вопросам: <a href="https://github.com/Genocide12/Genopoisk/issues/new" target="_blank">Оставить обращение</a>
+  </div>
+
   <script>
-    // Защита от копирования
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    document.addEventListener('copy', e => e.preventDefault());
-    document.addEventListener('cut', e => e.preventDefault());
-    document.addEventListener('selectstart', e => e.preventDefault());
-    document.onkeydown = function(e) {
-      if(e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X' || e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) {
+    // === Конфиг API ===
+    const API_KEY = "CRDEV06-M84M476-HQX2THM-RHFSWX0";
+    const API_BASE = "https://api.poiskkino.dev";
+
+    // === Элементы интерфейса ===
+    const tgSearchInput      = document.getElementById("tg-search");
+    const tgSection          = document.getElementById("tg-section");
+    const tgLoader           = document.getElementById("tg-loader");
+    const filmsGrid          = document.getElementById("tg-film-grid");
+    const searchResultsGrid  = document.getElementById("tg-search-results");
+
+    let currentCategory = "popular";
+
+    function showSection() {
+      if (tgSection) tgSection.classList.add("active");
+    }
+
+    function showLoader() {
+      if (tgLoader) tgLoader.style.display = "block";
+    }
+
+    function hideLoader() {
+      if (tgLoader) tgLoader.style.display = "none";
+    }
+
+    function showError(message) {
+      console.error(message || "Ошибка загрузки данных");
+    }
+
+    // === Базовый запрос к PoiskKino API ===
+    async function apiRequest(path, params = {}) {
+      const url = new URL(API_BASE + path);
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        url.searchParams.set(key, value);
+      });
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "X-API-KEY": API_KEY,
+          "accept": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("API error " + res.status);
+      }
+
+      return res.json();
+    }
+
+    async function searchMoviesByName(query, page = 1, limit = 24) {
+      return apiRequest("/v1.4/movie/search", { query, page, limit });
+    }
+
+    async function getMoviesList(filters = {}, page = 1, limit = 24) {
+      return apiRequest("/v1.4/movie", {
+        page,
+        limit,
+        ...filters,
+      });
+    }
+
+    async function getRandomMovie() {
+      return apiRequest("/v1.4/movie/random", {});
+    }
+
+    // === Проверка доступности фильма в Embess ===
+    async function isEmbessAvailable(kpId) {
+      if (!kpId) return false;
+
+      try {
+        const res = await fetch(`https://api.embess.ws/embed/kp/${kpId}`, {
+          method: "GET"
+        });
+
+        if (!res.ok) return false;
+
+        const html = await res.text();
+        const lower = html.toLowerCase();
+
+        if (lower.includes("к сожалению, видео недоступно") ||
+            lower.includes("video недоступно")) {
+          return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.error("embess check error", e);
         return false;
       }
-      if(e.key === 'F12') return false;
-    };
-    
-    const params = new URLSearchParams(window.location.search);
-    const kid = params.get('id') || '326';
-    const title = params.get('title') || 'Фильм';
-    document.getElementById('videoTitle').textContent = decodeURIComponent(title);
-    const iframe = document.getElementById('playerIframe');
-    
-    // Используем Embess плеер
-    iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-    
-    function openInBrowser() {
-      const currentUrl = `https://genopoisk.vercel.app/player.html?id=${kid}&title=${encodeURIComponent(title)}`;
-      window.open(currentUrl, '_blank');
     }
-    
-    // Проверяем, запущено ли в Telegram Mini App
-    function isTelegramMiniApp() {
-      return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
+
+    async function filterPlayableMovies(docs) {
+      const checks = await Promise.all(
+        docs.map(async (movie) => {
+          const ok = await isEmbessAvailable(movie.id);
+          return ok ? movie : null;
+        })
+      );
+      return checks.filter(Boolean);
     }
-    
-    // Показываем кнопку "В браузере" ТОЛЬКО в Telegram Mini App
-    if(isTelegramMiniApp()) {
-      document.getElementById('btnBrowser').style.display = 'inline-block';
+
+    // === Рендер фильмов ===
+    function renderMovies(container, docs) {
+      if (!container) return;
+
+      container.innerHTML = "";
+
+      if (!docs || !docs.length) {
+        const empty = document.createElement("div");
+        empty.className = "tg-film-details";
+        empty.style.gridColumn = "1 / -1";
+        empty.textContent = "Ничего не найдено. Попробуйте изменить запрос или категорию.";
+        container.appendChild(empty);
+        return;
+      }
+
+      docs.forEach((movie) => {
+        const card = document.createElement("div");
+        card.className = "tg-film-card";
+
+        const posterUrl =
+          (movie.poster && movie.poster.url) ||
+          (movie.backdrop && movie.backdrop.url) ||
+          "https://via.placeholder.com/300x450/EEEEEE/AAAAAA?text=No+image";
+
+        const title =
+          movie.name || movie.alternativeName || movie.enName || "Без названия";
+
+        const year = movie.year || "Год неизвестен";
+
+        const ratingKp =
+          movie.rating && movie.rating.kp != null
+            ? Number(movie.rating.kp.toFixed(1))
+            : null;
+
+        const genres = Array.isArray(movie.genres)
+          ? movie.genres.map((g) => g.name).filter(Boolean)
+          : [];
+
+        const subtitleParts = [];
+        subtitleParts.push(year);
+        if (genres[0]) subtitleParts.push(genres[0]);
+        if (ratingKp) subtitleParts.push("Рейтинг: " + ratingKp);
+
+        card.innerHTML = `
+          <img
+            class="tg-film-poster"
+            src="${posterUrl}"
+            loading="lazy"
+            alt="${String(title).replace(/"/g, "&quot;")}"
+          />
+          <div class="tg-film-title">${title}</div>
+          <div class="tg-film-details">${subtitleParts.join(" • ")}</div>
+        `;
+
+        card.addEventListener("click", () => {
+          if (!movie.id) return;
+          const url = `player.html?id=${encodeURIComponent(
+            movie.id
+          )}&title=${encodeURIComponent(title)}`;
+          window.location.href = url;
+        });
+
+        container.appendChild(card);
+      });
     }
-    
-    window.Telegram?.WebApp?.expand?.();
-    window.Telegram?.WebApp?.setHeaderColor?.('#000000');
-    window.Telegram?.WebApp?.setBackgroundColor?.('#000000');
+
+    // === Категории ===
+    async function loadPopular() {
+      currentCategory = "popular";
+      showSection();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            "rating.kp": "6-10",
+            "votes.kp": "1000-100000000",
+            sortField: "rating.kp",
+            sortType: "-1",
+          },
+          1,
+          24
+        );
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
+      } catch (e) {
+        showError("Не удалось загрузить популярные фильмы");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadTop250() {
+      currentCategory = "top250";
+      showSection();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            top250: "1-250",
+            sortField: "top250",
+            sortType: "1",
+          },
+          1,
+          24
+        );
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
+      } catch (e) {
+        showError("Не удалось загрузить топ 250");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadNew() {
+      currentCategory = "new";
+      showSection();
+
+      const currentYear = new Date().getFullYear();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            year: (currentYear - 1) + "-" + currentYear,
+            sortField: "year",
+            sortType: "-1",
+          },
+          1,
+          24
+        );
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
+      } catch (e) {
+        showError("Не удалось загрузить новинки");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadRandom() {
+      currentCategory = "random";
+      showSection();
+
+      try {
+        showLoader();
+        const movie = await getRandomMovie();
+        const docs = Array.isArray(movie)
+          ? movie
+          : movie.docs || movie.items || [movie];
+
+        if (searchResultsGrid) searchResultsGrid.innerHTML = "";
+        const playable = await filterPlayableMovies(docs);
+
+        renderMovies(filmsGrid, playable);
+      } catch (e) {
+        showError("Не удалось получить случайный фильм");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadCategory(category) {
+      if (category === "popular") return loadPopular();
+      if (category === "top250")  return loadTop250();
+      if (category === "new")     return loadNew();
+      if (category === "random")  return loadRandom();
+    }
+
+    // === Поиск ===
+    async function handleSearch() {
+      if (!tgSearchInput) return;
+      const value = tgSearchInput.value.trim();
+
+      showSection();
+
+      if (!value) {
+        await loadPopular();
+        return;
+      }
+
+      try {
+        showLoader();
+        const data = await searchMoviesByName(value, 1, 24);
+        const docs = data.docs || data.items || [];
+        const playable = await filterPlayableMovies(docs);
+
+        if (filmsGrid) filmsGrid.innerHTML = "";
+        renderMovies(searchResultsGrid || filmsGrid, playable);
+      } catch (e) {
+        showError("Ошибка при выполнении поиска");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    function triggerSearch() {
+      handleSearch();
+    }
+
+    if (tgSearchInput) {
+      tgSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          triggerSearch();
+        }
+      });
+    }
+
+    const zoomSlider = document.getElementById("zoomSlider");
+    if (zoomSlider) {
+      zoomSlider.addEventListener("input", (e) => {
+        const level = Number(e.target.value);
+        document.body.classList.remove("zoom-0", "zoom-1", "zoom-2", "zoom-3");
+        document.body.classList.add("zoom-" + level);
+      });
+    }
+
+    loadPopular();
   </script>
 </body>
 </html>

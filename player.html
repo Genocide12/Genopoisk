@@ -115,10 +115,17 @@
     </div>
   </div>
   <div class="player-main">
-    <iframe id="playerIframe" class="player-iframe" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>
+    <!-- ВАЖНО: sandbox убран, добавлен allow -->
+    <iframe
+      id="playerIframe"
+      class="player-iframe"
+      allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+      allowfullscreen
+    ></iframe>
   </div>
   
   <script>
+    // Защита от копирования
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
@@ -137,7 +144,8 @@
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
     
-    iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+    const embessUrl = `https://api.embess.ws/embed/kp/${kid}`;
+    iframe.src = embessUrl;
     
     function openInBrowser() {
       const currentUrl = `${location.origin}/player.html?id=${kid}&title=${encodeURIComponent(title)}`;
@@ -148,7 +156,7 @@
       return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
     }
     
-    if(isTelegramMiniApp()) {
+    if (isTelegramMiniApp()) {
       document.getElementById('btnBrowser').style.display = 'inline-block';
     }
     

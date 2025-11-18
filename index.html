@@ -1,672 +1,943 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
-  <meta name="theme-color" content="#007AFF">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Genopoisk">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/icon-192.png">
-  <title>Genopoisk MiniApp</title>
+  <meta charset="UTF-8" />
+  <title>Genopoisk — Смотри фильмы в хорошем качестве</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Genopoisk — каталог лучших фильмов, онлайн-поиск и просмотр без лишней рекламы!"
+  />
+
   <style>
-    @keyframes gradientMove {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: radial-gradient(circle at top, #1f2937 0, #030712 55%);
+      color: #f9fafb;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(15px);
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 16px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .logo-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .logo-highlight {
+      color: #22c55e;
+    }
+
+    .logo-subtitle {
+      font-size: 0.9rem;
+      color: #9ca3af;
+    }
+
+    .search-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .search-input-wrap {
+      flex: 1 1 220px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 38px 10px 12px;
+      border-radius: 999px;
+      border: 1px solid #374151;
+      background: rgba(17, 24, 39, 0.9);
+      color: #f9fafb;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease,
+        background 0.15s ease;
+    }
+
+    .search-input::placeholder {
+      color: #6b7280;
+    }
+
+    .search-input:focus {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4);
+      background: rgba(15, 23, 42, 0.98);
+    }
+
+    .search-button {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-radius: 999px;
+      border: none;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #22c55e, #4ade80);
+      color: #022c22;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+      transition: transform 0.15s ease, box-shadow 0.15s ease,
+        background 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .search-button:hover {
+      transform: translateY(-50%) translateY(-1px);
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+    }
+
+    .search-button:active {
+      transform: translateY(-50%) translateY(0);
+      box-shadow: 0 1px 4px rgba(34, 197, 94, 0.35);
+    }
+
+    .search-button-icon {
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .chip {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: rgba(17, 24, 39, 0.85);
+      color: #e5e7eb;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease, border-color 0.15s ease,
+        transform 0.1s ease, color 0.15s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .chip span.icon {
+      font-size: 0.9rem;
+    }
+
+    .chip-primary {
+      border-color: rgba(34, 197, 94, 0.25);
+      color: #bbf7d0;
+    }
+
+    .chip:hover {
+      background: rgba(31, 41, 55, 0.95);
+      border-color: rgba(148, 163, 184, 0.8);
+      transform: translateY(-1px);
+    }
+
+    .chip:active {
+      transform: translateY(0);
+    }
+
+    .chip-active {
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      border-color: transparent;
+      color: #ecfdf5;
+      box-shadow: 0 2px 10px rgba(34, 197, 94, 0.4);
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+    }
+
+    .status-right {
+      opacity: 0.9;
+    }
+
+    .status-strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .grid-wrapper {
+      position: relative;
+      border-radius: 16px;
+      padding: 14px 10px 10px;
+      background: radial-gradient(circle at top left, #1f2937 0, #020617 55%);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      box-shadow: 0 14px 45px rgba(15, 23, 42, 0.9),
+        0 10px 20px rgba(15, 23, 42, 0.7);
+      min-height: 140px;
+    }
+
+    .grid-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+
+    .grid-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .grid-counter {
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+
+    .movies-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    @media (max-width: 640px) {
+      .movies-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
       }
-      to {
+    }
+
+    .movie-card {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #020617;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      display: flex;
+      flex-direction: column;
+      min-height: 210px;
+      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.7);
+      transition: transform 0.16s ease, box-shadow 0.16s ease,
+        border-color 0.16s ease;
+      cursor: pointer;
+    }
+
+    .movie-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(148, 163, 184, 0.8);
+      box-shadow: 0 14px 35px rgba(15, 23, 42, 0.95);
+    }
+
+    .movie-poster-wrap {
+      position: relative;
+      width: 100%;
+      padding-top: 145%;
+      background: radial-gradient(circle at top, #111827 0, #020617 60%);
+      overflow: hidden;
+    }
+
+    .movie-poster {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(1.02);
+      transition: transform 0.35s ease, filter 0.35s ease, opacity 0.25s ease;
+      filter: saturate(1.05) contrast(1.02);
+    }
+
+    .movie-card:hover .movie-poster {
+      transform: scale(1.06);
+      filter: saturate(1.1) contrast(1.03);
+    }
+
+    .movie-gradient {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 52%;
+      background: linear-gradient(
+        to top,
+        rgba(15, 23, 42, 0.96),
+        rgba(15, 23, 42, 0.88),
+        transparent
+      );
+      pointer-events: none;
+    }
+
+    .movie-rating-pill {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.86);
+      color: #e5e7eb;
+      border: 1px solid rgba(31, 41, 55, 0.95);
+      backdrop-filter: blur(10px);
+    }
+
+    .movie-rating-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+    }
+
+    .rating-high {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.6);
+    }
+
+    .rating-mid {
+      background: linear-gradient(135deg, #eab308, #f97316);
+      box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.6);
+    }
+
+    .rating-low {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5);
+    }
+
+    .movie-info {
+      padding: 8px 9px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .movie-title {
+      font-size: 0.87rem;
+      font-weight: 600;
+      color: #f9fafb;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .movie-meta {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .movie-year {
+      opacity: 0.9;
+    }
+
+    .movie-genre {
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .loader {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(
+        circle at top,
+        rgba(17, 24, 39, 0.9),
+        rgba(3, 7, 18, 0.98)
+      );
+      backdrop-filter: blur(12px);
+      z-index: 5;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+
+    .loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: #e5e7eb;
+      font-size: 0.9rem;
+    }
+
+    .loader-dots {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .loader-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #22c55e;
+      opacity: 0.5;
+      animation: pulse 0.9s infinite ease-in-out;
+    }
+
+    .loader-dot:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    .loader-dot:nth-child(3) {
+      animation-delay: 0.2s;
+    }
+
+    @keyframes pulse {
+      0% {
+        opacity: 0.25;
+        transform: translateY(0);
+      }
+      50% {
         opacity: 1;
+        transform: translateY(-3px);
+      }
+      100% {
+        opacity: 0.25;
         transform: translateY(0);
       }
     }
-    @keyframes arrowFade {
-      0% { opacity: 1; transform: translateX(-50%) translateY(0); }
-      100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-    }
-    @keyframes buttonRipple {
-      0% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7);
-      }
-      50% {
-        transform: scale(1);
-      }
-      100% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 15px rgba(0, 122, 255, 0);
-      }
-    }
-    @keyframes colorPulse {
-      0%, 100% {
-        background: #007AFF;
-      }
-      50% {
-        background: linear-gradient(135deg, #007AFF, #00D4FF);
-      }
-    }
-    @keyframes cardTap {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 2px 8px rgba(34,34,34,0.04);
-      }
-      50% {
-        transform: scale(0.92);
-        box-shadow: 0 0 20px rgba(0, 122, 255, 0.4);
-      }
-      100% {
-        transform: scale(1);
-        box-shadow: 0 2px 8px rgba(34,34,34,0.04);
-      }
-    }
-    html {
-      scroll-behavior: auto;
-      overflow-y: scroll;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    }
-    html::-webkit-scrollbar {
-      display: none;
-    }
-    html, body {
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      padding: 0;
-      margin: 0;
-      background: linear-gradient(-45deg, #e3f2fd, #f3e5f5, #e8f5e9, #fff3e0);
-      background-size: 400% 400%;
-      animation: gradientMove 15s ease infinite;
-      min-height: 100vh;
-      font-family: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-      color: #222;
-      font-size: 15px;
-      overflow-x:hidden;
-    }
-    *, *:after, *:before {
-      -webkit-user-select: none!important;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none!important;
-    }
-    .miniapp-arrow {
-      position: fixed;
-      top: 12px;
+
+    .error-banner {
+      position: absolute;
       left: 50%;
+      bottom: 8px;
       transform: translateX(-50%);
-      font-size: 36px;
-      color: #007AFF;
-      z-index: 99999;
-      pointer-events: none;
-      display: none;
-      text-shadow: 0 2px 8px rgba(0,122,255,0.4);
-      animation: blink 1s ease-in-out infinite;
-    }
-    .miniapp-arrow.fadeout {
-      animation: arrowFade 0.5s ease forwards;
-    }
-    .tg-main-block {
-      text-align: center;
-      margin: 24px auto 18px auto;
-      padding: 22px 0 24px 0;
-      background: linear-gradient(115deg,#007aff18,#f6f8fa);
-      border-radius: 20px;
-      max-width: 100%;
-      width: 96%;
-      box-shadow:0 2px 12px #2221;
-      border: 1px solid #E6E6EA;
-      pointer-events: none;
-    }
-    .tg-main-block .main-title{
-      font-size: 2.3rem;
-      font-weight: bold;
-      color:#222;
-      margin-bottom: 0.6em;
-      letter-spacing: 0.04em;
-      text-shadow: 0 1px 0 #fff, 0 0 10px #66aeff4d;
-      position: relative;
-    }
-    .tg-main-block .main-sub {
-      font-size: 1.15rem;
-      color:#444;
-      background:#fff8;
-      border-radius:7px;
-      padding:8px 18px;
-      display:inline-block;
-      margin-top:.3em;
-      box-shadow:0 1px 8px #2222;
-    }
-    .tg-disclaimer {
-      font-size: 13px;
-      color: #666;
-      margin: 20px 0 0 0;
-      width: 100vw;
-      box-sizing: border-box;
-      background: #fff7;
-      border-radius: 0;
-      padding: 16px 3vw 18px 3vw;
-      border-top:1.5px solid #eaeaea;
-      box-shadow:0 -2px 14px #2221;
-      line-height: 1.65;
-      text-align:center;
-      left:0; right:0;
-    }
-    .tg-disclaimer strong {
-      color: #222;
-      font-weight: 600;
-      display: block;
-      margin-bottom: 8px;
-    }
-    .tg-disclaimer a { 
-      color: #007AFF; 
-      text-decoration:none;
-      font-weight: 500;
-      border-bottom: 1px solid #007AFF;
-    }
-    .tg-disclaimer a:hover {
-      border-bottom: 2px solid #007AFF;
-    }
-    .tg-zoom-control {
-      display:none;
-      align-items:center;
-      gap:12px;
-      margin:0 auto 16px auto;
-      max-width:400px;
-      justify-content:center;
-    }
-    .tg-zoom-control .zoom-icon {
-      font-size:22px;
-      color:#007AFF;
-    }
-    .tg-zoom-control input[type="range"] {
-      flex:1;
-      max-width:280px;
-      cursor:pointer;
-    }
-    .tg-search-row {
-      max-width:620px;
-      margin:0 auto 24px auto;
-      text-align:center;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      justify-content:center;
-      padding:0 12px;
-    }
-    .tg-search-row input[type="search"] {
-      flex:1;
-      max-width:480px;
-      font-size: 1.15em;
-      padding: 12px 18px;
-      border-radius: 13px;
-      border: 1px solid #8F9AA3;
-      box-shadow: 0 3px 13px #2222;
-      background: #fff;
-      transition:all .2s;
-      outline:none;
-      -webkit-user-select: text!important;
-      user-select: text!important;
-    }
-    .tg-search-row input[type="search"]:focus {
-      border: 1.5px solid #007AFF; box-shadow: 0 7px 18px #86b7fa3b;
-    }
-    .tg-search-btn {
-      background: #007AFF;
-      color:#fff;
-      border:none;
-      padding:12px 24px;
-      border-radius:13px;
-      font-size:1.05em;
-      font-weight:600;
-      cursor:pointer;
-      box-shadow: 0 3px 13px #2222;
-      transition:all .15s;
-      position: relative;
-      overflow: hidden;
-    }
-    .tg-search-btn:active { 
-      animation: buttonRipple 0.4s ease-out, colorPulse 0.4s ease-out;
-    }
-    .tg-action-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin: 0 12px 24px 12px;
-    }
-    .tg-action-card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(34,34,34,0.04);
-      padding: 18px 0 14px 0;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(248, 113, 113, 0.8);
+      color: #fecaca;
+      font-size: 0.78rem;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      border: 1px solid #E6E6EA;
-      cursor: pointer;
-      transition: all 0.15s;
-      position: relative;
-      overflow: hidden;
+      gap: 6px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.9);
     }
-    .tg-action-card:hover {
-      box-shadow: 0 4px 24px rgba(34,34,34,0.09);
-      transform: translateY(-2px);
-    }
-    .tg-action-card:active {
-      animation: cardTap 0.3s ease-out;
-    }
-    .tg-action-card.tap-effect {
-      animation: cardTap 0.3s ease-out;
-    }
-    .tg-action-icon {
-      font-size: 24px;
-      margin-bottom: 9px;
-      transition: transform 0.2s;
-    }
-    .tg-action-card:active .tg-action-icon {
-      transform: scale(1.2) rotate(10deg);
-    }
-    .tg-action-title {
-      font-size: 14px;
-      color: #222;
-      font-weight: 500;
-    }
-    .tg-section {
-      margin: 18px 12px 0 12px;
-      background: #fff;
-      border-radius: 12px;
-      padding: 18px;
-      box-shadow: 0 1px 8px rgba(34,34,34,0.04);
-      border: 1px solid #E6E6EA;
+
+    .error-banner.hidden {
       display: none;
     }
-    .tg-section.active {
-      display: block;
+
+    .error-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #f97316;
+      box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.5);
     }
-    .tg-film-grid {
-      display: grid;
-      gap: 10px;
-      margin-top: 18px;
-    }
-    
-    .tg-film-grid { grid-template-columns: repeat(8, 1fr); }
-    .tg-film-card { min-height: 230px; }
-    .tg-film-poster { width: 137px; height: 205px; }
-    .tg-film-title { font-size: 16px; }
-    .tg-film-details { font-size: 12px; }
-    
-    body.zoom-1 .tg-film-grid { grid-template-columns: repeat(6, 1fr); }
-    body.zoom-1 .tg-film-card { min-height: 330px; }
-    body.zoom-1 .tg-film-poster { width: 195px; height: 293px; }
-    body.zoom-1 .tg-film-title { font-size: 18px; }
-    body.zoom-1 .tg-film-details { font-size: 14px; }
-    
-    body.zoom-2 .tg-film-grid { grid-template-columns: repeat(4, 1fr); }
-    body.zoom-2 .tg-film-card { min-height: 390px; }
-    body.zoom-2 .tg-film-poster { width: 234px; height: 351px; }
-    body.zoom-2 .tg-film-title { font-size: 20px; }
-    body.zoom-2 .tg-film-details { font-size: 15px; }
-    
-    body.zoom-3 .tg-film-grid { grid-template-columns: repeat(3, 1fr); }
-    body.zoom-3 .tg-film-card { min-height: 420px; }
-    body.zoom-3 .tg-film-poster { width: 260px; height: 390px; }
-    body.zoom-3 .tg-film-title { font-size: 20px; }
-    body.zoom-3 .tg-film-details { font-size: 15px; }
-    
-    .tg-film-card {
-      background: #F1F3F6;
-      border-radius: 8px;
-      padding: 6px 4px 7px 4px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      cursor: pointer;
-      border: 1px solid #E6E6EA;
-      box-shadow: 0 1px 6px rgba(34,34,34,0.06);
-      transition: all 0.2s;
-      min-width: 0;
-      opacity: 0;
-      animation: fadeInUp 0.3s ease forwards;
-    }
-    .tg-film-card:hover {
-      background: #E8EAED;
-      transform: translateY(-3px);
-      box-shadow: 0 4px 12px rgba(34,34,34,0.12);
-    }
-    .tg-film-card:active {
-      transform: scale(0.97);
-    }
-    .tg-film-poster {
-      background: #eee;
-      border-radius: 5px;
-      object-fit: cover;
-      margin-bottom: 5px;
-      transition: all 0.3s;
-    }
-    .tg-film-title {
-      font-weight: 500;
-      color: #222;
+
+    footer {
+      margin-top: auto;
+      padding: 10px 16px 14px;
+      font-size: 0.75rem;
+      color: #6b7280;
       text-align: center;
-      margin-bottom: 2px;
-      white-space: normal;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height:1.2;
-      transition: all 0.3s;
     }
-    .tg-film-details {
-      color: #8F9AA3;
-      margin-bottom: 1px;
-      text-align: center;
-      transition: all 0.3s;
-    }
-    .tg-loader {
-      margin: 28px auto 0 auto;
-      text-align: center;
-      color: #8F9AA3;
-    }
-    .spinner {
-      border: 3px solid rgba(0,0,0,0.1);
-      border-top: 3px solid #007AFF;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto 10px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    @media (min-width: 769px) {
-      .tg-zoom-control { display:flex !important; }
-    }
-    @media (max-width: 768px) {
-      .tg-zoom-control { display:none !important; }
-      .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
-      .tg-film-poster { width: 103.5px !important; height: 155.25px !important; }
-      .tg-film-title { font-size: 18px !important; }
-      .tg-film-details { font-size: 11px !important; }
-      .tg-film-card { min-height: 180px !important; }
-      body.zoom-1 .tg-film-grid,
-      body.zoom-2 .tg-film-grid,
-      body.zoom-3 .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
-      body.zoom-1 .tg-film-poster,
-      body.zoom-2 .tg-film-poster,
-      body.zoom-3 .tg-film-poster { width: 103.5px !important; height: 155.25px !important; }
-      body.zoom-1 .tg-film-title,
-      body.zoom-2 .tg-film-title,
-      body.zoom-3 .tg-film-title { font-size: 18px !important; }
-      body.zoom-1 .tg-film-details,
-      body.zoom-2 .tg-film-details,
-      body.zoom-3 .tg-film-details { font-size: 11px !important; }
-      body.zoom-1 .tg-film-card,
-      body.zoom-2 .tg-film-card,
-      body.zoom-3 .tg-film-card { min-height: 180px !important; }
-    }
-    @media (max-width: 480px) {
-      .tg-action-row { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 360px) {
-      .tg-main-block .main-title {font-size:1.3em;}
-      .tg-film-title { font-size:16px !important; }
-      .tg-action-row { grid-template-columns: 1fr; gap: 8px; }
+
+    footer span.accent {
+      color: #9ca3af;
     }
   </style>
 </head>
 <body>
-  <div class="miniapp-arrow" id="miniappArrow">⬆</div>
-  <div class="tg-main-block">
-    <div class="main-title">Genopoisk — Смотри фильмы в хорошем качестве</div>
-    <div class="main-sub">Каталог лучших фильмов, онлайн-поиск и просмотр без лишней рекламы!</div>
+  <div class="app">
+    <header>
+      <div class="logo-row">
+        <div>
+          <div class="logo-title">
+            Geno<span class="logo-highlight">poisk</span>
+          </div>
+          <div class="logo-subtitle">
+            Каталог лучших фильмов, онлайн-поиск и просмотр без лишней рекламы!
+          </div>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <div class="search-input-wrap">
+          <input
+            id="search-input"
+            type="text"
+            class="search-input"
+            placeholder="Найти фильм по названию, ID или оригинальному имени…"
+          />
+          <button id="search-button" class="search-button">
+            <span class="search-button-icon">🔍</span>
+            <span>Найти</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="chips-row">
+        <button id="btn-popular" class="chip chip-primary">
+          <span class="icon">🔥</span>
+          <span>Популярные</span>
+        </button>
+        <button id="btn-top250" class="chip">
+          <span class="icon">🏆</span>
+          <span>Топ 250</span>
+        </button>
+        <button id="btn-new" class="chip">
+          <span class="icon">🆕</span>
+          <span>Новинки</span>
+        </button>
+        <button id="btn-random" class="chip">
+          <span class="icon">🎲</span>
+          <span>Случайный</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <div class="status-row">
+        <div class="status-left">
+          <span class="status-dot"></span>
+          <span>Готов к поиску кино</span>
+        </div>
+        <div class="status-right">
+          API: <span class="status-strong">PoiskKino.dev</span>
+        </div>
+      </div>
+
+      <div class="grid-wrapper">
+        <div id="loader" class="loader hidden">
+          <div class="loader-inner">
+            <div class="loader-dots">
+              <div class="loader-dot"></div>
+              <div class="loader-dot"></div>
+              <div class="loader-dot"></div>
+            </div>
+            <div>Загрузка фильмов…</div>
+          </div>
+        </div>
+
+        <div id="error-banner" class="error-banner hidden">
+          <div class="error-dot"></div>
+          <div id="error-text">Ошибка загрузки данных</div>
+        </div>
+
+        <div class="grid-header">
+          <div class="grid-title" id="grid-title">Популярные фильмы</div>
+          <div class="grid-counter" id="grid-counter">0 найдено</div>
+        </div>
+
+        <div id="movies" class="movies-grid"></div>
+      </div>
+    </main>
   </div>
-  <div class="tg-search-row">
-    <input type="search" id="tg-search" placeholder="🔍 Поиск по названию..." autocomplete="off" />
-    <button class="tg-search-btn" onclick="triggerSearch()">Найти</button>
-  </div>
-  <div class="tg-zoom-control">
-    <span class="zoom-icon">🔍</span>
-    <input type="range" id="zoomSlider" min="0" max="3" value="0" step="1">
-    <span class="zoom-icon">🔎</span>
-  </div>
-  <div class="tg-action-row">
-    <div class="tg-action-card" onclick="loadCategory('popular')">
-      <div class="tg-action-icon">🔥</div>
-      <div class="tg-action-title">Популярные</div>
-    </div>
-    <div class="tg-action-card" onclick="loadCategory('top250')">
-      <div class="tg-action-icon">⭐</div>
-      <div class="tg-action-title">Топ 250</div>
-    </div>
-    <div class="tg-action-card" onclick="loadCategory('new')">
-      <div class="tg-action-icon">🎬</div>
-      <div class="tg-action-title">Новинки</div>
-    </div>
-    <div class="tg-action-card" onclick="loadCategory('random')">
-      <div class="tg-action-icon">🎯</div>
-      <div class="tg-action-title">Случайный</div>
-    </div>
-  </div>
-  <div class="tg-section" id="tg-section">
-    <div id="tg-loader" class="tg-loader" style="display:none;">
-      <div class="spinner"></div>
-      <div>Загрузка...</div>
-    </div>
-    <div id="tg-film-grid" class="tg-film-grid"></div>
-    <div id="tg-search-results" class="tg-film-grid" style="margin-top:10px;"></div>
-  </div>
-  <div class="tg-disclaimer">
-    <strong>Genopoisk не является онлайн-кинотеатром или видеохостингом.</strong>
-    Genopoisk — веб-приложение для поиска информации о фильмах, созданное исключительно в образовательных и информационных целях.<br><br>
-    По всем вопросам: <a href="https://github.com/Genocide12/Genopoisk/issues/new" target="_blank">Оставить обращение</a>
-  </div>
+
+  <footer>
+    Genopoisk · кино по данным <span class="accent">PoiskKino / Kinopoisk.dev</span>
+  </footer>
+
   <script>
-    const API_KEY = 'CRDEV06-M84M476-HQX2THM-RHFSWX0';
-    const API_BASE = 'https://api.poiskkino.dev';
-    let currentCategory = null;
-    let currentPage = 1;
-    let isLoading = false;
-    let hasMore = true;
-    let currentZoomLevel = parseInt(localStorage.getItem('zoomLevel')) || 0;
-    
-    function isTelegramMiniApp() {
-      return (typeof Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initData);
+    const API_KEY = "CRDEV06-M84M476-HQX2THM-RHFSWX0";
+    const API_BASE = "https://api.poiskkino.dev";
+
+    const searchInput = document.getElementById("search-input");
+    const searchButton = document.getElementById("search-button");
+    const btnPopular = document.getElementById("btn-popular");
+    const btnTop250 = document.getElementById("btn-top250");
+    const btnNew = document.getElementById("btn-new");
+    const btnRandom = document.getElementById("btn-random");
+
+    const moviesContainer = document.getElementById("movies");
+    const loader = document.getElementById("loader");
+    const errorBanner = document.getElementById("error-banner");
+    const errorText = document.getElementById("error-text");
+    const gridTitle = document.getElementById("grid-title");
+    const gridCounter = document.getElementById("grid-counter");
+
+    let currentCategory = "popular";
+
+    function setActiveChip(button) {
+      [btnPopular, btnTop250, btnNew, btnRandom].forEach((btn) =>
+        btn.classList.remove("chip-active")
+      );
+      if (button) {
+        button.classList.add("chip-active");
+      }
     }
-    
-    const arrow = document.getElementById('miniappArrow');
-    if(isTelegramMiniApp()) {
-      arrow.style.display = 'block';
+
+    function showLoader() {
+      loader.classList.remove("hidden");
+    }
+
+    function hideLoader() {
+      loader.classList.add("hidden");
+    }
+
+    function showError(message) {
+      errorText.textContent = message || "Ошибка загрузки данных";
+      errorBanner.classList.remove("hidden");
       setTimeout(() => {
-        arrow.classList.add('fadeout');
-        setTimeout(() => arrow.style.display = 'none', 500);
-      }, 3000);
+        errorBanner.classList.add("hidden");
+      }, 3500);
     }
-    
-    function applyZoomLevel(level) {
-      if(window.innerWidth <= 768) return;
-      document.body.className = document.body.className.replace(/zoom-\d/g, '');
-      if(level > 0) {
-        document.body.classList.add(`zoom-${level}`);
+
+    async function apiRequest(path, params = {}) {
+      const url = new URL(API_BASE + path);
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        url.searchParams.set(key, value);
+      });
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "X-API-KEY": API_KEY,
+          accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("API error " + res.status);
       }
+
+      return res.json();
     }
-    
-    const zoomSlider = document.getElementById('zoomSlider');
-    if(zoomSlider && window.innerWidth > 768) {
-      zoomSlider.value = currentZoomLevel;
-      applyZoomLevel(currentZoomLevel);
-      
-      zoomSlider.addEventListener('input', function() {
-        currentZoomLevel = parseInt(this.value);
-        localStorage.setItem('zoomLevel', currentZoomLevel);
-        applyZoomLevel(currentZoomLevel);
+
+    async function searchMoviesByName(query, page = 1, limit = 24) {
+      return apiRequest("/v1.4/movie/search", {
+        query,
+        page,
+        limit,
       });
     }
-    
-    function showLoader() { 
-      document.getElementById('tg-section').classList.add('active');
-      document.getElementById('tg-loader').style.display = 'block'; 
-    }
-    function hideLoader() { document.getElementById('tg-loader').style.display = 'none'; }
-    function clearFilms() { document.getElementById('tg-film-grid').innerHTML = ''; }
-    
-    async function apiGet(url) {
-      try {
-        const res = await fetch(url, { headers: { 'X-API-KEY': API_KEY } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-      } catch (err) {
-        console.error('API Error:', err);
-        hideLoader();
-        return { items: [] };
-      }
-    }
-    
-    async function loadCategory(category) {
-      currentCategory = category;
-      currentPage = 1;
-      hasMore = true;
-      clearFilms();
-      document.getElementById('tg-search-results').innerHTML = '';
-      document.getElementById('tg-film-grid').style.display = '';
-      showLoader();
-      await loadMoreFilms();
-    }
-    
-    async function loadMoreFilms() {
-      if (isLoading || !hasMore) return;
-      isLoading = true;
-      
-      let url = '';
-      const currentYear = new Date().getFullYear();
-      if (currentCategory === 'popular') url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${currentPage}`;
-      else if (currentCategory === 'top250') url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${currentPage}`;
-      else if (currentCategory === 'new') url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${currentPage}`;
-      else if (currentCategory === 'random') url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${Math.floor(Math.random()*4)+1}`;
-      
-      const data = await apiGet(url);
-      const films = data.items || data.films || [];
-      
-      if (films.length > 0) {
-        displayFilms(films, false);
-        currentPage++;
-      } else {
-        hasMore = false;
-      }
-      
-      isLoading = false;
-      hideLoader();
-    }
-    
-    let animationDelay = 0;
-    function displayFilms(films, isSearch) {
-      const grid = isSearch ? document.getElementById('tg-search-results') : document.getElementById('tg-film-grid');
-      if(isSearch) {
-        grid.innerHTML = '';
-        animationDelay = 0;
-      }
-      
-      const fragment = document.createDocumentFragment();
-      
-      films.forEach((film, index) => {
-        const filmId = film.filmId || film.kinopoiskId;
-        const title = film.nameRu || film.nameEn || 'Без названия';
-        const year = film.year || 'Н/Д';
-        const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-        const poster = film.posterUrlPreview || film.posterUrl || '';
-        const card = document.createElement('div');
-        card.className = 'tg-film-card';
-        card.style.animationDelay = `${animationDelay + (index * 0.02)}s`;
-        card.innerHTML = `<img src='${poster}' class='tg-film-poster' alt='${title}' onerror='this.style.display="none"'><div class='tg-film-title'>${title}</div><div class='tg-film-details'>${year} • ⭐ ${rating}</div>`;
-        card.onclick = () => openPlayer(filmId, title);
-        fragment.appendChild(card);
+
+    async function getMoviesList(filters = {}, page = 1, limit = 24) {
+      return apiRequest("/v1.4/movie", {
+        page,
+        limit,
+        ...filters,
       });
-      
-      grid.appendChild(fragment);
-      animationDelay += films.length * 0.02;
     }
-    
-    function openPlayer(filmId, title) {
-      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+
+    async function getRandomMovie() {
+      // по аналогии с kinopoisk.dev — random из коллекций
+      return apiRequest("/v1.4/movie/random", {
+        // можно ограничить, например, только фильмами
+        // type: "movie"
+      });
     }
-    
-    let searchTimeout;
-    document.getElementById('tg-search').addEventListener('input', function(e) {
-      clearTimeout(searchTimeout);
-      const val = e.target.value.trim();
-      
-      if (!val || val.length < 2) {
-        document.getElementById('tg-search-results').innerHTML = '';
-        document.getElementById('tg-film-grid').style.display = '';
-        if (!currentCategory) {
-          document.getElementById('tg-section').classList.remove('active');
-        }
+
+    function getRatingClass(value) {
+      if (value === null || value === undefined) return "rating-mid";
+      if (value >= 7.5) return "rating-high";
+      if (value >= 5.5) return "rating-mid";
+      return "rating-low";
+    }
+
+    function renderMovies(docs) {
+      moviesContainer.innerHTML = "";
+
+      if (!docs || !docs.length) {
+        const empty = document.createElement("div");
+        empty.style.padding = "10px 12px 6px";
+        empty.style.fontSize = "0.88rem";
+        empty.style.color = "#9ca3af";
+        empty.textContent = "Ничего не найдено. Попробуйте изменить запрос или категорию.";
+        moviesContainer.appendChild(empty);
+        gridCounter.textContent = "0 найдено";
         return;
       }
-      
-      searchTimeout = setTimeout(async () => {
+
+      docs.forEach((movie) => {
+        const card = document.createElement("div");
+        card.className = "movie-card";
+
+        const posterUrl =
+          movie.poster?.url ||
+          movie.backdrop?.url ||
+          "https://via.placeholder.com/300x450/020617/4b5563?text=No+Image";
+
+        const ratingKp =
+          movie.rating?.kp !== undefined && movie.rating?.kp !== null
+            ? Number(movie.rating.kp.toFixed(1))
+            : null;
+
+        const genres = Array.isArray(movie.genres)
+          ? movie.genres.map((g) => g.name).filter(Boolean)
+          : [];
+
+        card.innerHTML = `
+          <div class="movie-poster-wrap">
+            <img class="movie-poster" src="${posterUrl}" loading="lazy" alt="${(movie.name || movie.alternativeName || "Без названия")
+          .toString()
+          .replace(/"/g, "&quot;")}" />
+            <div class="movie-gradient"></div>
+            ${
+              ratingKp
+                ? `
+              <div class="movie-rating-pill">
+                <span class="movie-rating-dot ${getRatingClass(
+                  ratingKp
+                )}"></span>
+                <span>${ratingKp}</span>
+              </div>
+            `
+                : ""
+            }
+          </div>
+          <div class="movie-info">
+            <div class="movie-title">
+              ${movie.name || movie.alternativeName || "Без названия"}
+            </div>
+            <div class="movie-meta">
+              <span class="movie-year">
+                ${movie.year || "Год неизвестен"}
+              </span>
+              <span class="movie-genre">
+                ${genres[0] || ""}
+              </span>
+            </div>
+          </div>
+        `;
+
+        moviesContainer.appendChild(card);
+      });
+
+      gridCounter.textContent = `${docs.length} найдено`;
+    }
+
+    async function loadPopular() {
+      currentCategory = "popular";
+      gridTitle.textContent = "Популярные фильмы";
+      setActiveChip(btnPopular);
+
+      try {
         showLoader();
-        const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(val)}&page=1`;
-        
-        try {
-          const res = await apiGet(url);
-          const results = res.films || res.items || [];
-          
-          if (results.length === 0) {
-            document.getElementById('tg-search-results').innerHTML = '<div style="text-align:center;padding:40px;color:#888;">Ничего не найдено</div>';
-          } else {
-            displayFilms(results, true);
-          }
-          
-          document.getElementById('tg-film-grid').style.display = 'none';
-        } catch (error) {
-          console.error('Search error:', error);
-        } finally {
-          hideLoader();
-        }
-      }, 450);
-    });
-    
-    function triggerSearch() {
-      const val = document.getElementById('tg-search').value.trim();
-      if(val.length >= 2) {
-        document.getElementById('tg-search').dispatchEvent(new Event('input'));
-      } else {
-        alert('Введите минимум 2 символа для поиска');
+        const data = await getMoviesList(
+          {
+            "rating.kp": "6-10",
+            "votes.kp": "1000-100000000",
+            sortField: "rating.kp",
+            sortType: "-1",
+          },
+          1,
+          24
+        );
+
+        renderMovies(data.docs || data.items || []);
+      } catch (e) {
+        console.error(e);
+        showError("Не удалось загрузить популярные фильмы");
+      } finally {
+        hideLoader();
       }
     }
-    
-    let scrollTimeout;
-    let lastScrollTop = 0;
-    window.addEventListener('scroll', () => {
-      clearTimeout(scrollTimeout);
-      const st = window.scrollY;
-      
-      scrollTimeout = setTimeout(() => {
-        const scrollPosition = window.innerHeight + window.scrollY;
-        const threshold = document.body.offsetHeight - 1200;
-        
-        if (st > lastScrollTop && scrollPosition >= threshold && currentCategory && currentCategory !== 'random' && !isLoading) {
-          loadMoreFilms();
-        }
-        lastScrollTop = st;
-      }, 100);
+
+    async function loadTop250() {
+      currentCategory = "top250";
+      gridTitle.textContent = "Топ 250 фильмов";
+      setActiveChip(btnTop250);
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            top250: "1-250",
+            sortField: "top250",
+            sortType: "1",
+          },
+          1,
+          24
+        );
+
+        renderMovies(data.docs || data.items || []);
+      } catch (e) {
+        console.error(e);
+        showError("Не удалось загрузить топ 250");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadNew() {
+      currentCategory = "new";
+      gridTitle.textContent = "Новинки кино";
+      setActiveChip(btnNew);
+
+      const currentYear = new Date().getFullYear();
+
+      try {
+        showLoader();
+        const data = await getMoviesList(
+          {
+            year: `${currentYear - 1}-${currentYear}`,
+            sortField: "year",
+            sortType: "-1",
+          },
+          1,
+          24
+        );
+
+        renderMovies(data.docs || data.items || []);
+      } catch (e) {
+        console.error(e);
+        showError("Не удалось загрузить новинки");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function loadRandom() {
+      currentCategory = "random";
+      gridTitle.textContent = "Случайный фильм";
+      setActiveChip(btnRandom);
+
+      try {
+        showLoader();
+        const movie = await getRandomMovie();
+        const docs = Array.isArray(movie)
+          ? movie
+          : movie.docs || movie.items || [movie];
+        renderMovies(docs);
+      } catch (e) {
+        console.error(e);
+        showError("Не удалось получить случайный фильм");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    async function handleSearch() {
+      const value = searchInput.value.trim();
+      if (!value) {
+        loadPopular();
+        return;
+      }
+
+      currentCategory = "search";
+      gridTitle.textContent = `Результаты поиска: “${value}”`;
+      setActiveChip(null);
+
+      try {
+        showLoader();
+        const data = await searchMoviesByName(value, 1, 24);
+        renderMovies(data.docs || data.items || []);
+      } catch (e) {
+        console.error(e);
+        showError("Ошибка при выполнении поиска");
+      } finally {
+        hideLoader();
+      }
+    }
+
+    searchButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleSearch();
     });
-    
-    window.Telegram?.WebApp?.expand?.();
-    window.Telegram?.WebApp?.setHeaderColor?.('#F6F7F8');
-    window.Telegram?.WebApp?.setBackgroundColor?.('#F6F7F8');
+
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        handleSearch();
+      }
+    });
+
+    btnPopular.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadPopular();
+    });
+
+    btnTop250.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadTop250();
+    });
+
+    btnNew.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadNew();
+    });
+
+    btnRandom.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadRandom();
+    });
+
+    loadPopular();
   </script>
 </body>
 </html>
-

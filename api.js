@@ -13,6 +13,10 @@ class KinopoiskAPI {
         // Кэш для запросов
         this.cache = new Map();
         this.cacheTimeout = 5 * 60 * 1000; // 5 минут
+        
+        // Retry настройки
+        this.maxRetries = 3;
+        this.retryDelay = 1000; // 1 секунда
     }
 
     getEnvVar(name) {
@@ -49,7 +53,11 @@ class KinopoiskAPI {
         });
     }
 
-    async apiGet(url, useCache = true) {
+    async sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async apiGet(url, useCache = true, retryCount = 0) {
         // Проверяем кэш
         if (useCache) {
             const cached = this.getFromCache(url);
@@ -68,10 +76,21 @@ class KinopoiskAPI {
             });
             
             if (!res.ok) {
+                // Если 429 (Too Many Requests) или 5xx ошибки, пробуем повторно
+                if ((res.status === 429 || res.status >= 500) && retryCount < this.maxRetries) {
+                    console.warn(`⚠️ Request failed with status ${res.status}, retrying (${retryCount + 1}/${this.maxRetries})...`);
+                    await this.sleep(this.retryDelay * (retryCount + 1));
+                    return this.apiGet(url, useCache, retryCount + 1);
+                }
                 throw new Error(`HTTP ${res.status}: ${res.statusText}`);
             }
             
             const data = await res.json();
+            
+            // Проверяем, что данные валидные
+            if (!data) {
+                throw new Error('Empty response from API');
+            }
             
             // Сохраняем в кэш
             if (useCache) {
@@ -80,46 +99,92 @@ class KinopoiskAPI {
             
             return data;
         } catch (error) {
-            console.error('API Error:', error);
+            console.error('❌ API Error:', error.message);
+            
+            // Retry logic для network errors
+            if (retryCount < this.maxRetries && error.message.includes('fetch')) {
+                console.warn(`⚠️ Network error, retrying (${retryCount + 1}/${this.maxRetries})...`);
+                await this.sleep(this.retryDelay * (retryCount + 1));
+                return this.apiGet(url, useCache, retryCount + 1);
+            }
+            
             throw error;
         }
     }
 
+    // Вспомогательный метод для извлечения фильмов из разных форматов ответа
+    extractFilms(data) {
+        if (!data) return [];
+        
+        // API может возвращать фильмы в разных полях
+        if (Array.isArray(data.films)) return data.films;
+        if (Array.isArray(data.items)) return data.items;
+        if (Array.isArray(data.results)) return data.results;
+        
+        return [];
+    }
+
     async getPopular(page = 1) {
         const url = `${this.API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${page}`;
-        return this.apiGet(url);
+        const data = await this.apiGet(url);
+        return {
+            films: this.extractFilms(data),
+            totalPages: data.pagesCount || data.total_pages || 1
+        };
     }
 
     async getTop250(page = 1) {
         const url = `${this.API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;
-        return this.apiGet(url);
+        const data = await this.apiGet(url);
+        return {
+            films: this.extractFilms(data),
+            totalPages: data.pagesCount || data.total_pages || 1
+        };
     }
 
     async getNew(page = 1) {
         const currentYear = new Date().getFullYear();
         const url = `${this.API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
-        return this.apiGet(url);
+        const data = await this.apiGet(url);
+        return {
+            films: this.extractFilms(data),
+            totalPages: data.totalPages || data.total_pages || 1
+        };
     }
 
     async getRandomFilm() {
-        const randomPage = Math.floor(Math.random() * 5) + 1;
-        const data = await this.getTop250(randomPage);
-        const films = data.items || data.films || [];
-        
-        if (films.length > 0) {
-            return films[Math.floor(Math.random() * films.length)];
+        try {
+            // Получаем случайную страницу из топ-250
+            const randomPage = Math.floor(Math.random() * 5) + 1;
+            const result = await this.getTop250(randomPage);
+            const films = result.films;
+            
+            if (films && films.length > 0) {
+                const randomFilm = films[Math.floor(Math.random() * films.length)];
+                console.log('🎲 Random film selected:', randomFilm.nameRu || randomFilm.nameEn);
+                return randomFilm;
+            }
+            
+            console.warn('⚠️ No films found for random selection');
+            return null;
+        } catch (error) {
+            console.error('❌ Error getting random film:', error);
+            return null;
         }
-        
-        return null;
     }
 
     async searchFilms(query, page = 1) {
         if (!query || query.trim().length === 0) {
-            return { items: [], total: 0 };
+            return { films: [], total: 0 };
         }
         
         const url = `${this.API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=${page}`;
-        return this.apiGet(url, false); // Не кэшируем поиск
+        const data = await this.apiGet(url, false); // Не кэшируем поиск
+        
+        return {
+            films: this.extractFilms(data),
+            total: data.searchFilmsCountResult || data.total || 0
+        };
     }
 
     getPlayerUrl(filmId) {

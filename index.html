@@ -73,7 +73,6 @@
       padding: var(--ios-spacing);
     }
     
-    /* iOS 26 Hero Header */
     .hero-header {
       background: linear-gradient(135deg, 
         rgba(0, 122, 255, 0.05) 0%, 
@@ -123,7 +122,6 @@
       font-weight: 400;
     }
     
-    /* iOS 26 Search Bar */
     .search-container {
       display: flex;
       gap: 12px;
@@ -188,7 +186,6 @@
       transform: scale(0.98);
     }
     
-    /* iOS 26 Action Cards */
     .action-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -255,7 +252,6 @@
       color: var(--ios-text);
     }
     
-    /* iOS 26 Content Section */
     .content-section {
       background: var(--ios-card-bg);
       backdrop-filter: blur(20px);
@@ -274,7 +270,6 @@
       display: none;
     }
     
-    /* iOS 26 Loader */
     .loader {
       text-align: center;
       padding: 60px 20px;
@@ -300,7 +295,6 @@
       font-weight: 500;
     }
     
-    /* iOS 26 Film Grid */
     .film-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -365,7 +359,6 @@
       opacity: 0.5;
     }
     
-    /* iOS 26 Footer */
     .footer {
       background: var(--ios-card-bg);
       backdrop-filter: blur(20px);
@@ -405,7 +398,6 @@
       opacity: 0.7;
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
       .hero-title { font-size: 2rem; }
       .hero-subtitle { font-size: 1rem; }
@@ -480,24 +472,88 @@
     </footer>
   </div>
   
-  <script src="api.js"></script>
   <script>
-    // Инициализация API
-    const api = new KinopoiskAPI();
+    // API Configuration
+    const API_KEY = '33b1e3bd-2643-4ac1-8eb4-6b7392c5e913';
+    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
     
-    // Состояние приложения
+    // App State
     let currentCategory = null;
     let currentPage = 1;
     let isLoading = false;
     let hasMore = true;
     
-    // DOM элементы
+    // DOM Elements
     const contentSection = document.getElementById('contentSection');
     const loader = document.getElementById('loader');
     const filmGrid = document.getElementById('filmGrid');
     const searchInput = document.getElementById('searchInput');
     
-    // Вспомогательные функции
+    // API Functions
+    async function apiGet(url) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'X-API-KEY': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        
+        const data = await res.json();
+        return data;
+      } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+      }
+    }
+    
+    function extractFilms(data) {
+      if (!data) return [];
+      if (Array.isArray(data.films)) return data.films;
+      if (Array.isArray(data.items)) return data.items;
+      if (Array.isArray(data.results)) return data.results;
+      return [];
+    }
+    
+    async function getPopular(page = 1) {
+      const url = `${API_BASE}/v2.2/films/top?type=TOP_100_POPULAR_FILMS&page=${page}`;
+      const data = await apiGet(url);
+      return extractFilms(data);
+    }
+    
+    async function getTop250(page = 1) {
+      const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;
+      const data = await apiGet(url);
+      return extractFilms(data);
+    }
+    
+    async function getNew(page = 1) {
+      const currentYear = new Date().getFullYear();
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
+      const data = await apiGet(url);
+      return extractFilms(data);
+    }
+    
+    async function getRandomFilm() {
+      const randomPage = Math.floor(Math.random() * 5) + 1;
+      const films = await getTop250(randomPage);
+      if (films && films.length > 0) {
+        return films[Math.floor(Math.random() * films.length)];
+      }
+      return null;
+    }
+    
+    async function searchFilms(query) {
+      const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
+      const data = await apiGet(url);
+      return extractFilms(data);
+    }
+    
+    // UI Functions
     function showLoader() {
       contentSection.classList.remove('hidden');
       loader.classList.remove('hidden');
@@ -511,84 +567,15 @@
       filmGrid.innerHTML = '';
     }
     
-    // Загрузка категории
-    async function loadCategory(category) {
-      console.log('Loading category:', category);
-      
-      currentCategory = category;
-      currentPage = 1;
-      hasMore = true;
-      clearFilms();
-      showLoader();
-      searchInput.value = '';
-      
-      try {
-        if (category === 'random') {
-          const film = await api.getRandomFilm();
-          hideLoader();
-          
-          if (film) {
-            displayFilms([film]);
-          } else {
-            showEmptyState('Не удалось загрузить случайный фильм');
-          }
-        } else {
-          await loadMoreFilms();
-        }
-      } catch (error) {
-        console.error('Error loading category:', error);
-        hideLoader();
-        showEmptyState('Ошибка загрузки данных');
-      }
+    function showEmptyState(message) {
+      filmGrid.innerHTML = `
+        <div class="empty-state" style="grid-column: 1/-1;">
+          <div class="empty-icon">🎬</div>
+          <div>${message}</div>
+        </div>
+      `;
     }
     
-    // Загрузка дополнительных фильмов
-    async function loadMoreFilms() {
-      if (isLoading || !hasMore || !currentCategory) return;
-      
-      isLoading = true;
-      console.log(`Loading page ${currentPage} of ${currentCategory}`);
-      
-      try {
-        let result;
-        
-        switch (currentCategory) {
-          case 'popular':
-            result = await api.getPopular(currentPage);
-            break;
-          case 'top250':
-            result = await api.getTop250(currentPage);
-            break;
-          case 'new':
-            result = await api.getNew(currentPage);
-            break;
-          default:
-            throw new Error('Unknown category');
-        }
-        
-        const films = result.films || [];
-        console.log(`Loaded ${films.length} films`);
-        
-        if (films.length > 0) {
-          displayFilms(films);
-          currentPage++;
-        } else {
-          hasMore = false;
-          if (filmGrid.children.length === 0) {
-            showEmptyState('Фильмы не найдены');
-          }
-        }
-      } catch (error) {
-        console.error('Error loading films:', error);
-        showEmptyState('Ошибка загрузки фильмов');
-        hasMore = false;
-      } finally {
-        isLoading = false;
-        hideLoader();
-      }
-    }
-    
-    // Отображение фильмов
     function displayFilms(films) {
       const fragment = document.createDocumentFragment();
       
@@ -616,22 +603,84 @@
       filmGrid.appendChild(fragment);
     }
     
-    // Открытие плеера
     function openPlayer(filmId, title) {
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
     
-    // Пустое состояние
-    function showEmptyState(message) {
-      filmGrid.innerHTML = `
-        <div class="empty-state" style="grid-column: 1/-1;">
-          <div class="empty-icon">🎬</div>
-          <div>${message}</div>
-        </div>
-      `;
+    // Category Loading
+    async function loadCategory(category) {
+      console.log('Loading category:', category);
+      
+      currentCategory = category;
+      currentPage = 1;
+      hasMore = true;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      
+      try {
+        if (category === 'random') {
+          const film = await getRandomFilm();
+          hideLoader();
+          
+          if (film) {
+            displayFilms([film]);
+          } else {
+            showEmptyState('Не удалось загрузить случайный фильм');
+          }
+        } else {
+          await loadMoreFilms();
+        }
+      } catch (error) {
+        console.error('Error loading category:', error);
+        hideLoader();
+        showEmptyState('Ошибка загрузки данных');
+      }
     }
     
-    // Поиск
+    async function loadMoreFilms() {
+      if (isLoading || !hasMore || !currentCategory) return;
+      
+      isLoading = true;
+      console.log(`Loading page ${currentPage} of ${currentCategory}`);
+      
+      try {
+        let films = [];
+        
+        switch (currentCategory) {
+          case 'popular':
+            films = await getPopular(currentPage);
+            break;
+          case 'top250':
+            films = await getTop250(currentPage);
+            break;
+          case 'new':
+            films = await getNew(currentPage);
+            break;
+        }
+        
+        console.log(`Loaded ${films.length} films`);
+        
+        if (films.length > 0) {
+          displayFilms(films);
+          currentPage++;
+        } else {
+          hasMore = false;
+          if (filmGrid.children.length === 0) {
+            showEmptyState('Фильмы не найдены');
+          }
+        }
+      } catch (error) {
+        console.error('Error loading films:', error);
+        showEmptyState('Ошибка загрузки фильмов');
+        hasMore = false;
+      } finally {
+        isLoading = false;
+        hideLoader();
+      }
+    }
+    
+    // Search
     let searchTimeout;
     searchInput.addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
@@ -653,9 +702,7 @@
         showLoader();
         
         try {
-          const result = await api.searchFilms(query);
-          const films = result.films || [];
-          
+          const films = await searchFilms(query);
           hideLoader();
           
           if (films.length > 0) {
@@ -680,7 +727,7 @@
       }
     }
     
-    // Бесконечная прокрутка
+    // Infinite Scroll
     let scrollTimeout;
     window.addEventListener('scroll', () => {
       clearTimeout(scrollTimeout);
@@ -695,7 +742,7 @@
       }, 100);
     });
     
-    // Telegram WebApp API
+    // Telegram WebApp
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.expand();
       window.Telegram.WebApp.setHeaderColor('#F5F5F7');

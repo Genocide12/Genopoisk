@@ -289,33 +289,37 @@
       padding: 18px;
       box-shadow: 0 1px 8px rgba(34,34,34,0.04);
       border: 1px solid #E6E6EA;
+      display: none;
+    }
+    .tg-section.active {
+      display: block;
     }
     .tg-film-grid {
       display: grid;
-      gap: 10px;
+      gap: 5px;
       margin-top: 18px;
     }
     
     .tg-film-grid { grid-template-columns: repeat(8, 1fr); }
-    .tg-film-card { min-height: 230px; }
+    .tg-film-card { min-height: 210px; }
     .tg-film-poster { width: 137px; height: 205px; }
     .tg-film-title { font-size: 16px; }
     .tg-film-details { font-size: 12px; }
     
     body.zoom-1 .tg-film-grid { grid-template-columns: repeat(6, 1fr); }
-    body.zoom-1 .tg-film-card { min-height: 330px; }
+    body.zoom-1 .tg-film-card { min-height: 300px; }
     body.zoom-1 .tg-film-poster { width: 195px; height: 293px; }
     body.zoom-1 .tg-film-title { font-size: 18px; }
     body.zoom-1 .tg-film-details { font-size: 14px; }
     
     body.zoom-2 .tg-film-grid { grid-template-columns: repeat(4, 1fr); }
-    body.zoom-2 .tg-film-card { min-height: 390px; }
+    body.zoom-2 .tg-film-card { min-height: 355px; }
     body.zoom-2 .tg-film-poster { width: 234px; height: 351px; }
     body.zoom-2 .tg-film-title { font-size: 20px; }
     body.zoom-2 .tg-film-details { font-size: 15px; }
     
     body.zoom-3 .tg-film-grid { grid-template-columns: repeat(3, 1fr); }
-    body.zoom-3 .tg-film-card { min-height: 420px; }
+    body.zoom-3 .tg-film-card { min-height: 395px; }
     body.zoom-3 .tg-film-poster { width: 260px; height: 390px; }
     body.zoom-3 .tg-film-title { font-size: 20px; }
     body.zoom-3 .tg-film-details { font-size: 15px; }
@@ -323,7 +327,7 @@
     .tg-film-card {
       background: #F1F3F6;
       border-radius: 8px;
-      padding: 6px 4px 7px 4px;
+      padding: 3px 2px 4px 2px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -347,14 +351,14 @@
       background: #eee;
       border-radius: 5px;
       object-fit: cover;
-      margin-bottom: 5px;
+      margin-bottom: 3px;
       transition: all 0.3s;
     }
     .tg-film-title {
       font-weight: 500;
       color: #222;
       text-align: center;
-      margin-bottom: 2px;
+      margin-bottom: 1px;
       white-space: normal;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -363,7 +367,7 @@
     }
     .tg-film-details {
       color: #8F9AA3;
-      margin-bottom: 1px;
+      margin-bottom: 0px;
       text-align: center;
       transition: all 0.3s;
     }
@@ -394,7 +398,7 @@
       .tg-film-poster { width: 103.5px !important; height: 155.25px !important; }
       .tg-film-title { font-size: 18px !important; }
       .tg-film-details { font-size: 11px !important; }
-      .tg-film-card { min-height: 180px !important; }
+      .tg-film-card { min-height: 165px !important; }
       body.zoom-1 .tg-film-grid,
       body.zoom-2 .tg-film-grid,
       body.zoom-3 .tg-film-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -409,7 +413,7 @@
       body.zoom-3 .tg-film-details { font-size: 11px !important; }
       body.zoom-1 .tg-film-card,
       body.zoom-2 .tg-film-card,
-      body.zoom-3 .tg-film-card { min-height: 180px !important; }
+      body.zoom-3 .tg-film-card { min-height: 165px !important; }
     }
     @media (max-width: 480px) {
       .tg-action-row { grid-template-columns: repeat(2, 1fr); }
@@ -454,7 +458,7 @@
       <div class="tg-action-title">Случайный</div>
     </div>
   </div>
-  <div class="tg-section">
+  <div class="tg-section" id="tg-section">
     <div id="tg-loader" class="tg-loader" style="display:none;">
       <div class="spinner"></div>
       <div>Загрузка...</div>
@@ -509,7 +513,10 @@
       });
     }
     
-    function showLoader() { document.getElementById('tg-loader').style.display = 'block'; }
+    function showLoader() { 
+      document.getElementById('tg-section').classList.add('active');
+      document.getElementById('tg-loader').style.display = 'block'; 
+    }
     function hideLoader() { document.getElementById('tg-loader').style.display = 'none'; }
     function clearFilms() { document.getElementById('tg-film-grid').innerHTML = ''; }
     
@@ -601,6 +608,9 @@
       if (!val || val.length < 2) {
         document.getElementById('tg-search-results').innerHTML = '';
         document.getElementById('tg-film-grid').style.display = '';
+        if (!currentCategory) {
+          document.getElementById('tg-section').classList.remove('active');
+        }
         return;
       }
       

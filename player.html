@@ -74,8 +74,9 @@
       background:#a00;
       transform: scale(0.95);
     }
+    /* ИСПРАВЛЕНИЕ: показываем кнопку "В браузере" на всех устройствах */
     .btn-browser {
-      display: none;
+      display: inline-block;
     }
     .player-main {
       width:100vw;
@@ -140,7 +141,6 @@
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
-      .btn-browser { display: inline-block !important; }
     }
   </style>
 </head>
@@ -154,7 +154,7 @@
   </div>
   <div class="player-main">
     <div class="ad-notice" id="adNotice">⏳ Реклама закончится через <span id="adTimer">10</span> сек</div>
-    <iframe id="playerIframe" class="player-iframe" allowfullscreen></iframe>
+    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
     <div id="mobileHint" class="mobile-hint">Полный экран на кнопке внизу ⛶<br><br>через 10 сек</div>
   </div>
   <script>

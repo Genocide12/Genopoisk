@@ -74,10 +74,6 @@
       background:#a00;
       transform: scale(0.95);
     }
-    /* ИСПРАВЛЕНИЕ: показываем кнопку "В браузере" на всех устройствах */
-    .btn-browser {
-      display: inline-block;
-    }
     .player-main {
       width:100vw;
       height:calc(100vh - 52px);
@@ -148,7 +144,6 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
-      <button class="btn btn-browser" id="btnBrowser" onclick="openInBrowser()">🌐 В браузере</button>
       <button class="btn btn-close" onclick="window.history.back()">✕</button>
     </div>
   </div>
@@ -194,11 +189,6 @@
         adNotice.style.display = 'none';
       }
     }, 1000);
-    
-    function openInBrowser() {
-      const currentUrl = `https://genopoisk.vercel.app/player.html?id=${kid}&title=${encodeURIComponent(title)}`;
-      window.open(currentUrl, '_blank');
-    }
     
     function isMobile() {
       return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);

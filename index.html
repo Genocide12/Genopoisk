@@ -12,11 +12,52 @@
   <title>Genopoisk</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-    :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
-    body{--bg-primary:#000;--bg-secondary:#1C1C1E;--bg-tertiary:#2C2C2E;--text-primary:#FFF;--text-secondary:#98989D;--separator:rgba(84,84,88,0.6);--fill:rgba(120,120,128,0.2);--fill-secondary:rgba(120,120,128,0.16);--fill-tertiary:rgba(118,118,128,0.12);font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5;min-height:100vh;overflow-x:hidden;transition:background 0.3s,color 0.3s;}
-  body.light-theme{--bg-primary:#F2F2F7;--bg-secondary:#FFF;--bg-tertiary:#F2F2F7;--text-primary:#000;--text-secondary:#6E6E73;--separator:rgba(60,60,67,0.29);}
-    html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    * {
+      box-sizing:border-box;
+      margin:0;
+      padding:0;
+      -webkit-tap-highlight-color:transparent;
+    }
+    :root {
+      --ios-blue:#007AFF;
+      --ios-purple:#5856D6;
+      --ios-pink:#FF2D55;
+    }
+    body {
+      --bg-primary:#000;
+      --bg-secondary:#1C1C1E;
+      --bg-tertiary:#2C2C2E;
+      --text-primary:#FFF;
+      --text-secondary:#98989D;
+      --separator:rgba(84,84,88,0.6);
+      --fill:rgba(120,120,128,0.2);
+      --fill-secondary:rgba(120,120,128,0.16);
+      --fill-tertiary:rgba(118,118,128,0.12);
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
+      background:var(--bg-primary);
+      color:var(--text-primary);
+      line-height:1.5;
+      min-height:100vh;
+      overflow-x:hidden;
+      transition:background 0.3s,color 0.3s;
+      -webkit-user-select:none;
+      -moz-user-select:none;
+      -ms-user-select:none;
+      user-select:none;
+    }
+    body.light-theme {
+      --bg-primary:#F2F2F7;
+      --bg-secondary:#FFF;
+      --bg-tertiary:#F2F2F7;
+      --text-primary:#000;
+      --text-secondary:#6E6E73;
+      --separator:rgba(60,60,67,0.29);
+    }
+    html {
+      scroll-behavior:smooth;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
     .container{max-width:1200px;margin:0 auto;padding:20px 16px;}
     .hero{text-align:center;padding:40px 20px;margin-bottom:32px;position:relative;overflow:hidden;border-radius:32px;background:linear-gradient(135deg,rgba(0,122,255,0.15) 0%,rgba(88,86,214,0.15) 50%,rgba(255,45,85,0.15) 100%);backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid var(--separator);box-shadow:0 8px 32px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.1);}
     .hero-title{font-size:clamp(32px,6vw,48px);font-weight:800;margin-bottom:12px;background:linear-gradient(135deg,#007AFF 0%,#5856D6 50%,#FF2D55 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.03em;line-height:1.1;cursor:pointer;user-select:none;transition:transform 0.2s;}
@@ -57,8 +98,17 @@
     .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
     .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
     .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
-    @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
-    @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
+    @media (max-width:768px){
+      .container{padding:16px 12px;}
+      .hero{padding:32px 16px;margin-bottom:24px;}
+      .actions{grid-template-columns:repeat(2,1fr);}
+      .film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}
+    }
+    @media (max-width:480px){
+      .hero-title{font-size:28px;}
+      .action-icon{font-size:32px;}
+      .film-grid{gap:10px;}
+    }
   </style>
 </head>
 <body>
@@ -105,53 +155,266 @@
     </footer>
   </div>
   <script>
+    // Защита от копирования / инспектора
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+    document.onkeydown = function(e) {
+      const key = e.key || '';
+      if (e.ctrlKey && (key === 'c' || key === 'C' || key === 'x' || key === 'X' || key === 'u' || key === 'U' || key === 's' || key === 'S')) {
+        e.preventDefault();
+        return false;
+      }
+      if (key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
     const API_KEY = '2162133a-a4d6-4712-84bd-88652fe904ea';
     const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+
     let currentCategory = null;
     let currentPage = 1;
     let isLoading = false;
     let hasMore = true;
+
     const content = document.getElementById('content');
     const loader = document.getElementById('loader');
     const filmGrid = document.getElementById('filmGrid');
     const searchInput = document.getElementById('searchInput');
+
     function toggleTheme() {
       const body = document.body;
       const isLight = body.classList.contains('light-theme');
       body.classList.toggle('light-theme');
       localStorage.setItem('theme', isLight ? 'dark' : 'light');
       const metaTheme = document.querySelector('meta[name="theme-color"]');
-      if (metaTheme) metaTheme.content = isLight ? '#F2F2F7' : '#000000';
+      if (metaTheme) metaTheme.content = isLight ? '#000000' : '#F2F2F7';
     }
+
     // Load saved theme
-    if(localStorage.getItem('theme')==='light') document.body.classList.add('light-theme');
+    if (localStorage.getItem('theme') === 'light') {
+      document.body.classList.add('light-theme');
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.content = '#F2F2F7';
+    }
+
     async function apiGet(url) {
       try {
-        const res = await fetch(url, {headers: {'X-API-KEY': API_KEY, 'Content-Type': 'application/json'}});
-        if (!res.ok) throw new Error('HTTP '+res.status+': '+res.statusText);
+        const res = await fetch(url, {
+          headers: {
+            'X-API-KEY': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
         return await res.json();
-      } catch (e) {console.error('API Error:', e);throw e;}
+      } catch (e) {
+        console.error('API Error:', e);
+        throw e;
+      }
     }
+
     function extractFilms(data) {
       if (!data) return [];
       return data.films || data.items || data.results || [];
     }
-    async function getPopular(page=1) {const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=${page}`;return extractFilms(await apiGet(url));}
-    async function getTop250(page=1) {const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;const d=await apiGet(url);const f=extractFilms(d);if(f.length===0){const fb=`${API_BASE}/v2.2/films?order=RATING&type=FILM&ratingFrom=8&ratingTo=10&page=${page}`;return extractFilms(await apiGet(fb));}return f;}
-    async function getNew(page=1){const currentYear=new Date().getFullYear();const url=`${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;return extractFilms(await apiGet(url));}
-    async function getRandomFilm(){const randomPage=Math.floor(Math.random()*5)+1;const films=await getTop250(randomPage);if(films&&films.length>0)return films[Math.floor(Math.random()*films.length)];return null;}
-    async function searchFilms(query){const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;return extractFilms(await apiGet(url));}
-    function showLoader(){content.classList.remove('hidden');loader.classList.remove('hidden');}
-    function hideLoader(){loader.classList.add('hidden');}
-    function clearFilms(){filmGrid.innerHTML = ''}
-    function showEmptyState(msg){hideLoader();filmGrid.innerHTML=`<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;}
-    function displayFilms(films){if(!films||films.length===0){showEmptyState('Фильмы не найдены');return;}const frag=document.createDocumentFragment();films.forEach((film,index)=>{const filmId=film.filmId||film.kinopoiskId;const title=film.nameRu||film.nameEn||'Без названия';const year=film.year||'Н/Д';const rating=film.rating||film.ratingKinopoisk||'Н/Д';const poster=film.posterUrlPreview||film.posterUrl||'';const card=document.createElement('div');card.className='film-card';card.style.animationDelay=`${index*0.05}s`;card.innerHTML=`<img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'"><div class="film-info"><div class="film-title">${title}</div><div class="film-meta"><span>${year}</span>${rating!=='Н/Д'?`<span class="rating">⭐ ${rating}</span>`:''}</div></div>`;card.onclick=()=>openPlayer(filmId,title);frag.appendChild(card);});filmGrid.appendChild(frag);hideLoader();}
-    function openPlayer(filmId,title){window.location.href=`player.html?id=${filmId}&title=${encodeURIComponent(title)}`;}
-    async function loadCategory(category){currentCategory=category;currentPage=1;hasMore=true;clearFilms();showLoader();searchInput.value='';try{if(category==='random'){const film=await getRandomFilm();if(film)displayFilms([film]);else showEmptyState('Не удалось загрузить случайный фильм');}else{await loadMoreFilms();}}catch(e){showEmptyState('Ошибка загрузки: '+e.message);}}
-    async function loadMoreFilms(){if(isLoading||!hasMore||!currentCategory)return;isLoading=true;try{let films=[];switch(currentCategory){case'popular':films=await getPopular(currentPage);break;case'top250':films=await getTop250(currentPage);break;case'new':films=await getNew(currentPage);break;}if(films.length>0){displayFilms(films);currentPage++;}else{hasMore=false;if(filmGrid.children.length===0)showEmptyState('Фильмы не найдены');else hideLoader();}}catch(e){showEmptyState('Ошибка загрузки: '+e.message);hasMore=false;}finally{isLoading=false;}}
-    let searchTimeout;searchInput.addEventListener('input',function(e){clearTimeout(searchTimeout);const val=e.target.value.trim();if(!val||val.length<2){if(!currentCategory){content.classList.add('hidden');clearFilms();}return;}searchTimeout=setTimeout(async()=>{currentCategory=null;currentPage=1;hasMore=false;clearFilms();showLoader();try{const films=await searchFilms(val);displayFilms(films);}catch(e){showEmptyState('Ошибка поиска: '+e.message);}},500);});
-    let scrollTimeout;window.addEventListener('scroll',()=>{clearTimeout(scrollTimeout);scrollTimeout=setTimeout(()=>{const scrollPosition=window.innerHeight+window.scrollY;const threshold=document.documentElement.scrollHeight-800;if(scrollPosition>=threshold&&currentCategory&&currentCategory!=='random'&&!isLoading&&hasMore)loadMoreFilms();},100);});
-    if(window.Telegram?.WebApp){window.Telegram.WebApp.expand();let themeParams=window.Telegram.WebApp.themeParams;if(themeParams?.bg_color){document.querySelector('meta[name="theme-color"]').content=themeParams.bg_color;}}
+
+    async function getPopular(page = 1) {
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getTop250(page = 1) {
+      const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;
+      const d = await apiGet(url);
+      const f = extractFilms(d);
+      if (f.length === 0) {
+        const fb = `${API_BASE}/v2.2/films?order=RATING&type=FILM&ratingFrom=8&ratingTo=10&page=${page}`;
+        return extractFilms(await apiGet(fb));
+      }
+      return f;
+    }
+
+    async function getNew(page = 1) {
+      const currentYear = new Date().getFullYear();
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getRandomFilm() {
+      const randomPage = Math.floor(Math.random() * 5) + 1;
+      const films = await getTop250(randomPage);
+      if (films && films.length > 0) return films[Math.floor(Math.random() * films.length)];
+      return null;
+    }
+
+    async function searchFilms(query) {
+      const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
+      return extractFilms(await apiGet(url));
+    }
+
+    function showLoader() {
+      content.classList.remove('hidden');
+      loader.classList.remove('hidden');
+    }
+
+    function hideLoader() {
+      loader.classList.add('hidden');
+    }
+
+    function clearFilms() {
+      filmGrid.innerHTML = '';
+    }
+
+    function showEmptyState(msg) {
+      hideLoader();
+      filmGrid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="empty-icon">🎬</div>
+          <div class="empty-text">${msg}</div>
+        </div>`;
+    }
+
+    function displayFilms(films) {
+      if (!films || films.length === 0) {
+        showEmptyState('Фильмы не найдены');
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      films.forEach((film, index) => {
+        const filmId = film.filmId || film.kinopoiskId;
+        const title = film.nameRu || film.nameEn || 'Без названия';
+        const year = film.year || 'Н/Д';
+        const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+        const poster = film.posterUrlPreview || film.posterUrl || '';
+        const card = document.createElement('div');
+        card.className = 'film-card';
+        card.style.animationDelay = `${index * 0.05}s`;
+        card.innerHTML = `
+          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
+          <div class="film-info">
+            <div class="film-title">${title}</div>
+            <div class="film-meta">
+              <span>${year}</span>
+              ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
+            </div>
+          </div>`;
+        card.onclick = () => openPlayer(filmId, title);
+        frag.appendChild(card);
+      });
+      filmGrid.appendChild(frag);
+      hideLoader();
+    }
+
+    function openPlayer(filmId, title) {
+      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+    }
+
+    async function loadCategory(category) {
+      currentCategory = category;
+      currentPage = 1;
+      hasMore = true;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      try {
+        if (category === 'random') {
+          const film = await getRandomFilm();
+          if (film) displayFilms([film]);
+          else showEmptyState('Не удалось загрузить случайный фильм');
+        } else {
+          await loadMoreFilms();
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
+      }
+    }
+
+    async function loadMoreFilms() {
+      if (isLoading || !hasMore || !currentCategory) return;
+      isLoading = true;
+      try {
+        let films = [];
+        switch (currentCategory) {
+          case 'popular':
+            films = await getPopular(currentPage);
+            break;
+          case 'top250':
+            films = await getTop250(currentPage);
+            break;
+          case 'new':
+            films = await getNew(currentPage);
+            break;
+        }
+        if (films.length > 0) {
+          displayFilms(films);
+          currentPage++;
+        } else {
+          hasMore = false;
+          if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
+          else hideLoader();
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
+        hasMore = false;
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    let searchTimeout;
+    searchInput.addEventListener('input', function(e) {
+      clearTimeout(searchTimeout);
+      const val = e.target.value.trim();
+      if (!val || val.length < 2) {
+        if (!currentCategory) {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+        return;
+      }
+      searchTimeout = setTimeout(async () => {
+        currentCategory = null;
+        currentPage = 1;
+        hasMore = false;
+        clearFilms();
+        showLoader();
+        try {
+          const films = await searchFilms(val);
+          displayFilms(films);
+        } catch (e) {
+          showEmptyState('Ошибка поиска: ' + e.message);
+        }
+      }, 500);
+    });
+
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const threshold = document.documentElement.scrollHeight - 800;
+        if (scrollPosition >= threshold &&
+            currentCategory &&
+            currentCategory !== 'random' &&
+            !isLoading &&
+            hasMore) {
+          loadMoreFilms();
+        }
+      }, 100);
+    });
+
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.expand();
+      const themeParams = window.Telegram.WebApp.themeParams;
+      if (themeParams?.bg_color) {
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.content = themeParams.bg_color;
+      }
+    }
   </script>
 </body>
 </html>

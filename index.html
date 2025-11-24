@@ -12,52 +12,11 @@
   <title>Genopoisk</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-    * {
-      box-sizing:border-box;
-      margin:0;
-      padding:0;
-      -webkit-tap-highlight-color:transparent;
-    }
-    :root {
-      --ios-blue:#007AFF;
-      --ios-purple:#5856D6;
-      --ios-pink:#FF2D55;
-    }
-    body {
-      --bg-primary:#000;
-      --bg-secondary:#1C1C1E;
-      --bg-tertiary:#2C2C2E;
-      --text-primary:#FFF;
-      --text-secondary:#98989D;
-      --separator:rgba(84,84,88,0.6);
-      --fill:rgba(120,120,128,0.2);
-      --fill-secondary:rgba(120,120,128,0.16);
-      --fill-tertiary:rgba(118,118,128,0.12);
-      font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
-      background:var(--bg-primary);
-      color:var(--text-primary);
-      line-height:1.5;
-      min-height:100vh;
-      overflow-x:hidden;
-      transition:background 0.3s,color 0.3s;
-      -webkit-user-select:none;
-      -moz-user-select:none;
-      -ms-user-select:none;
-      user-select:none;
-    }
-    body.light-theme {
-      --bg-primary:#F2F2F7;
-      --bg-secondary:#FFF;
-      --bg-tertiary:#F2F2F7;
-      --text-primary:#000;
-      --text-secondary:#6E6E73;
-      --separator:rgba(60,60,67,0.29);
-    }
-    html {
-      scroll-behavior:smooth;
-      -webkit-font-smoothing:antialiased;
-      -moz-osx-font-smoothing:grayscale;
-    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
+    body{--bg-primary:#000;--bg-secondary:#1C1C1E;--bg-tertiary:#2C2C2E;--text-primary:#FFF;--text-secondary:#98989D;--separator:rgba(84,84,88,0.6);--fill:rgba(120,120,128,0.2);--fill-secondary:rgba(120,120,128,0.16);--fill-tertiary:rgba(118,118,128,0.12);font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5;min-height:100vh;overflow-x:hidden;transition:background 0.3s,color 0.3s;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;}
+    body.light-theme{--bg-primary:#F2F2F7;--bg-secondary:#FFF;--bg-tertiary:#F2F2F7;--text-primary:#000;--text-secondary:#6E6E73;--separator:rgba(60,60,67,0.29);}
+    html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     .container{max-width:1200px;margin:0 auto;padding:20px 16px;}
     .hero{text-align:center;padding:40px 20px;margin-bottom:32px;position:relative;overflow:hidden;border-radius:32px;background:linear-gradient(135deg,rgba(0,122,255,0.15) 0%,rgba(88,86,214,0.15) 50%,rgba(255,45,85,0.15) 100%);backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid var(--separator);box-shadow:0 8px 32px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.1);}
     .hero-title{font-size:clamp(32px,6vw,48px);font-weight:800;margin-bottom:12px;background:linear-gradient(135deg,#007AFF 0%,#5856D6 50%,#FF2D55 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.03em;line-height:1.1;cursor:pointer;user-select:none;transition:transform 0.2s;}
@@ -83,6 +42,13 @@
     @keyframes spin{to{transform:rotate(360deg);}}
     .loader-text{font-size:15px;font-weight:500;color:var(--text-secondary);letter-spacing:-0.01em;}
     .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
+    .film-grid.centered {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      min-height:300px;
+    }
     .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);background:var(--bg-secondary);}
     .film-card:hover{transform:translateY(-8px) scale(1.03);box-shadow:0 20px 60px rgba(0,122,255,0.4);z-index:2;}
     .film-poster{width:100%;aspect-ratio:2/3;object-fit:cover;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display:block;}
@@ -98,17 +64,8 @@
     .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
     .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
     .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
-    @media (max-width:768px){
-      .container{padding:16px 12px;}
-      .hero{padding:32px 16px;margin-bottom:24px;}
-      .actions{grid-template-columns:repeat(2,1fr);}
-      .film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}
-    }
-    @media (max-width:480px){
-      .hero-title{font-size:28px;}
-      .action-icon{font-size:32px;}
-      .film-grid{gap:10px;}
-    }
+    @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
+    @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
 </head>
 <body>
@@ -267,18 +224,17 @@
 
     function clearFilms() {
       filmGrid.innerHTML = '';
+      filmGrid.classList.remove('centered');
     }
 
     function showEmptyState(msg) {
       hideLoader();
-      filmGrid.innerHTML = `
-        <div class="empty-state" style="grid-column:1/-1;">
-          <div class="empty-icon">🎬</div>
-          <div class="empty-text">${msg}</div>
-        </div>`;
+      filmGrid.classList.remove('centered');
+      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
     }
 
-    function displayFilms(films) {
+    function displayFilms(films, forceCenter = false) {
+      clearFilms();
       if (!films || films.length === 0) {
         showEmptyState('Фильмы не найдены');
         return;
@@ -307,6 +263,9 @@
       });
       filmGrid.appendChild(frag);
       hideLoader();
+      if (forceCenter || films.length === 1) {
+        filmGrid.classList.add('centered');
+      }
     }
 
     function openPlayer(filmId, title) {
@@ -323,7 +282,7 @@
       try {
         if (category === 'random') {
           const film = await getRandomFilm();
-          if (film) displayFilms([film]);
+          if (film) displayFilms([film], true);
           else showEmptyState('Не удалось загрузить случайный фильм');
         } else {
           await loadMoreFilms();

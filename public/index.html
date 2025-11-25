@@ -1,1 +1,380 @@
-<meta name="google-site-verification" content="Yd6LYUl97HtqaAmwgFf7BJIauzpoOLVc1epesFXZ890" />
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Genopoisk">
+  <meta name="google-site-verification" content="Yd6LYUl97HtqaAmwgFf7BJIauzpoOLVc1epesFXZ890" />
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <title>Genopoisk</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
+    body{--bg-primary:#000;--bg-secondary:#1C1C1E;--bg-tertiary:#2C2C2E;--text-primary:#FFF;--text-secondary:#98989D;--separator:rgba(84,84,88,0.6);--fill:rgba(120,120,128,0.2);--fill-secondary:rgba(120,120,128,0.16);--fill-tertiary:rgba(118,118,128,0.12);font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5;min-height:100vh;overflow-x:hidden;transition:background 0.3s,color 0.3s;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;}
+    body.light-theme{--bg-primary:#F2F2F7;--bg-secondary:#FFF;--bg-tertiary:#F2F2F7;--text-primary:#000;--text-secondary:#6E6E73;--separator:rgba(60,60,67,0.29);}
+    html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    .container{max-width:1200px;margin:0 auto;padding:20px 16px;}
+    .hero{text-align:center;padding:40px 20px;margin-bottom:32px;position:relative;overflow:hidden;border-radius:32px;background:linear-gradient(135deg,rgba(0,122,255,0.15) 0%,rgba(88,86,214,0.15) 50%,rgba(255,45,85,0.15) 100%);backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid var(--separator);box-shadow:0 8px 32px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.1);}
+    .hero-title{font-size:clamp(32px,6vw,48px);font-weight:800;margin-bottom:12px;background:linear-gradient(135deg,#007AFF 0%,#5856D6 50%,#FF2D55 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.03em;line-height:1.1;cursor:pointer;user-select:none;transition:transform 0.2s;}
+    .hero-title:active{transform:scale(0.98);}
+    .hero-subtitle{font-size:clamp(14px,2vw,17px);color:var(--text-secondary);font-weight:500;letter-spacing:-0.01em;}
+    .search-wrapper{margin-bottom:24px;}
+    .search-container{position:relative;max-width:600px;margin:0 auto;}
+    .search-input{width:100%;padding:14px 20px 14px 44px;font-size:17px;font-weight:500;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:16px;color:var(--text-primary);outline:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);font-family:inherit;}
+    .search-input::placeholder{color:var(--text-secondary);}
+    .search-input:focus{background:var(--bg-tertiary);border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);transform:translateY(-2px);}
+    .search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;opacity:0.6;}
+    .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
+    .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
+    .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
+    .action-card:active{transform:scale(0.96);}
+    .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));}
+    .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;}
+    .content{background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:24px;padding:24px;min-height:400px;margin-bottom:32px;position:relative;overflow:hidden;}
+    .content.hidden{display:none;}
+    .loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);z-index:10;}
+    .loader.hidden{display:none;}
+    .spinner{width:44px;height:44px;border:3px solid var(--fill);border-top-color:var(--ios-blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .loader-text{font-size:15px;font-weight:500;color:var(--text-secondary);letter-spacing:-0.01em;}
+    .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
+    .film-grid.centered {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      min-height:300px;
+    }
+    .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);background:var(--bg-secondary);}
+    .film-card:hover{transform:translateY(-8px) scale(1.03);box-shadow:0 20px 60px rgba(0,122,255,0.4);z-index:2;}
+    .film-poster {width: 140px;height:210px;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;}
+    .film-info{padding:12px;background:linear-gradient(to top,var(--bg-secondary) 0%,transparent 100%);}
+    .film-title{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-0.01em;}
+    .film-meta{font-size:12px;color:var(--text-secondary);font-weight:500;display:flex;align-items:center;gap:6px;}
+    .rating{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:rgba(0,122,255,0.2);border-radius:6px;font-weight:600;color:var(--ios-blue);}
+    .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
+    .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
+    .empty-text{font-size:17px;font-weight:500;letter-spacing:-0.01em;}
+    .footer{text-align:center;padding:32px 20px;margin-top:40px;border-top:1px solid var(--separator);}
+    .footer-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:-0.01em;}
+    .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
+    .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
+    .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
+    @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
+    @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
+      <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
+    </div>
+    <div class="search-wrapper">
+      <div class="search-container">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" />
+      </div>
+    </div>
+    <div class="actions">
+      <div class="action-card" onclick="loadCategory('popular')">
+        <span class="action-icon">🔥</span>
+        <div class="action-title">Популярные</div>
+      </div>
+      <div class="action-card" onclick="loadCategory('top250')">
+        <span class="action-icon">⭐</span>
+        <div class="action-title">Топ 250</div>
+      </div>
+      <div class="action-card" onclick="loadCategory('new')">
+        <span class="action-icon">🎬</span>
+        <div class="action-title">Новинки</div>
+      </div>
+      <div class="action-card" onclick="loadCategory('random')">
+        <span class="action-icon">🎯</span>
+        <div class="action-title">Случайный</div>
+      </div>
+    </div>
+    <div class="content hidden" id="content">
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <div class="loader-text">Загрузка...</div>
+      </div>
+      <div class="film-grid" id="filmGrid"></div>
+    </div>
+    <footer class="footer">
+      <div class="footer-title">О проекте</div>
+      <div class="footer-text">Genopoisk — веб-приложение для поиска информации о фильмах<br>Создано в образовательных целях</div>
+      <a href="https://github.com/Genocide12/Genopoisk" target="_blank" class="footer-link">GitHub</a>
+    </footer>
+  </div>
+  <script>
+    // Защита от копирования / инспектора
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+    document.onkeydown = function(e) {
+      const key = e.key || '';
+      if (e.ctrlKey && (key === 'c' || key === 'C' || key === 'x' || key === 'X' || key === 'u' || key === 'U' || key === 's' || key === 'S')) {
+        e.preventDefault();
+        return false;
+      }
+      if (key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const API_KEY = '2162133a-a4d6-4712-84bd-88652fe904ea';
+    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+
+    let currentCategory = null;
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
+
+    const content = document.getElementById('content');
+    const loader = document.getElementById('loader');
+    const filmGrid = document.getElementById('filmGrid');
+    const searchInput = document.getElementById('searchInput');
+
+    function toggleTheme() {
+      const body = document.body;
+      const isLight = body.classList.contains('light-theme');
+      body.classList.toggle('light-theme');
+      localStorage.setItem('theme', isLight ? 'dark' : 'light');
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.content = isLight ? '#000000' : '#F2F2F7';
+    }
+
+    // Load saved theme
+    if (localStorage.getItem('theme') === 'light') {
+      document.body.classList.add('light-theme');
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.content = '#F2F2F7';
+    }
+
+    async function apiGet(url) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'X-API-KEY': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        return await res.json();
+      } catch (e) {
+        console.error('API Error:', e);
+        throw e;
+      }
+    }
+
+    function extractFilms(data) {
+      if (!data) return [];
+      return data.films || data.items || data.results || [];
+    }
+
+    async function getPopular(page = 1) {
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getTop250(page = 1) {
+      const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;
+      const d = await apiGet(url);
+      const f = extractFilms(d);
+      if (f.length === 0) {
+        const fb = `${API_BASE}/v2.2/films?order=RATING&type=FILM&ratingFrom=8&ratingTo=10&page=${page}`;
+        return extractFilms(await apiGet(fb));
+      }
+      return f;
+    }
+
+    async function getNew(page = 1) {
+      const currentYear = new Date().getFullYear();
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getRandomFilm() {
+      const randomPage = Math.floor(Math.random() * 5) + 1;
+      const films = await getTop250(randomPage);
+      if (films && films.length > 0) return films[Math.floor(Math.random() * films.length)];
+      return null;
+    }
+
+    async function searchFilms(query) {
+      const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
+      return extractFilms(await apiGet(url));
+    }
+
+    function showLoader() {
+      content.classList.remove('hidden');
+      loader.classList.remove('hidden');
+    }
+
+    function hideLoader() {
+      loader.classList.add('hidden');
+    }
+
+    function clearFilms() {
+      filmGrid.innerHTML = '';
+      filmGrid.classList.remove('centered');
+    }
+
+    function showEmptyState(msg) {
+      hideLoader();
+      filmGrid.classList.remove('centered');
+      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
+    }
+
+    function displayFilms(films, forceCenter = false) {
+      clearFilms();
+      if (!films || films.length === 0) {
+        showEmptyState('Фильмы не найдены');
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      films.forEach((film, index) => {
+        const filmId = film.filmId || film.kinopoiskId;
+        const title = film.nameRu || film.nameEn || 'Без названия';
+        const year = film.year || 'Н/Д';
+        const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+        const poster = film.posterUrlPreview || film.posterUrl || '';
+        const card = document.createElement('div');
+        card.className = 'film-card';
+        card.style.animationDelay = `${index * 0.05}s`;
+        card.innerHTML = `
+          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
+          <div class="film-info">
+            <div class="film-title">${title}</div>
+            <div class="film-meta">
+              <span>${year}</span>
+              ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
+            </div>
+          </div>`;
+        card.onclick = () => openPlayer(filmId, title);
+        frag.appendChild(card);
+      });
+      filmGrid.appendChild(frag);
+      hideLoader();
+      if (forceCenter || films.length === 1) {
+        filmGrid.classList.add('centered');
+      }
+    }
+
+    function openPlayer(filmId, title) {
+      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+    }
+
+    async function loadCategory(category) {
+      currentCategory = category;
+      currentPage = 1;
+      hasMore = true;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      try {
+        if (category === 'random') {
+          const film = await getRandomFilm();
+          if (film) displayFilms([film], true);
+          else showEmptyState('Не удалось загрузить случайный фильм');
+        } else {
+          await loadMoreFilms();
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
+      }
+    }
+
+    async function loadMoreFilms() {
+      if (isLoading || !hasMore || !currentCategory) return;
+      isLoading = true;
+      try {
+        let films = [];
+        switch (currentCategory) {
+          case 'popular':
+            films = await getPopular(currentPage);
+            break;
+          case 'top250':
+            films = await getTop250(currentPage);
+            break;
+          case 'new':
+            films = await getNew(currentPage);
+            break;
+        }
+        if (films.length > 0) {
+          displayFilms(films);
+          currentPage++;
+        } else {
+          hasMore = false;
+          if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
+          else hideLoader();
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
+        hasMore = false;
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    let searchTimeout;
+    searchInput.addEventListener('input', function(e) {
+      clearTimeout(searchTimeout);
+      const val = e.target.value.trim();
+      if (!val || val.length < 2) {
+        if (!currentCategory) {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+        return;
+      }
+      searchTimeout = setTimeout(async () => {
+        currentCategory = null;
+        currentPage = 1;
+        hasMore = false;
+        clearFilms();
+        showLoader();
+        try {
+          const films = await searchFilms(val);
+          displayFilms(films);
+        } catch (e) {
+          showEmptyState('Ошибка поиска: ' + e.message);
+        }
+      }, 500);
+    });
+
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const threshold = document.documentElement.scrollHeight - 800;
+        if (scrollPosition >= threshold &&
+            currentCategory &&
+            currentCategory !== 'random' &&
+            !isLoading &&
+            hasMore) {
+          loadMoreFilms();
+        }
+      }, 100);
+    });
+
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.expand();
+      const themeParams = window.Telegram.WebApp.themeParams;
+      if (themeParams?.bg_color) {
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.content = themeParams.bg_color;
+      }
+    }
+  </script>
+</body>
+</html>

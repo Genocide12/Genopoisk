@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://genopoisk.vercel.app/sitemap.xml

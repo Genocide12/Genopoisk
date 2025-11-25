@@ -47,13 +47,13 @@
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;}
     .content{background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:24px;padding:24px;min-height:400px;margin-bottom:32px;position:relative;overflow:visible;}
     .content.hidden{display:none;}
-    .loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);z-index:10;}
+    .loader{text-align:center;padding:40px 20px;color:var(--text-secondary);}
     .loader.hidden{display:none;}
-    .spinner{width:44px;height:44px;border:3px solid var(--fill);border-top-color:var(--ios-blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px;}
+    .spinner{width:44px;height:44px;border:3px solid var(--fill);border-top-color:var(--ios-blue);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;}
     @keyframes spin{to{transform:rotate(360deg);}}
     .loader-text{font-size:15px;font-weight:500;color:var(--text-secondary);letter-spacing:-0.01em;}
     .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;}
-    .film-grid.centered{display:flex;justify-content:center;align-items:center;gap:0;min-height:300px;}
+    .film-grid.centered{display:flex;justify-content:center;align-items:center;}
     
     /* Flip карточки */
     .film-card-wrapper{perspective:1000px;height:340px;}
@@ -61,19 +61,18 @@
     .film-card.flipped{transform:rotateY(180deg);}
     .film-card-front,.film-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:16px;overflow:hidden;background:var(--bg-secondary);box-shadow:0 4px 12px rgba(0,0,0,0.3);}
     .film-card-front{z-index:2;transform:rotateY(0deg);}
-    .film-card-back{transform:rotateY(180deg);padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);}
-    .film-poster{width:100%;height:260px;object-fit:cover;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);}
+    .film-card-back{transform:rotateY(180deg);padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);}
+    .film-poster{width:100%;height:260px;object-fit:cover;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);pointer-events:none;-webkit-user-drag:none;-webkit-touch-callout:none;}
     .film-info{padding:12px;background:linear-gradient(to top,var(--bg-secondary) 0%,transparent 100%);}
-    .film-title{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-0.01em;}
-    .film-meta{font-size:12px;color:var(--text-secondary);font-weight:500;display:flex;align-items:center;gap:6px;}
+    .film-title{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-0.01em;text-align:center;}
+    .film-meta{font-size:12px;color:var(--text-secondary);font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;}
     .rating{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:rgba(0,122,255,0.2);border-radius:6px;font-weight:600;color:var(--ios-blue);}
     
     /* Описание на обратной стороне */
-    .film-description-title{font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px;line-height:1.2;}
-    .film-description-text{font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:12px;max-height:200px;overflow-y:auto;}
-    .film-description-meta{font-size:12px;color:var(--text-secondary);margin-top:auto;}
-    .watch-btn{margin-top:12px;padding:10px 20px;background:var(--ios-blue);color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;}
-    .watch-btn:hover{background:#005ecb;transform:scale(1.05);}
+    .film-description-text{font-size:14px;color:var(--text-primary);line-height:1.6;max-height:280px;overflow-y:auto;text-align:left;padding:0 4px;}
+    .film-description-text::-webkit-scrollbar{width:4px;}
+    .film-description-text::-webkit-scrollbar-track{background:transparent;}
+    .film-description-text::-webkit-scrollbar-thumb{background:var(--fill);border-radius:4px;}
     
     .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);grid-column:1/-1;}
     .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
@@ -91,6 +90,7 @@
       .film-grid{grid-template-columns:repeat(2,1fr);gap:16px;}
       .film-card-wrapper{height:300px;}
       .film-poster{height:220px;}
+      .film-description-text{font-size:13px;max-height:240px;}
     }
     @media (max-width:480px){
       .hero-title{font-size:28px;}
@@ -98,6 +98,7 @@
       .film-grid{gap:12px;}
       .film-card-wrapper{height:280px;}
       .film-poster{height:200px;}
+      .film-description-text{font-size:12px;max-height:220px;}
     }
   </style>
 </head>
@@ -132,7 +133,7 @@
       </div>
     </div>
     <div class="content hidden" id="content">
-      <div class="loader" id="loader">
+      <div class="loader hidden" id="loader">
         <div class="spinner"></div>
         <div class="loader-text">Загрузка...</div>
       </div>
@@ -168,6 +169,7 @@
     let currentPage = 1;
     let isLoading = false;
     let hasMore = true;
+    const filmDescriptions = new Map();
 
     const content = document.getElementById('content');
     const loader = document.getElementById('loader');
@@ -245,11 +247,17 @@
     }
 
     async function getFilmDetails(filmId) {
+      if (filmDescriptions.has(filmId)) {
+        return filmDescriptions.get(filmId);
+      }
       try {
         const url = `${API_BASE}/v2.2/films/${filmId}`;
-        return await apiGet(url);
+        const data = await apiGet(url);
+        const description = data.description || 'Описание отсутствует';
+        filmDescriptions.set(filmId, description);
+        return description;
       } catch (e) {
-        return null;
+        return 'Описание недоступно';
       }
     }
 
@@ -273,7 +281,7 @@
       filmGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
     }
 
-    function displayFilms(films, append = false) {
+    async function displayFilms(films, append = false) {
       if (!append) {
         clearFilms();
       }
@@ -285,13 +293,15 @@
       hideLoader();
       const frag = document.createDocumentFragment();
       
-      films.forEach((film, index) => {
+      for (const film of films) {
         const filmId = film.filmId || film.kinopoiskId;
         const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
         const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
         const poster = film.posterUrlPreview || film.posterUrl || '';
-        const description = film.description || 'Описание недоступно';
+        
+        // Загружаем описание в фоне
+        const descriptionPromise = getFilmDetails(filmId);
         
         const wrapper = document.createElement('div');
         wrapper.className = 'film-card-wrapper';
@@ -304,7 +314,7 @@
         const front = document.createElement('div');
         front.className = 'film-card-front';
         front.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
+          <img src="${poster}" class="film-poster" alt="${title}" draggable="false">
           <div class="film-info">
             <div class="film-title">${title}</div>
             <div class="film-meta">
@@ -316,17 +326,26 @@
         // Задняя сторона
         const back = document.createElement('div');
         back.className = 'film-card-back';
-        back.innerHTML = `
-          <div class="film-description-title">${title}</div>
-          <div class="film-description-text">${description}</div>
-          <div class="film-description-meta">
-            ${year} • ${rating !== 'Н/Д' ? `⭐ ${rating}` : ''}
-          </div>
-          <button class="watch-btn" onclick="event.stopPropagation(); openPlayer(${filmId}, '${title.replace(/'/g, "\\'")}')">Смотреть</button>`;
+        back.innerHTML = `<div class="film-description-text">Загрузка описания...</div>`;
         
         card.appendChild(front);
         card.appendChild(back);
         wrapper.appendChild(card);
+        
+        // Загружаем описание асинхронно
+        descriptionPromise.then(description => {
+          const descElement = back.querySelector('.film-description-text');
+          if (descElement) {
+            descElement.textContent = description;
+          }
+        });
+        
+        // Клик на карточку открывает плеер (только на передней стороне)
+        front.addEventListener('click', (e) => {
+          if (!card.classList.contains('flipped')) {
+            openPlayer(filmId, title);
+          }
+        });
         
         // Desktop: hover для flip
         if (!('ontouchstart' in window)) {
@@ -339,24 +358,39 @@
         } else {
           // Mobile: long press для flip
           let pressTimer;
+          let touchMoved = false;
+          
           wrapper.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchMoved = false;
             pressTimer = setTimeout(() => {
-              card.classList.add('flipped');
+              if (!touchMoved) {
+                card.classList.add('flipped');
+              }
             }, 300);
-          });
-          wrapper.addEventListener('touchend', () => {
-            clearTimeout(pressTimer);
-            setTimeout(() => {
-              card.classList.remove('flipped');
-            }, 100);
-          });
+          }, {passive: false});
+          
           wrapper.addEventListener('touchmove', () => {
+            touchMoved = true;
             clearTimeout(pressTimer);
+          });
+          
+          wrapper.addEventListener('touchend', (e) => {
+            clearTimeout(pressTimer);
+            if (!touchMoved && !card.classList.contains('flipped')) {
+              // Короткое касание - открыть плеер
+              openPlayer(filmId, title);
+            } else {
+              // Убираем flip при отпускании
+              setTimeout(() => {
+                card.classList.remove('flipped');
+              }, 100);
+            }
           });
         }
         
         frag.appendChild(wrapper);
-      });
+      }
       
       filmGrid.appendChild(frag);
     }
@@ -378,7 +412,7 @@
           const film = await getRandomFilm();
           if (film) {
             filmGrid.classList.add('centered');
-            displayFilms([film], false);
+            await displayFilms([film], false);
           } else {
             showEmptyState('Не удалось загрузить случайный фильм');
           }
@@ -394,7 +428,9 @@
       if (isLoading || !hasMore || !currentCategory || currentCategory === 'random') return;
       
       isLoading = true;
-      showLoader();
+      if (currentPage === 1) {
+        showLoader();
+      }
       
       try {
         let films = [];
@@ -411,7 +447,7 @@
         }
         
         if (films.length > 0) {
-          displayFilms(films, currentPage > 1);
+          await displayFilms(films, currentPage > 1);
           currentPage++;
         } else {
           hasMore = false;
@@ -447,26 +483,26 @@
         
         try {
           const films = await searchFilms(val);
-          displayFilms(films, false);
+          await displayFilms(films, false);
         } catch (e) {
           showEmptyState('Ошибка поиска: ' + e.message);
         }
       }, 500);
     });
 
-    // Infinite scroll
+    // Infinite scroll - плавная подгрузка
     let scrollTimeout;
     window.addEventListener('scroll', () => {
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
         const scrollPosition = window.innerHeight + window.scrollY;
-        const threshold = document.documentElement.scrollHeight - 800;
+        const threshold = document.documentElement.scrollHeight - 1000;
         
         if (scrollPosition >= threshold && currentCategory && currentCategory !== 'random' && !isLoading && hasMore) {
           loadMoreFilms();
         }
-      }, 100);
-    });
+      }, 150);
+    }, {passive: true});
 
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.expand();

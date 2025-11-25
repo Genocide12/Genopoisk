@@ -45,29 +45,37 @@
     .action-card:active{transform:scale(0.96);}
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;}
-    .content{background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:24px;padding:24px;min-height:400px;margin-bottom:32px;position:relative;overflow:hidden;}
+    .content{background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:24px;padding:24px;min-height:400px;margin-bottom:32px;position:relative;overflow:visible;}
     .content.hidden{display:none;}
     .loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);z-index:10;}
     .loader.hidden{display:none;}
     .spinner{width:44px;height:44px;border:3px solid var(--fill);border-top-color:var(--ios-blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px;}
     @keyframes spin{to{transform:rotate(360deg);}}
     .loader-text{font-size:15px;font-weight:500;color:var(--text-secondary);letter-spacing:-0.01em;}
-    .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
-    .film-grid.centered {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 0;
-      min-height:300px;
-    }
-    .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);background:var(--bg-secondary);}
-    .film-card:hover{transform:translateY(-8px) scale(1.03);box-shadow:0 20px 60px rgba(0,122,255,0.4);z-index:2;}
-    .film-poster {width: 140px;height:210px;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;}
+    .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;}
+    .film-grid.centered{display:flex;justify-content:center;align-items:center;gap:0;min-height:300px;}
+    
+    /* Flip карточки */
+    .film-card-wrapper{perspective:1000px;height:340px;}
+    .film-card{position:relative;width:100%;height:100%;transition:transform 0.6s;transform-style:preserve-3d;cursor:pointer;border-radius:16px;}
+    .film-card.flipped{transform:rotateY(180deg);}
+    .film-card-front,.film-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:16px;overflow:hidden;background:var(--bg-secondary);box-shadow:0 4px 12px rgba(0,0,0,0.3);}
+    .film-card-front{z-index:2;transform:rotateY(0deg);}
+    .film-card-back{transform:rotateY(180deg);padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);}
+    .film-poster{width:100%;height:260px;object-fit:cover;background:linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);}
     .film-info{padding:12px;background:linear-gradient(to top,var(--bg-secondary) 0%,transparent 100%);}
     .film-title{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-0.01em;}
     .film-meta{font-size:12px;color:var(--text-secondary);font-weight:500;display:flex;align-items:center;gap:6px;}
     .rating{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:rgba(0,122,255,0.2);border-radius:6px;font-weight:600;color:var(--ios-blue);}
-    .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
+    
+    /* Описание на обратной стороне */
+    .film-description-title{font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px;line-height:1.2;}
+    .film-description-text{font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:12px;max-height:200px;overflow-y:auto;}
+    .film-description-meta{font-size:12px;color:var(--text-secondary);margin-top:auto;}
+    .watch-btn{margin-top:12px;padding:10px 20px;background:var(--ios-blue);color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;}
+    .watch-btn:hover{background:#005ecb;transform:scale(1.05);}
+    
+    .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);grid-column:1/-1;}
     .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
     .empty-text{font-size:17px;font-weight:500;letter-spacing:-0.01em;}
     .footer{text-align:center;padding:32px 20px;margin-top:40px;border-top:1px solid var(--separator);}
@@ -75,8 +83,22 @@
     .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
     .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
     .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
-    @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
-    @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
+    
+    @media (max-width:768px){
+      .container{padding:16px 12px;}
+      .hero{padding:32px 16px;margin-bottom:24px;}
+      .actions{grid-template-columns:repeat(2,1fr);}
+      .film-grid{grid-template-columns:repeat(2,1fr);gap:16px;}
+      .film-card-wrapper{height:300px;}
+      .film-poster{height:220px;}
+    }
+    @media (max-width:480px){
+      .hero-title{font-size:28px;}
+      .action-icon{font-size:32px;}
+      .film-grid{gap:12px;}
+      .film-card-wrapper{height:280px;}
+      .film-poster{height:200px;}
+    }
   </style>
 </head>
 <body>
@@ -123,7 +145,6 @@
     </footer>
   </div>
   <script>
-    // Защита от копирования / инспектора
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
@@ -162,7 +183,6 @@
       if (metaTheme) metaTheme.content = isLight ? '#000000' : '#F2F2F7';
     }
 
-    // Load saved theme
     if (localStorage.getItem('theme') === 'light') {
       document.body.classList.add('light-theme');
       const metaTheme = document.querySelector('meta[name="theme-color"]');
@@ -224,6 +244,15 @@
       return extractFilms(await apiGet(url));
     }
 
+    async function getFilmDetails(filmId) {
+      try {
+        const url = `${API_BASE}/v2.2/films/${filmId}`;
+        return await apiGet(url);
+      } catch (e) {
+        return null;
+      }
+    }
+
     function showLoader() {
       content.classList.remove('hidden');
       loader.classList.remove('hidden');
@@ -241,26 +270,40 @@
     function showEmptyState(msg) {
       hideLoader();
       filmGrid.classList.remove('centered');
-      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
+      filmGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
     }
 
-    function displayFilms(films, forceCenter = false) {
-      clearFilms();
+    function displayFilms(films, append = false) {
+      if (!append) {
+        clearFilms();
+      }
       if (!films || films.length === 0) {
-        showEmptyState('Фильмы не найдены');
+        if (!append) showEmptyState('Фильмы не найдены');
         return;
       }
+      
+      hideLoader();
       const frag = document.createDocumentFragment();
+      
       films.forEach((film, index) => {
         const filmId = film.filmId || film.kinopoiskId;
         const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
         const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
         const poster = film.posterUrlPreview || film.posterUrl || '';
+        const description = film.description || 'Описание недоступно';
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'film-card-wrapper';
+        
         const card = document.createElement('div');
         card.className = 'film-card';
-        card.style.animationDelay = `${index * 0.05}s`;
-        card.innerHTML = `
+        card.dataset.filmId = filmId;
+        
+        // Передняя сторона
+        const front = document.createElement('div');
+        front.className = 'film-card-front';
+        front.innerHTML = `
           <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
           <div class="film-info">
             <div class="film-title">${title}</div>
@@ -269,14 +312,53 @@
               ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
             </div>
           </div>`;
-        card.onclick = () => openPlayer(filmId, title);
-        frag.appendChild(card);
+        
+        // Задняя сторона
+        const back = document.createElement('div');
+        back.className = 'film-card-back';
+        back.innerHTML = `
+          <div class="film-description-title">${title}</div>
+          <div class="film-description-text">${description}</div>
+          <div class="film-description-meta">
+            ${year} • ${rating !== 'Н/Д' ? `⭐ ${rating}` : ''}
+          </div>
+          <button class="watch-btn" onclick="event.stopPropagation(); openPlayer(${filmId}, '${title.replace(/'/g, "\\'")}')">Смотреть</button>`;
+        
+        card.appendChild(front);
+        card.appendChild(back);
+        wrapper.appendChild(card);
+        
+        // Desktop: hover для flip
+        if (!('ontouchstart' in window)) {
+          wrapper.addEventListener('mouseenter', () => {
+            card.classList.add('flipped');
+          });
+          wrapper.addEventListener('mouseleave', () => {
+            card.classList.remove('flipped');
+          });
+        } else {
+          // Mobile: long press для flip
+          let pressTimer;
+          wrapper.addEventListener('touchstart', (e) => {
+            pressTimer = setTimeout(() => {
+              card.classList.add('flipped');
+            }, 300);
+          });
+          wrapper.addEventListener('touchend', () => {
+            clearTimeout(pressTimer);
+            setTimeout(() => {
+              card.classList.remove('flipped');
+            }, 100);
+          });
+          wrapper.addEventListener('touchmove', () => {
+            clearTimeout(pressTimer);
+          });
+        }
+        
+        frag.appendChild(wrapper);
       });
+      
       filmGrid.appendChild(frag);
-      hideLoader();
-      if (forceCenter || films.length === 1) {
-        filmGrid.classList.add('centered');
-      }
     }
 
     function openPlayer(filmId, title) {
@@ -290,11 +372,16 @@
       clearFilms();
       showLoader();
       searchInput.value = '';
+      
       try {
         if (category === 'random') {
           const film = await getRandomFilm();
-          if (film) displayFilms([film], true);
-          else showEmptyState('Не удалось загрузить случайный фильм');
+          if (film) {
+            filmGrid.classList.add('centered');
+            displayFilms([film], false);
+          } else {
+            showEmptyState('Не удалось загрузить случайный фильм');
+          }
         } else {
           await loadMoreFilms();
         }
@@ -304,8 +391,11 @@
     }
 
     async function loadMoreFilms() {
-      if (isLoading || !hasMore || !currentCategory) return;
+      if (isLoading || !hasMore || !currentCategory || currentCategory === 'random') return;
+      
       isLoading = true;
+      showLoader();
+      
       try {
         let films = [];
         switch (currentCategory) {
@@ -319,18 +409,18 @@
             films = await getNew(currentPage);
             break;
         }
+        
         if (films.length > 0) {
-          displayFilms(films);
+          displayFilms(films, currentPage > 1);
           currentPage++;
         } else {
           hasMore = false;
-          if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
-          else hideLoader();
         }
       } catch (e) {
-        showEmptyState('Ошибка загрузки: ' + e.message);
+        console.error('Ошибка загрузки:', e);
         hasMore = false;
       } finally {
+        hideLoader();
         isLoading = false;
       }
     }
@@ -339,6 +429,7 @@
     searchInput.addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
       const val = e.target.value.trim();
+      
       if (!val || val.length < 2) {
         if (!currentCategory) {
           content.classList.add('hidden');
@@ -346,32 +437,32 @@
         }
         return;
       }
+      
       searchTimeout = setTimeout(async () => {
         currentCategory = null;
         currentPage = 1;
         hasMore = false;
         clearFilms();
         showLoader();
+        
         try {
           const films = await searchFilms(val);
-          displayFilms(films);
+          displayFilms(films, false);
         } catch (e) {
           showEmptyState('Ошибка поиска: ' + e.message);
         }
       }, 500);
     });
 
+    // Infinite scroll
     let scrollTimeout;
     window.addEventListener('scroll', () => {
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
         const scrollPosition = window.innerHeight + window.scrollY;
         const threshold = document.documentElement.scrollHeight - 800;
-        if (scrollPosition >= threshold &&
-            currentCategory &&
-            currentCategory !== 'random' &&
-            !isLoading &&
-            hasMore) {
+        
+        if (scrollPosition >= threshold && currentCategory && currentCategory !== 'random' && !isLoading && hasMore) {
           loadMoreFilms();
         }
       }, 100);

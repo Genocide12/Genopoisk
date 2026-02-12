@@ -50,11 +50,23 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      margin-right: 8px;
+    }
+
+    .player-switcher {
+      background: rgba(255,255,255,0.14);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      min-width: 140px;
     }
 
     .btn-group {
       display: flex;
       gap: 8px;
+      align-items: center;
     }
 
     .btn {
@@ -111,6 +123,7 @@
     @media (max-width: 768px) {
       .player-header { padding: 9px 8px; font-size: 14px; height: 44px; }
       .player-main { height: calc(100vh - 44px); }
+      .player-switcher { min-width: 120px; font-size: 13px; padding: 4px 8px; }
     }
   </style>
 </head>
@@ -119,6 +132,10 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
+      <select id="playerSwitcher" class="player-switcher">
+        <option value="default">Основной</option>
+        <option value="ddbb">ddbb.lol</option>
+      </select>
       <button class="btn btn-close" onclick="window.history.back()">Назад</button>
     </div>
   </div>
@@ -149,7 +166,19 @@
     document.getElementById("videoTitle").textContent = decodeURIComponent(title);
 
     const iframe = document.getElementById("playerIframe");
+    const switcher = document.getElementById("playerSwitcher");
+
+    // Установка по умолчанию
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+
+    // Обработчик переключателя
+    switcher.addEventListener('change', function() {
+      if (this.value === 'default') {
+        iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+      } else if (this.value === 'ddbb') {
+        iframe.src = `https://ddbb.lol/?id=${kid}&n=0`;
+      }
+    });
 
     window.Telegram?.WebApp?.expand?.();
     window.Telegram?.WebApp?.setHeaderColor?.("#000000");

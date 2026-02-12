@@ -5,14 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1" />
   <title>Player</title>
   <style>
-    /* [ВСЕ СТИЛИ БЕЗ ИЗМЕНЕНИЙ] */
     html, body {
       -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
       user-select: none; -moz-user-select: none; -ms-user-select: none;
       margin: 0; padding: 0; background: #000; width: 100vw; height: 100vh;
       min-height: 100vh; min-width: 100vw; font-family: system-ui, sans-serif; overflow: hidden;
     }
-    /* ... остальные стили ... */
+
+    .player-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 10;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .title {
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 60%;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.14);
+      border: none;
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button:active { transform: scale(0.95); opacity: 0.8; }
+    .btn-close { background: rgba(255, 59, 48, 0.3); }
+
+    .player-main {
+      width: 100%;
+      height: 100%;
+      padding-top: 60px; /* Высота хедера */
+    }
+
+    .player-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* Error Screen */
+    .error-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: white;
+      text-align: center;
+      padding: 20px;
+      background: #000;
+    }
   </style>
 </head>
 <body>
@@ -28,7 +100,7 @@
   </div>
 
   <script>
-    // ЗАЩИТА
+    // === ЗАЩИТА ===
     document.addEventListener("contextmenu", (e) => e.preventDefault());
     document.addEventListener("copy", (e) => e.preventDefault());
     document.addEventListener("cut", (e) => e.preventDefault());
@@ -39,7 +111,7 @@
     };
 
     // === ПРОВЕРКА ЗАЩИЩЁННОЙ ССЫЛКИ ===
-    const SECRET_KEY = 'Genopoisk2026!x7K9pM2v'; // Тот же ключ!
+    const SECRET_KEY = 'Genopoisk2026!x7K9pM2v'; // Тот же ключ, что в index.html!
     
     function verifySecureLink() {
       const params = new URLSearchParams(window.location.search);
@@ -47,55 +119,69 @@
       const h = params.get('h');
       
       if (!p || !h) {
-        showError('Неверная ссылка');
+        showError('Неверная ссылка или прямой доступ запрещен');
         return null;
       }
       
       try {
+        // Декодируем данные
         const data = atob(p);
+        
+        // Проверяем хеш целостности
         const expectedHash = btoa(data + SECRET_KEY).slice(0, 16);
         
         if (h !== expectedHash) {
-          showError('Доступ запрещён');
+          showError('Доступ запрещён (Ошибка подписи)');
           return null;
         }
         
+        // Парсим данные
         const parts = data.split('|');
         if (parts.length !== 3) {
-          showError('Неверный формат');
+          showError('Неверный формат данных');
           return null;
         }
         
         const [kid, title, timestamp] = parts;
         const age = Date.now() - parseInt(timestamp);
         
-        if (age > 24 * 60 * 60 * 1000) { // 24 часа
-          showError('Ссылка просрочена');
+        // Проверяем время жизни (24 часа)
+        if (age > 24 * 60 * 60 * 1000) {
+          showError('Ссылка просрочена (более 24 часов)');
           return null;
         }
         
         return { kid, title };
       } catch (e) {
-        showError('Ошибка расшифровки');
+        console.error(e);
+        showError('Ошибка расшифровки ссылки');
         return null;
       }
     }
 
     function showError(msg) {
       document.body.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100vh;color:white;font-size:18px;font-weight:600;text-align:center;padding:20px;">
-          ${msg}<br><br>
-          <button onclick="window.location.href='index.html'" style="background:#f33;color:white;border:none;padding:12px 24px;border-radius:8px;font-size:16px;cursor:pointer;margin-top:20px;">← На главную</button>
+        <div class="error-screen">
+          <div style="font-size: 40px; margin-bottom: 20px;">🔒</div>
+          <div style="font-size: 18px; font-weight: 600; margin-bottom: 10px;">Ошибка доступа</div>
+          <div style="color: #888; margin-bottom: 30px;">${msg}</div>
+          <button onclick="window.location.href='index.html'" style="background:#f33;color:white;border:none;padding:12px 24px;border-radius:8px;font-size:16px;cursor:pointer;">← На главную</button>
         </div>`;
     }
 
     // === ИНИЦИАЛИЗАЦИЯ ===
     const paramsData = verifySecureLink();
-    if (!paramsData) return;
+    if (!paramsData) return; // Останавливаем выполнение, если ссылка невалидна
     
     const kid = paramsData.kid;
     const title = paramsData.title;
-    document.getElementById("videoTitle").textContent = decodeURIComponent(title);
+    
+    // Декодируем заголовок для отображения (если он был закодирован)
+    try {
+      document.getElementById("videoTitle").textContent = decodeURIComponent(title);
+    } catch(e) {
+      document.getElementById("videoTitle").textContent = title;
+    }
 
     const iframe = document.getElementById("playerIframe");
     const toggleBtn = document.getElementById("playerToggle");
@@ -105,26 +191,34 @@
       window.location.href = 'index.html';
     }
 
-    // УМНАЯ ЛОГИКА ПЛЕЕРОВ
+    // === УМНАЯ ЛОГИКА ПЛЕЕРОВ ===
     function getBestPlayerUrl(kid, title) {
       const kidNum = parseInt(kid);
-      if (kidNum < 100000 || title.includes('1+1') || title.includes('+')) {
-        return `https://ddbb.lol/search?q=${encodeURIComponent(decodeURIComponent(title).replace(/\+/g, '1+1'))}`;
+      const decodedTitle = decodeURIComponent(title);
+      
+      // Логика: если ID маленький или в названии есть "1+1" или "+", ищем по названию
+      if (kidNum < 100000 || decodedTitle.includes('1+1') || decodedTitle.includes('+')) {
+        // Заменяем "+" на "1+1" для поиска, если нужно, или оставляем как есть
+        const searchQuery = decodedTitle.replace(/\+/g, '1+1');
+        return `https://ddbb.lol/search?q=${encodeURIComponent(searchQuery)}`;
       }
+      // Иначе ищем по ID
       return `https://ddbb.lol/?id=${kid}&n=0`;
     }
 
-    // Основной плеер
+    // Устанавливаем основной плеер при загрузке
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
 
-    // Переключатель
+    // Логика переключения
     toggleBtn.addEventListener('click', function() {
       isDefaultPlayer = !isDefaultPlayer;
       if (isDefaultPlayer) {
+        // Основной плеер
         iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
         toggleBtn.textContent = 'Другой плеер';
         toggleBtn.style.background = 'rgba(255,255,255,0.14)';
       } else {
+        // Резервный умный плеер
         const ddbbUrl = getBestPlayerUrl(kid, title);
         iframe.src = ddbbUrl;
         toggleBtn.textContent = 'Основной';

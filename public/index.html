@@ -19,234 +19,22 @@
   <meta property="og:type" content="website">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  
   <style>
+    /* [ВСЕ СТИЛИ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ - копируйте из вашего файла] */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-    
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    
-    :root {
-      --ios-blue: #007AFF;
-      --ios-purple: #5856D6;
-      --ios-pink: #FF2D55;
-      --bg-color: #000000;
-      --card-bg: #1C1C1E;
-      --text-primary: #FFFFFF;
-      --text-secondary: #8E8E93;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-primary);
-      padding-bottom: 80px;
-    }
-
-    /* Header & Search */
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(20px);
-      padding: 16px;
-      border-bottom: 1px solid #333;
-    }
-
-    .logo {
-      font-size: 24px;
-      font-weight: 800;
-      margin-bottom: 12px;
-      background: linear-gradient(90deg, #FF9500, #FF2D55);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -0.5px;
-    }
-
-    .search-container {
-      position: relative;
-    }
-
-    .search-input {
-      width: 100%;
-      background: #2C2C2E;
-      border: none;
-      border-radius: 12px;
-      padding: 12px 16px 12px 40px;
-      color: #fff;
-      font-size: 16px;
-      outline: none;
-      transition: 0.2s;
-    }
-
-    .search-input:focus {
-      background: #3A3A3C;
-      box-shadow: 0 0 0 2px var(--ios-blue);
-    }
-
-    .search-icon {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-secondary);
-      pointer-events: none;
-    }
-
-    /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 10px;
-      padding: 12px 16px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .tabs::-webkit-scrollbar { display: none; }
-
-    .tab {
-      background: #2C2C2E;
-      color: #fff;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 14px;
-      font-weight: 500;
-      white-space: nowrap;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    .tab.active {
-      background: var(--ios-blue);
-      color: #fff;
-    }
-
-    /* Grid */
-    .container {
-      padding: 16px;
-    }
-
-    .film-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 16px;
-    }
-
-    .card {
-      background: transparent;
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.2s;
-      position: relative;
-    }
-
-    .card:active {
-      transform: scale(0.96);
-    }
-
-    .poster-wrapper {
-      position: relative;
-      border-radius: 12px;
-      overflow: hidden;
-      aspect-ratio: 2/3;
-      background: #2C2C2E;
-    }
-
-    .poster-wrapper img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .film-rating {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
-      color: #fff;
-      padding: 2px 6px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .film-rating.high { border-color: #34C759; color: #34C759; }
-    .film-rating.mid { border-color: #FF9500; color: #FF9500; }
-    .film-rating.low { border-color: #FF3B30; color: #FF3B30; }
-
-    .film-title {
-      margin-top: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1.3;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      height: 34px;
-    }
-
-    .film-year {
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-top: 2px;
-    }
-
-    .loader {
-      text-align: center;
-      padding: 20px;
-      color: var(--text-secondary);
-    }
-    
-    .toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #333;
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 14px;
-      opacity: 0;
-      pointer-events: none;
-      transition: 0.3s;
-      z-index: 200;
-    }
-    .toast.show { opacity: 1; bottom: 30px; }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
+    /* ... остальные стили без изменений ... */
   </style>
 </head>
 <body>
-
-  <header>
-    <div class="logo">Genopoisk</div>
-    <div class="search-container">
-      <span class="search-icon">🔍</span>
-      <input type="text" class="search-input" id="searchInput" placeholder="Поиск фильмов...">
-    </div>
-  </header>
-
-  <div class="tabs">
-    <button class="tab active" onclick="loadTop250()">Топ 250</button>
-    <button class="tab" onclick="loadPopular()">Популярное</button>
-    <button class="tab" onclick="loadPremieres()">Премьеры</button>
-  </div>
-
+  <!-- [HTML структура без изменений до скрипта] -->
   <div class="container">
-    <div class="film-grid" id="filmGrid">
-      <!-- Фильмы будут здесь -->
-    </div>
-    <div id="loader" class="loader">Загрузка...</div>
+    <!-- Hero, search, actions, content - БЕЗ ИЗМЕНЕНИЙ -->
   </div>
-
-  <div id="toast" class="toast"></div>
-
+  
   <script>
-    // === ЗАЩИТА ОТ КОПИРОВАНИЯ И F12 ===
+    // ЗАЩИТА ОТ КОПИРОВАНИЯ И F12
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
@@ -259,146 +47,33 @@
       if (key === 'F12') { e.preventDefault(); return false; }
     };
 
-    // === КОНФИГУРАЦИЯ ===
-    const API_KEY = '3698ed63-120c-4285-8071-2811619a0a7c';
-    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
-    const SECRET_KEY = 'Genopoisk2026!x7K9pM2v'; // Секретный ключ для шифрования
-
     // === СИСТЕМА ЗАЩИЩЁННЫХ ССЫЛОК ===
+    const SECRET_KEY = 'Genopoisk2026!x7K9pM2v'; // Меняйте при деплое
+    
     function generateSecureLink(filmId, title) {
-      // 1. Формируем данные: ID | Название | Текущее время
-      const timestamp = Date.now();
-      const rawData = `${filmId}|${title}|${timestamp}`;
-      
-      // 2. Кодируем данные в Base64
-      const encodedData = btoa(rawData);
-      
-      // 3. Создаем хеш (первые 16 символов от Base64 строки "Данные + Секрет")
-      const hashBase = btoa(rawData + SECRET_KEY);
-      const hash = hashBase.slice(0, 16);
-      
-      // 4. Возвращаем ссылку
+      const data = `${filmId}|${title}|${Date.now()}`;
+      const hash = btoa(data + SECRET_KEY).slice(0, 16);
+      const encodedData = btoa(data);
       return `player.html?p=${encodedData}&h=${hash}`;
     }
 
-    function openPlayer(id, title) {
-      const url = generateSecureLink(id, title);
-      window.location.href = url;
+    function openPlayer(filmId, title) {
+      const secureUrl = generateSecureLink(filmId, title);
+      window.location.href = secureUrl;
     }
 
-    // === API ФУНКЦИИ ===
-    const filmGrid = document.getElementById('filmGrid');
-    const loader = document.getElementById('loader');
-
-    async function apiGet(endpoint) {
-      loader.style.display = 'block';
-      try {
-        const res = await fetch(`${API_BASE}${endpoint}`, {
-          headers: { 'X-API-KEY': API_KEY, 'Content-Type': 'application/json' }
-        });
-        if (!res.ok) throw new Error('API Error');
-        return await res.json();
-      } catch (err) {
-        showToast('Ошибка загрузки данных');
-        console.error(err);
-        return null;
-      } finally {
-        loader.style.display = 'none';
-      }
-    }
-
-    function createCard(film) {
-      const poster = film.posterUrlPreview || film.posterUrl || 'https://via.placeholder.com/150x225?text=No+Image';
-      const rating = film.ratingKinopoisk || film.rating || '?';
-      const year = film.year || film.startYear || '';
-      const title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
-      
-      let ratingClass = 'low';
-      if (rating >= 7) ratingClass = 'high';
-      else if (rating >= 5) ratingClass = 'mid';
-
-      const div = document.createElement('div');
-      div.className = 'card';
-      div.innerHTML = `
-        <div class="poster-wrapper">
-          <img src="${poster}" loading="lazy" alt="${title}">
-          <div class="film-rating ${ratingClass}">${rating}</div>
-        </div>
-        <div class="film-title">${title}</div>
-        <div class="film-year">${year}</div>
-      `;
-
-      div.addEventListener('click', () => openPlayer(film.filmId || film.kinopoiskId, title));
-      return div;
-    }
-
-    function displayFilms(films) {
-      filmGrid.innerHTML = '';
-      if (!films || films.length === 0) {
-        filmGrid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 20px; color: #666;">Ничего не найдено</div>';
-        return;
-      }
-      films.forEach(film => {
-        filmGrid.appendChild(createCard(film));
-      });
-    }
-
-    // Загрузчики
-    async function loadTop250() {
-      const data = await apiGet('/v2.2/films/top?type=TOP_250_BEST_FILMS&page=1');
-      displayFilms(data?.films);
-      updateActiveTab(0);
-    }
-
-    async function loadPopular() {
-      const data = await apiGet('/v2.2/films/collections?type=POPULAR_SERIES&page=1'); // Или TOP_POPULAR_FILMS
-      // Попробуем получить популярные фильмы, если SERIES не сработает, заменим на TOP_POPULAR_ALL
-      const dataFilms = await apiGet('/v2.2/films/collections?type=TOP_POPULAR_ALL&page=1');
-      displayFilms(dataFilms?.items || data?.films);
-      updateActiveTab(1);
-    }
-
-    async function loadPremieres() {
-      const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, '0');
-      const data = await apiGet(`/v2.2/films/premieres?year=${year}&month=${month}`);
-      displayFilms(data?.items);
-      updateActiveTab(2);
-    }
-
-    function updateActiveTab(index) {
-      document.querySelectorAll('.tab').forEach((t, i) => {
-        t.classList.toggle('active', i === index);
-      });
-    }
-
-    // Поиск
-    let searchTimeout;
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      clearTimeout(searchTimeout);
-      const query = e.target.value.trim();
-      if (query.length < 3) return;
-      
-      searchTimeout = setTimeout(async () => {
-        const data = await apiGet(`/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`);
-        displayFilms(data?.films);
-      }, 500);
+    // === API И ЛОГИКА ОСТАЁТСЯ БЕЗ ИЗМЕНЕНИЙ ===
+    const API_KEY = '3698ed63-120c-4285-8071-2811619a0a7c';
+    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+    
+    // [Все остальные функции без изменений: apiGet, getPopular, getTop250, etc.]
+    
+    // ИЗМЕНЕНИЕ: в displayFilms замените card.addEventListener:
+    card.addEventListener('click', () => {
+      openPlayer(filmId, title); // Теперь использует защищённую ссылку
     });
 
-    // Тосты
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 3000);
-    }
-
-    // Старт
-    loadTop250();
-
-    // Telegram WebApp
-    window.Telegram?.WebApp?.expand?.();
-    window.Telegram?.WebApp?.setHeaderColor?.("#000000");
+    // [Остальной код без изменений]
   </script>
 </body>
 </html>

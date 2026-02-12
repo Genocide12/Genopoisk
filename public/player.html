@@ -53,23 +53,13 @@
       margin-right: 8px;
     }
 
-    .player-switcher {
-      background: rgba(255,255,255,0.14);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.2);
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 14px;
-      min-width: 140px;
-    }
-
     .btn-group {
       display: flex;
       gap: 8px;
       align-items: center;
     }
 
-    .btn {
+    .btn, .player-toggle {
       background: rgba(255,255,255,0.14);
       color: #fff;
       border: none;
@@ -79,21 +69,24 @@
       font-weight: 500;
       cursor: pointer;
       transition: all .15s;
+      height: 36px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .btn:active {
+    .btn:active, .player-toggle:active {
       background: rgba(50,150,225,0.23);
       transform: scale(0.95);
     }
 
     .btn-close {
       background: #f33;
-      margin-left: 4px;
     }
 
     .btn-close:active {
       background: #a00;
-      transform: scale(0.95);
     }
 
     .player-main {
@@ -123,7 +116,7 @@
     @media (max-width: 768px) {
       .player-header { padding: 9px 8px; font-size: 14px; height: 44px; }
       .player-main { height: calc(100vh - 44px); }
-      .player-switcher { min-width: 120px; font-size: 13px; padding: 4px 8px; }
+      .btn, .player-toggle { padding: 6px 12px; font-size: 13px; height: 32px; }
     }
   </style>
 </head>
@@ -132,10 +125,7 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
-      <select id="playerSwitcher" class="player-switcher">
-        <option value="default">Основной</option>
-        <option value="ddbb">ddbb.lol</option>
-      </select>
+      <button id="playerToggle" class="player-toggle">Другой плеер</button>
       <button class="btn btn-close" onclick="window.history.back()">Назад</button>
     </div>
   </div>
@@ -166,17 +156,22 @@
     document.getElementById("videoTitle").textContent = decodeURIComponent(title);
 
     const iframe = document.getElementById("playerIframe");
-    const switcher = document.getElementById("playerSwitcher");
+    const toggleBtn = document.getElementById("playerToggle");
+
+    let isDefaultPlayer = true; // true = embess.ws, false = ddbb.lol
 
     // Установка по умолчанию
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
 
-    // Обработчик переключателя
-    switcher.addEventListener('change', function() {
-      if (this.value === 'default') {
+    // Обработчик кнопки
+    toggleBtn.addEventListener('click', function() {
+      isDefaultPlayer = !isDefaultPlayer;
+      if (isDefaultPlayer) {
         iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-      } else if (this.value === 'ddbb') {
+        toggleBtn.textContent = 'Другой плеер';
+      } else {
         iframe.src = `https://ddbb.lol/?id=${kid}&n=0`;
+        toggleBtn.textContent = 'Основной';
       }
     });
 

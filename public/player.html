@@ -1,112 +1,186 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <!-- head без изменений -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1" />
+  <title>Player</title>
+
+  <style>
+    html, body {
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      margin: 0;
+      padding: 0;
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      min-height: 100vh;
+      min-width: 100vw;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    *, *:after, *:before {
+      -webkit-user-select: none !important;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none !important;
+    }
+
+    .player-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #fff;
+      background: #101014;
+      padding: 14px 10px;
+      height: 52px;
+      font-size: 17px;
+      font-weight: 600;
+      box-sizing: border-box;
+    }
+
+    .title {
+      font-size: 17px;
+      font-weight: 600;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: 8px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn, .player-toggle {
+      background: rgba(255,255,255,0.14);
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+      height: 36px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn:active, .player-toggle:active {
+      background: rgba(50,150,225,0.23);
+      transform: scale(0.95);
+    }
+
+    .btn-close {
+      background: #f33;
+    }
+
+    .btn-close:active {
+      background: #a00;
+    }
+
+    .player-main {
+      width: 100vw;
+      height: calc(100vh - 52px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    .player-iframe {
+      width: 100vw;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100%;
+      border: none;
+      display: block;
+      background: #111;
+      border-radius: 0;
+    }
+
+    @media (max-width: 768px) {
+      .player-header { padding: 9px 8px; font-size: 14px; height: 44px; }
+      .player-main { height: calc(100vh - 44px); }
+      .btn, .player-toggle { padding: 6px 12px; font-size: 13px; height: 32px; }
+    }
+  </style>
 </head>
+
 <body>
-  <!-- HTML без изменений -->
-  
-  <script>
-    // === ПОЛНАЯ ЗАЩИТА ПЛЕЕРА ===
-    
-    // Проверка параметров при загрузке
-    window.addEventListener('load', function() {
-      const params = new URLSearchParams(window.location.search);
-      
-      // Блокировка без параметров
-      if (!params.get('p') || !params.get('h') || !params.get('t')) {
-        window.location.href = 'index.html';
-        return;
-      }
-      
-      // Декодирование и проверка
-      const p = params.get('p');
-      const h = params.get('h');
-      const t = params.get('t');
-      
-      function generateTimestamp() {
-        return Math.floor(Date.now() / 1000 / 86400);
-      }
-      
-      function generateHash(filmId, timestamp) {
-        const secret = 'GenopoiskSecret2026';
-        const data = `${filmId}:${timestamp}:${secret}`;
-        let hash = 0;
-        for (let i = 0; i < data.length; i++) {
-          const char = data.charCodeAt(i);
-          hash = ((hash << 5) - hash) + char;
-          hash = hash & hash;
-        }
-        return Math.abs(hash).toString(36).slice(0, 8).toUpperCase();
-      }
-      
-      function decodeFilmId(encoded) {
-        try {
-          return atob(encoded.replace(/-/g, '+').replace(/_/g, '/'));
-        } catch (e) {
-          return null;
-        }
-      }
-      
-      const decodedId = decodeFilmId(p);
-      const currentTimestamp = generateTimestamp();
-      
-      // Проверки безопасности
-      if (!decodedId || isNaN(decodedId) || 
-          currentTimestamp > parseInt(t) + 1 || // > 24ч
-          generateHash(decodedId, t) !== h) {
-        window.location.href = 'index.html';
-        return;
-      }
-      
-      // Установка kid для плеера
-      window.kid = decodedId;
-    });
+  <div class="player-header">
+    <span class="title" id="videoTitle">Загрузка...</span>
+    <div class="btn-group">
+      <button id="playerToggle" class="player-toggle">Другой плеер</button>
+      <button class="btn btn-close" onclick="goToIndex()">Назад</button>
+    </div>
+  </div>
 
-    // Остальной код плеера с заменой получения kid
-    document.addEventListener("contextmenu", (e) => e.preventDefault());
-    // ... остальные защиты ...
+  <div class="player-main">
+    <iframe
+      id="playerIframe"
+      class="player-iframe"
+      allowfullscreen
+      allow="autoplay; fullscreen; picture-in-picture"
+    ></iframe>
+  </div>
 
-    function goToIndex() {
-      window.location.href = 'index.html';
-    }
+ <script>
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+document.addEventListener("copy", (e) => e.preventDefault());
+document.addEventListener("cut", (e) => e.preventDefault());
+document.addEventListener("selectstart", (e) => e.preventDefault());
 
-    const params = new URLSearchParams(window.location.search);
-    const title = params.get("title") || "";
-    document.getElementById("videoTitle").textContent = decodeURIComponent(title);
+document.onkeydown = function (e) {
+  if (e.ctrlKey && (e.key === "c" || e.key === "C" || e.key === "x" || e.key === "X" || e.key === "u" || e.key === "U" || e.key === "s" || e.key === "S")) return false;
+  if (e.key === "F12") return false;
+};
 
-    const iframe = document.getElementById("playerIframe");
-    const toggleBtn = document.getElementById("playerToggle");
+// Функция для кнопки Назад
+function goToIndex() {
+  window.location.href = 'index.html';
+}
 
-    let isDefaultPlayer = true;
+const params = new URLSearchParams(window.location.search);
+const kid = params.get("id") || "4910542";
+const title = params.get("title") || "";
+document.getElementById("videoTitle").textContent = decodeURIComponent(title);
 
-    // Ждем загрузки kid и устанавливаем плеер
-    function initPlayer() {
-      if (!window.kid) {
-        setTimeout(initPlayer, 100);
-        return;
-      }
-      
-      iframe.src = `https://api.embess.ws/embed/kp/${window.kid}`;
-      
-      toggleBtn.addEventListener('click', function() {
-        isDefaultPlayer = !isDefaultPlayer;
-        if (isDefaultPlayer) {
-          iframe.src = `https://api.embess.ws/embed/kp/${window.kid}`;
-          toggleBtn.textContent = 'Другой плеер';
-        } else {
-          iframe.src = `https://ddbb.lol/?id=${window.kid}&n=0`;
-          toggleBtn.textContent = 'Основной';
-        }
-      });
-    }
+const iframe = document.getElementById("playerIframe");
+const toggleBtn = document.getElementById("playerToggle");
 
-    initPlayer();
-    
-    // Telegram WebApp
-    window.Telegram?.WebApp?.expand?.();
-    window.Telegram?.WebApp?.setHeaderColor?.("#000000");
-    window.Telegram?.WebApp?.setBackgroundColor?.("#000000");
-  </script>
+let isDefaultPlayer = true;
+
+iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+
+toggleBtn.addEventListener('click', function() {
+  isDefaultPlayer = !isDefaultPlayer;
+  if (isDefaultPlayer) {
+    iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+    toggleBtn.textContent = 'Другой плеер';
+  } else {
+    iframe.src = `https://ddbb.lol/?id=${kid}&n=0`;
+    toggleBtn.textContent = 'Основной';
+  }
+});
+
+window.Telegram?.WebApp?.expand?.();
+window.Telegram?.WebApp?.setHeaderColor?.("#000000");
+window.Telegram?.WebApp?.setBackgroundColor?.("#000000");
+</script>
 </body>
 </html>

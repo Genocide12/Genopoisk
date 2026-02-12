@@ -126,7 +126,7 @@
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
       <button id="playerToggle" class="player-toggle">Другой плеер</button>
-      <button class="btn btn-close" onclick="window.history.back()">Назад</button>
+      <button class="btn btn-close" onclick="goToIndex()">Назад</button>
     </div>
   </div>
 
@@ -139,7 +139,7 @@
     ></iframe>
   </div>
 
-  <script>
+ <script>
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("copy", (e) => e.preventDefault());
 document.addEventListener("cut", (e) => e.preventDefault());
@@ -150,6 +150,11 @@ document.onkeydown = function (e) {
   if (e.key === "F12") return false;
 };
 
+// Функция для кнопки Назад
+function goToIndex() {
+  window.location.href = 'index.html';
+}
+
 const params = new URLSearchParams(window.location.search);
 const kid = params.get("id") || "4910542";
 const title = params.get("title") || "";
@@ -159,38 +164,17 @@ const iframe = document.getElementById("playerIframe");
 const toggleBtn = document.getElementById("playerToggle");
 
 let isDefaultPlayer = true;
-let currentDdbbIndex = 0;
 
-const ddbbUrls = [
-  `https://ddbb.lol/?id=${kid}&n=0`,           // Основной вариант
-  `https://ddbb.lol/?kp=${kid}`,               // Kinopoisk параметр  
-  `https://ddbb.lol/search/${kid}`,            // Поиск
-  `https://ddbb.lol/?id=${kid}`,               // Без n
-];
-
-// Установка по умолчанию
 iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
 
 toggleBtn.addEventListener('click', function() {
   isDefaultPlayer = !isDefaultPlayer;
-  
   if (isDefaultPlayer) {
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
     toggleBtn.textContent = 'Другой плеер';
-    toggleBtn.style.background = 'rgba(255,255,255,0.14)';
   } else {
-    // Цикл по вариантам ddbb.lol
-    const ddbbUrl = ddbbUrls[currentDdbbIndex];
-    iframe.src = ddbbUrl;
+    iframe.src = `https://ddbb.lol/?id=${kid}&n=0`;
     toggleBtn.textContent = 'Основной';
-    toggleBtn.style.background = 'rgba(50,150,225,0.3)';
-    
-    currentDdbbIndex = (currentDdbbIndex + 1) % ddbbUrls.length;
-    
-    // Авто-переключение через 4 сек если не загрузилось
-    setTimeout(() => {
-      iframe.src = ddbbUrls[currentDdbbIndex];
-    }, 4000);
   }
 });
 

@@ -50,8 +50,9 @@
     .btn-group {
       display:flex;
       gap:8px;
+      align-items:center;
     }
-    .btn {
+    .btn, .player-toggle {
       background:rgba(255,255,255,0.14);
       color:#fff;
       border:none;
@@ -61,8 +62,13 @@
       font-weight:500;
       cursor:pointer;
       transition:all .15s;
+      height:36px;
+      box-sizing:border-box;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
-    .btn:active { 
+    .btn:active, .player-toggle:active { 
       background:rgba(50,150,225,0.23);
       transform: scale(0.95);
     }
@@ -96,26 +102,6 @@
       background:#111;
       border-radius:0;
     }
-    .ad-notice {
-      position:absolute;
-      top:10px;
-      left:50%;
-      transform:translateX(-50%);
-      background:rgba(0,0,0,0.85);
-      color:#fff;
-      padding:12px 24px;
-      border-radius:8px;
-      font-size:14px;
-      font-weight:500;
-      z-index:999;
-      display:none;
-      animation: fadeIn 0.3s ease;
-      box-shadow:0 4px 12px rgba(0,0,0,0.5);
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
     .mobile-hint {
       position:absolute;
       top:50%;
@@ -137,6 +123,7 @@
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
+      .btn, .player-toggle { padding:6px 12px; font-size:13px; height:32px; }
     }
   </style>
 </head>
@@ -144,11 +131,11 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
+      <button id="playerToggle" class="player-toggle">Другой плеер</button>
       <button class="btn btn-close" onclick="window.history.back()">✕</button>
     </div>
   </div>
   <div class="player-main">
-    <div class="ad-notice" id="adNotice">⏳ Реклама закончится через <span id="adTimer">10</span> сек</div>
     <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
     <div id="mobileHint" class="mobile-hint">Полный экран на кнопке внизу ⛶<br><br>через 10 сек</div>
   </div>
@@ -170,25 +157,10 @@
     const title = params.get('title') || 'Фильм';
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
-    const adNotice = document.getElementById('adNotice');
-    const adTimer = document.getElementById('adTimer');
+    const toggleBtn = document.getElementById('playerToggle');
+    let isDefaultPlayer = true;
     
-    // Загружаем плеер Embess
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-    
-    // Показываем таймер рекламы
-    let adDuration = 10;
-    adNotice.style.display = 'block';
-    
-    const countdown = setInterval(() => {
-      adDuration--;
-      adTimer.textContent = adDuration;
-      
-      if(adDuration <= 0) {
-        clearInterval(countdown);
-        adNotice.style.display = 'none';
-      }
-    }, 1000);
     
     function isMobile() {
       return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
@@ -201,6 +173,17 @@
         hint.style.display = 'none';
       }, 2000);
     }
+
+    toggleBtn.addEventListener('click', function() {
+      isDefaultPlayer = !isDefaultPlayer;
+      if (isDefaultPlayer) {
+        iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
+        toggleBtn.textContent = 'Другой плеер';
+      } else {
+        iframe.src = `https://ddbb.lol/?id=${kid}&n=0`;
+        toggleBtn.textContent = 'Основной';
+      }
+    });
     
     // TODO: Telegram WebApp integration
     // Блок оставлен как напоминание, но отключён для совместимости со старыми Android WebView.

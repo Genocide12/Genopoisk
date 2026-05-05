@@ -102,24 +102,6 @@
       background:#111;
       border-radius:0;
     }
-    .mobile-hint {
-      position:absolute;
-      top:50%;
-      left:50%;
-      transform:translate(-50%,-50%);
-      background:rgba(0,0,0,0.88);
-      color:#fff;
-      padding:18px 26px;
-      border-radius:14px;
-      font-size:15px;
-      font-weight:500;
-      z-index:9999;
-      pointer-events:none;
-      box-shadow:0 4px 20px rgba(0,0,0,0.7);
-      display:none;
-      text-align:center;
-      line-height:1.5;
-    }
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
@@ -137,7 +119,6 @@
   </div>
   <div class="player-main">
     <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
-    <div id="mobileHint" class="mobile-hint">Полный экран на кнопке внизу ⛶<br><br>через 10 сек</div>
   </div>
   <script>
     // Защита от копирования
@@ -161,18 +142,6 @@
     let isDefaultPlayer = true;
     
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-    
-    function isMobile() {
-      return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
-    }
-    
-    if(isMobile()) {
-      const hint = document.getElementById('mobileHint');
-      hint.style.display = 'block';
-      setTimeout(() => {
-        hint.style.display = 'none';
-      }, 2000);
-    }
 
     toggleBtn.addEventListener('click', function() {
       isDefaultPlayer = !isDefaultPlayer;

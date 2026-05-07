@@ -59,11 +59,6 @@
     .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
     .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
     .empty-text{font-size:17px;font-weight:500;letter-spacing:-0.01em;}
-    .footer{text-align:center;padding:32px 20px;margin-top:40px;border-top:1px solid var(--separator);}
-    .footer-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:-0.01em;}
-    .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
-    .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
-    .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
     @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
     @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
@@ -228,10 +223,14 @@
       filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
     }
 
-    function displayFilms(films, forceCenter = false) {
-      clearFilms();
+    function renderFilms(films, options = {}) {
+      const append = !!options.append;
+      const forceCenter = !!options.forceCenter;
+      if (!append) {
+        clearFilms();
+      }
       if (!films || films.length === 0) {
-        showEmptyState('Фильмы не найдены');
+        if (!append) showEmptyState('Фильмы не найдены');
         return;
       }
       const frag = document.createDocumentFragment();
@@ -261,6 +260,10 @@
       if (forceCenter || films.length === 1) {
         filmGrid.classList.add('centered');
       }
+    }
+
+    function displayFilms(films, forceCenter = false) {
+      renderFilms(films, { append: false, forceCenter });
     }
 
     function openPlayer(filmId, title) {
@@ -304,7 +307,7 @@
             break;
         }
         if (films.length > 0) {
-          displayFilms(films);
+          renderFilms(films, { append: currentPage > 1 });
           currentPage++;
         } else {
           hasMore = false;

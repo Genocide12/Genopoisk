@@ -246,7 +246,7 @@
         card.className = 'film-card';
         card.style.animationDelay = `${index * 0.05}s`;
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
+          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.closest('.film-card').remove()">
           <div class="film-info">
             <div class="film-title">${title}</div>
             <div class="film-meta">

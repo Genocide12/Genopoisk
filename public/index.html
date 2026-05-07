@@ -187,8 +187,10 @@
 
     async function getNew(page = 1) {
       const currentYear = new Date().getFullYear();
-      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
-      return extractFilms(await apiGet(url));
+      const url = `${API_BASE}/v2.2/films?order=YEAR&type=FILM&ratingFrom=6&ratingTo=10&yearFrom=${currentYear - 1}&yearTo=${currentYear}&page=${page}`;
+      const films = extractFilms(await apiGet(url));
+      // Отбрасываем совсем пустые карточки без постера
+      return films.filter(f => f.posterUrlPreview || f.posterUrl);
     }
 
     async function getRandomFilm() {

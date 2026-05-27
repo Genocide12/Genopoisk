@@ -2,245 +2,862 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
   <meta name="theme-color" content="#000000">
-  <title>Genopoisk – кинотеатр в кармане</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Genopoisk">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <title>Genopoisk</title>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-    :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
-    body{--bg-primary:#000;--bg-secondary:#1C1C1E;--bg-tertiary:#2C2C2E;--text-primary:#FFF;--text-secondary:#98989D;--separator:rgba(84,84,88,0.6);--fill:rgba(120,120,128,0.2);font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5;transition:background .3s,color .3s;user-select:none;}
-    body.light-theme{--bg-primary:#F2F2F7;--bg-secondary:#FFF;--bg-tertiary:#F2F2F7;--text-primary:#000;--text-secondary:#6E6E73;}
-    .container{max-width:1200px;margin:0 auto;padding:20px 16px;}
-    .hero{text-align:center;padding:40px 20px;margin-bottom:32px;border-radius:32px;background:linear-gradient(135deg,rgba(0,122,255,0.15),rgba(88,86,214,0.15),rgba(255,45,85,0.15));backdrop-filter:blur(40px);border:1px solid var(--separator);}
-    .hero-title{font-size:clamp(32px,6vw,48px);font-weight:800;background:linear-gradient(135deg,#007AFF,#5856D6,#FF2D55);-webkit-background-clip:text;background-clip:text;color:transparent;cursor:pointer;}
-    .hero-subtitle{font-size:clamp(14px,2vw,17px);color:var(--text-secondary);}
-    .search-wrapper{margin-bottom:24px;}
-    .search-container{position:relative;max-width:600px;margin:0 auto;}
-    .search-input{width:100%;padding:14px 52px 14px 44px;font-size:17px;background:var(--fill);backdrop-filter:blur(20px);border:1px solid var(--separator);border-radius:16px;color:var(--text-primary);outline:none;}
-    .search-input:focus{border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);}
-    .search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;opacity:0.6;}
-    .voice-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;border:none;background:var(--fill);cursor:pointer;font-size:16px;}
-    .voice-btn.listening{background:rgba(255,45,85,0.2);color:var(--ios-pink);animation:pulse-ring 1s ease-out infinite;}
-    @keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(255,45,85,0.5);}70%{box-shadow:0 0 0 10px rgba(255,45,85,0);}100%{box-shadow:0 0 0 0 rgba(255,45,85,0);}}
-    .voice-tooltip{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(28,28,30,0.95);border-radius:16px;padding:12px 20px;font-size:15px;border:1px solid var(--separator);backdrop-filter:blur(20px);opacity:0;transition:.3s;pointer-events:none;z-index:100;display:flex;gap:10px;}
-    .voice-tooltip.visible{opacity:1;transform:translateX(-50%) translateY(0);}
-    .mic-dot{width:10px;height:10px;border-radius:50%;background:var(--ios-pink);animation:blink .8s infinite;}
-    @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
-    .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
-    .action-card{background:var(--fill);backdrop-filter:blur(20px);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:.2s;}
-    .action-card:active{transform:scale(0.96);}
-    .action-icon{font-size:40px;margin-bottom:8px;display:block;}
-    .content{background:var(--fill);backdrop-filter:blur(20px);border:1px solid var(--separator);border-radius:24px;padding:24px;min-height:400px;position:relative;}
-    .content.hidden{display:none;}
-    .loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);backdrop-filter:blur(40px);z-index:10;}
-    .loader.hidden{display:none;}
-    .spinner{width:44px;height:44px;border:3px solid var(--fill);border-top-color:var(--ios-blue);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px;}
-    @keyframes spin{to{transform:rotate(360deg);}}
-    .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
-    .film-card{border-radius:16px;overflow:hidden;cursor:pointer;background:var(--bg-secondary);transition:transform .2s;}
-    .film-card:hover{transform:translateY(-5px);}
-    .film-poster{width:100%;aspect-ratio:2/3;object-fit:cover;}
-    .film-info{padding:12px;}
-    .film-title{font-size:14px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-    .film-meta{font-size:12px;color:var(--text-secondary);display:flex;gap:6px;flex-wrap:wrap;}
-    .rating{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:rgba(0,122,255,0.2);border-radius:6px;color:var(--ios-blue);}
-    .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
-    @media(max-width:768px){.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    :root {
+      --ios-blue: #007AFF;
+      --ios-purple: #5856D6;
+      --ios-pink: #FF2D55;
+    }
+    body {
+      --bg-primary: #000;
+      --bg-secondary: #1C1C1E;
+      --bg-tertiary: #2C2C2E;
+      --text-primary: #FFF;
+      --text-secondary: #98989D;
+      --separator: rgba(84, 84, 88, 0.6);
+      --fill: rgba(120, 120, 128, 0.2);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background 0.3s, color 0.3s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body.light-theme {
+      --bg-primary: #F2F2F7;
+      --bg-secondary: #FFF;
+      --bg-tertiary: #F2F2F7;
+      --text-primary: #000;
+      --text-secondary: #6E6E73;
+      --separator: rgba(60, 60, 67, 0.29);
+    }
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 16px;
+    }
+    .hero {
+      text-align: center;
+      padding: 40px 20px;
+      margin-bottom: 32px;
+      border-radius: 32px;
+      background: linear-gradient(135deg, rgba(0,122,255,0.15), rgba(88,86,214,0.15), rgba(255,45,85,0.15));
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid var(--separator);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .hero-title {
+      font-size: clamp(32px, 6vw, 48px);
+      font-weight: 800;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #007AFF, #5856D6, #FF2D55);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .hero-title:active {
+      transform: scale(0.98);
+    }
+    .hero-subtitle {
+      font-size: clamp(14px, 2vw, 17px);
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .search-wrapper {
+      margin-bottom: 24px;
+    }
+    .search-container {
+      position: relative;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .search-input {
+      width: 100%;
+      padding: 14px 52px 14px 44px;
+      font-size: 17px;
+      font-weight: 500;
+      background: var(--fill);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--separator);
+      border-radius: 16px;
+      color: var(--text-primary);
+      outline: none;
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      font-family: inherit;
+    }
+    .search-input::placeholder {
+      color: var(--text-secondary);
+    }
+    .search-input:focus {
+      background: var(--bg-tertiary);
+      border-color: var(--ios-blue);
+      box-shadow: 0 0 0 4px rgba(0,122,255,0.2);
+      transform: translateY(-2px);
+    }
+    .search-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 18px;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+    .voice-btn {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: var(--fill);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+    .voice-btn:hover {
+      background: rgba(0,122,255,0.25);
+      color: var(--ios-blue);
+    }
+    .voice-btn:active {
+      transform: translateY(-50%) scale(0.9);
+    }
+    .voice-btn.listening {
+      background: rgba(255,45,85,0.2);
+      color: var(--ios-pink);
+      animation: pulse-ring 1s ease-out infinite;
+    }
+    @keyframes pulse-ring {
+      0% {
+        box-shadow: 0 0 0 0 rgba(255,45,85,0.5);
+      }
+      70% {
+        box-shadow: 0 0 0 10px rgba(255,45,85,0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(255,45,85,0);
+      }
+    }
+    .voice-tooltip {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(28,28,30,0.95);
+      color: #fff;
+      border-radius: 16px;
+      padding: 12px 20px;
+      font-size: 15px;
+      font-weight: 500;
+      border: 1px solid var(--separator);
+      backdrop-filter: blur(20px);
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .voice-tooltip.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .voice-tooltip .mic-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ios-pink);
+      animation: blink 0.8s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes blink {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.2;
+      }
+    }
+    .voice-error {
+      text-align: center;
+      font-size: 13px;
+      color: var(--ios-pink);
+      margin-top: 6px;
+      min-height: 18px;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .action-card {
+      background: var(--fill);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--separator);
+      border-radius: 20px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    .action-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: var(--ios-blue);
+      box-shadow: 0 12px 40px rgba(0,122,255,0.3);
+    }
+    .action-card:active {
+      transform: scale(0.96);
+    }
+    .action-icon {
+      font-size: 40px;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .action-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .content {
+      background: var(--fill);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--separator);
+      border-radius: 24px;
+      padding: 24px;
+      min-height: 400px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .content.hidden {
+      display: none;
+    }
+    .loader {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+      backdrop-filter: blur(40px);
+      z-index: 10;
+    }
+    .loader.hidden {
+      display: none;
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid var(--fill);
+      border-top-color: var(--ios-blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .loader-text {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .film-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
+    }
+    .film-grid.centered {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 300px;
+    }
+    .film-card {
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      background: var(--bg-secondary);
+    }
+    .film-card:hover {
+      transform: translateY(-8px) scale(1.03);
+      box-shadow: 0 20px 60px rgba(0,122,255,0.4);
+      z-index: 2;
+    }
+    .film-poster {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+      display: block;
+      background: var(--bg-tertiary);
+    }
+    .film-info {
+      padding: 12px;
+    }
+    .film-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .film-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rating {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      background: rgba(0,122,255,0.2);
+      border-radius: 6px;
+      font-weight: 600;
+      color: var(--ios-blue);
+    }
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-secondary);
+    }
+    .empty-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.4;
+    }
+    .empty-text {
+      font-size: 17px;
+      font-weight: 500;
+    }
+    .empty-hint {
+      font-size: 13px;
+      margin-top: 8px;
+      opacity: 0.7;
+      line-height: 1.5;
+    }
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px 12px;
+      }
+      .hero {
+        padding: 32px 16px;
+        margin-bottom: 24px;
+      }
+      .actions {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .film-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+    }
+    @media (max-width: 480px) {
+      .hero-title {
+        font-size: 28px;
+      }
+      .action-icon {
+        font-size: 32px;
+      }
+      .film-grid {
+        gap: 10px;
+      }
+    }
   </style>
 </head>
 <body>
-<div class="container">
-  <div class="hero"><h1 class="hero-title" onclick="toggleTheme()">Genopoisk</h1><p class="hero-subtitle">Кинотеатр в твоем кармане</p></div>
-  <div class="search-wrapper">
-    <div class="search-container"><span class="search-icon">🔍</span><input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..."><button class="voice-btn" id="voiceBtn">🎙️</button></div>
-    <div class="voice-error" id="voiceError"></div>
+  <div class="container">
+    <div class="hero">
+      <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
+      <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
+    </div>
+
+    <div class="search-wrapper">
+      <div class="search-container">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off"/>
+        <button class="voice-btn" id="voiceBtn" title="Голосовой поиск" aria-label="Голосовой поиск">🎙️</button>
+      </div>
+      <div class="voice-error" id="voiceError"></div>
+    </div>
+
+    <div class="actions">
+      <div class="action-card" onclick="loadCategory('popular')"><span class="action-icon">🔥</span><div class="action-title">Популярные</div></div>
+      <div class="action-card" onclick="loadCategory('top250')"><span class="action-icon">⭐</span><div class="action-title">Топ 250</div></div>
+      <div class="action-card" onclick="loadCategory('new')"><span class="action-icon">🎬</span><div class="action-title">Новинки</div></div>
+      <div class="action-card" onclick="loadCategory('random')"><span class="action-icon">🎯</span><div class="action-title">Случайный</div></div>
+    </div>
+
+    <div class="content hidden" id="content">
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <div class="loader-text" id="loaderText">Загрузка...</div>
+      </div>
+      <div class="film-grid" id="filmGrid"></div>
+    </div>
   </div>
-  <div class="actions">
-    <div class="action-card" onclick="loadCategory('popular')"><span class="action-icon">🔥</span><div class="action-title">Популярные</div></div>
-    <div class="action-card" onclick="loadCategory('top250')"><span class="action-icon">⭐</span><div class="action-title">Топ 250</div></div>
-    <div class="action-card" onclick="loadCategory('new')"><span class="action-icon">🎬</span><div class="action-title">Новинки</div></div>
-    <div class="action-card" onclick="loadCategory('random')"><span class="action-icon">🎯</span><div class="action-title">Случайный</div></div>
+
+  <div class="voice-tooltip" id="voiceTooltip">
+    <span class="mic-dot"></span>
+    <span id="voiceTooltipText">Говорите...</span>
   </div>
-  <div class="content hidden" id="content"><div class="loader" id="loader"><div class="spinner"></div><div class="loader-text">Загрузка...</div></div><div class="film-grid" id="filmGrid"></div></div>
-</div>
-<div class="voice-tooltip" id="voiceTooltip"><span class="mic-dot"></span><span id="voiceTooltipText">Говорите...</span></div>
 
-<script>
-  document.addEventListener('contextmenu', e => e.preventDefault());
-  document.addEventListener('copy', e => e.preventDefault());
-
-  const PROXY = '/proxy.php?';
-  const API_KEY = '8b1a6c709677304a06dbdae1465a56bf';
-
-  async function apiRequest(params) {
-    params.set('key', API_KEY);
-    const url = PROXY + params.toString();
-    console.log('Request URL:', url);
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-    const data = await resp.json();
-    console.log('API response:', data);
-    if (data.error !== 0) {
-      const errors = {
-        1: 'Материал не существует',
-        4: 'Неверный ключ доступа',
-        10: 'Нет информации по данному ID',
-        18: 'Недостаточно средств на балансе',
-        20: 'Неверный метод API',
-        22: 'Отсутствует обязательный параметр',
-        24: 'Недопустимый ID'
-      };
-      throw new Error(errors[data.error] || `Ошибка API ${data.error}: ${data.message || ''}`);
-    }
-    return data;
-  }
-
-  function extractFilms(data) {
-    if (!data) return [];
-    if (data.results) return data.results;
-    if (Array.isArray(data)) return data;
-    if (data.kinopoisk_id) return [data];
-    return [];
-  }
-
-  // Методы API (без потенциально проблемных параметров)
-  async function getTop250(page = 1, limit = 20) {
-    const params = new URLSearchParams({ method: 'get-top250', page, limit });
-    return extractFilms(await apiRequest(params));
-  }
-
-  async function getPopular(page = 1, limit = 20) {
-    // Используем сортировку по рейтингу КП (rating_kp) — работает стабильно
-    const params = new URLSearchParams({ method: 'search', query: '', sort: 'rating_kp', order: 'desc', page, limit });
-    return extractFilms(await apiRequest(params));
-  }
-
-  async function getNew(page = 1, limit = 20) {
-    const year = new Date().getFullYear();
-    // Передаём один год, а не диапазон (так надёжнее)
-    const params = new URLSearchParams({ method: 'search', query: '', year: String(year), sort: 'year', order: 'desc', page, limit });
-    return extractFilms(await apiRequest(params));
-  }
-
-  async function getRandomFilm() {
-    const params = new URLSearchParams({ method: 'get-random', count: 1 });
-    const data = await apiRequest(params);
-    const films = extractFilms(data);
-    return films.length ? films[0] : null;
-  }
-
-  async function searchFilms(query, page = 1, limit = 20) {
-    const params = new URLSearchParams({ method: 'search', query, page, limit });
-    return extractFilms(await apiRequest(params));
-  }
-
-  // UI логика (без изменений, но добавлено логирование ошибок)
-  let currentCategory = null, currentPage = 1, isLoading = false, hasMore = true;
-  const content = document.getElementById('content'), loader = document.getElementById('loader'), filmGrid = document.getElementById('filmGrid'), searchInput = document.getElementById('searchInput');
-
-  function toggleTheme() {
-    const isLight = document.body.classList.contains('light-theme');
-    document.body.classList.toggle('light-theme');
-    localStorage.setItem('theme', isLight ? 'dark' : 'light');
-  }
-  if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
-
-  function showLoader(msg) { content.classList.remove('hidden'); loader.classList.remove('hidden'); document.querySelector('.loader-text').textContent = msg || 'Загрузка...'; }
-  function hideLoader() { loader.classList.add('hidden'); }
-  function clearFilms() { filmGrid.innerHTML = ''; }
-  function showEmptyState(msg) { hideLoader(); filmGrid.innerHTML = `<div class="empty-state">🎬<br>${escapeHtml(msg)}</div>`; }
-  function escapeHtml(s) { return String(s).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
-
-  function renderFilms(films, append = false) {
-    if (!append) clearFilms();
-    if (!films.length) { if (!append) showEmptyState('Ничего не найдено'); return; }
-    const frag = document.createDocumentFragment();
-    for (const f of films) {
-      const id = f.kinopoisk_id;
-      const title = f.title_ru || f.title_en || 'Без названия';
-      const year = f.year || 'Н/Д';
-      let rating = f.rating_kp;
-      if (!rating && f.rating && typeof f.rating === 'object') rating = f.rating.kinopoisk?.value;
-      const poster = f.poster_small || f.poster_big || '';
-      const card = document.createElement('div');
-      card.className = 'film-card';
-      card.innerHTML = `<img src="${poster}" class="film-poster" loading="lazy" onerror="this.closest('.film-card').remove()"><div class="film-info"><div class="film-title">${escapeHtml(title)}</div><div class="film-meta"><span>${escapeHtml(year)}</span>${rating ? `<span class="rating">⭐ ${rating.toFixed(1)}</span>` : ''}</div></div>`;
-      card.onclick = () => window.location.href = `player.html?id=${id}&title=${encodeURIComponent(title)}`;
-      frag.appendChild(card);
-    }
-    filmGrid.appendChild(frag);
-    hideLoader();
-  }
-
-  async function loadCategory(cat) {
-    currentCategory = cat; currentPage = 1; hasMore = true; clearFilms(); showLoader(); searchInput.value = '';
-    try {
-      if (cat === 'random') {
-        const film = await getRandomFilm();
-        film ? renderFilms([film]) : showEmptyState('Случайный фильм не найден');
-      } else {
-        await loadMoreFilms();
-      }
-    } catch (e) { showEmptyState(`Ошибка: ${e.message}`); console.error(e); }
-  }
-
-  async function loadMoreFilms() {
-    if (isLoading || !hasMore || !currentCategory) return;
-    isLoading = true;
-    try {
-      let films = [];
-      if (currentCategory === 'popular') films = await getPopular(currentPage);
-      else if (currentCategory === 'top250') films = await getTop250(currentPage);
-      else if (currentCategory === 'new') films = await getNew(currentPage);
-      if (films.length) {
-        renderFilms(films, currentPage > 1);
-        currentPage++;
-        if (films.length < 20) hasMore = false;
-      } else {
-        hasMore = false;
-        if (!filmGrid.children.length) showEmptyState('Нет фильмов');
-        else hideLoader();
-      }
-    } catch (e) { hasMore = false; showEmptyState(`Ошибка: ${e.message}`); } finally { isLoading = false; }
-  }
-
-  let searchTimeout;
-  searchInput.addEventListener('input', e => {
-    clearTimeout(searchTimeout);
-    const val = e.target.value.trim();
-    if (val.length < 2) {
-      if (!currentCategory) { content.classList.add('hidden'); clearFilms(); }
-      return;
-    }
-    searchTimeout = setTimeout(async () => {
-      currentCategory = null; hasMore = false; clearFilms(); showLoader('Поиск...');
-      try { renderFilms(await searchFilms(val)); } catch (e) { showEmptyState(`Ошибка поиска: ${e.message}`); }
-    }, 500);
-  });
-
-  window.addEventListener('scroll', () => {
-    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 800 && currentCategory && currentCategory !== 'random' && !isLoading && hasMore)
-      loadMoreFilms();
-  });
-
-  // Голосовой поиск (без изменений)
-  const voiceBtn = document.getElementById('voiceBtn'), voiceTooltip = document.getElementById('voiceTooltip'), voiceTooltipT = document.getElementById('voiceTooltipText'), voiceError = document.getElementById('voiceError');
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let recognition = null, isListening = false;
-  function setVoiceTip(text, show) { voiceTooltipT.textContent = text; voiceTooltip.classList.toggle('visible', show); }
-  function showVErr(msg) { voiceError.textContent = msg; setTimeout(() => voiceError.textContent = '', 4000); }
-  if (SR) {
-    recognition = new SR(); recognition.lang = 'ru-RU'; recognition.continuous = false; recognition.interimResults = true;
-    recognition.onstart = () => { isListening = true; voiceBtn.classList.add('listening'); setVoiceTip('Говорите...', true); };
-    recognition.onresult = event => {
-      let final = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) if (event.results[i].isFinal) final += event.results[i][0].transcript;
-      if (final) { searchInput.value = final; setVoiceTip('«' + final + '»', true); recognition.stop(); if (final.length >= 2) { currentCategory = null; hasMore = false; clearFilms(); showLoader('Поиск...'); searchFilms(final).then(renderFilms).catch(e => showEmptyState(`Ошибка: ${e.message}`)); } }
+  <script>
+    // Защита от копирования и девелоперских инструментов
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+    document.onkeydown = function(e) {
+      const k = e.key || '';
+      if (e.ctrlKey && 'cxusCXUS'.includes(k)) { e.preventDefault(); return false; }
+      if (k === 'F12') { e.preventDefault(); return false; }
     };
-    recognition.onerror = e => { isListening = false; voiceBtn.classList.remove('listening'); setVoiceTip('', false); if (e.error !== 'aborted') showVErr('Ошибка микрофона'); };
-    recognition.onend = () => { isListening = false; voiceBtn.classList.remove('listening'); setTimeout(() => setVoiceTip('', false), 800); };
-    voiceBtn.onclick = () => { if (isListening) recognition.stop(); else recognition.start(); };
-  } else { voiceBtn.style.opacity = '0.4'; voiceBtn.onclick = () => showVErr('Голосовой ввод не поддерживается'); }
-</script>
+
+    // ------------------------- НАСТРОЙКИ API -------------------------
+    const API_KEY = 'f792e-e230c-139d4-4d690';
+    const API_URL = 'https://apiget.ru/API/';
+
+    // Базовый метод для запросов к API
+    async function apiRequest(params) {
+      const url = new URL(API_URL);
+      // Добавляем ключ к параметрам, если его нет
+      if (!params.has('key')) {
+        params.set('key', API_KEY);
+      }
+      url.search = params.toString();
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (data.error !== 0) {
+        // Обрабатываем известные ошибки
+        const errors = {
+          1: 'Материал не существует',
+          4: 'Неверный ключ доступа',
+          10: 'Нет информации по данному ID',
+          16: 'Ошибка формата ID',
+          17: 'Недопустимый GET параметр',
+          18: 'Недостаточно средств на балансе',
+          19: 'Превышено количество ID (макс. 100)',
+          20: 'Неверный метод API',
+          22: 'Отсутствует обязательный параметр',
+          24: 'Недопустимый ID',
+          25: 'Неверный секретный ключ',
+          26: 'Секретный ключ не найден'
+        };
+        throw new Error(errors[data.error] || `API Error ${data.error}: ${data.message || 'Unknown error'}`);
+      }
+      return data;
+    }
+
+    // Преобразование ответа API в единый массив фильмов
+    function extractFilms(data) {
+      if (!data) return [];
+      // Для методов search и get-top250 результаты в поле results
+      if (data.results && Array.isArray(data.results)) return data.results;
+      // Для get-random ответ — массив напрямую
+      if (Array.isArray(data)) return data;
+      // Если прилетел один фильм
+      if (data.kinopoisk_id) return [data];
+      return [];
+    }
+
+    // ------------------------- МЕТОДЫ API -------------------------
+    // Популярные фильмы (используем поиск с сортировкой по рейтингу КП)
+    async function getPopular(page = 1) {
+      const params = new URLSearchParams({
+        method: 'search',
+        query: '',
+        page: page,
+        limit: 20,
+        sort: 'rating_kp',
+        order: 'desc'
+      });
+      const data = await apiRequest(params);
+      return extractFilms(data);
+    }
+
+    // Топ-250 фильмов по версии Кинопоиска
+    async function getTop250(page = 1) {
+      const params = new URLSearchParams({
+        method: 'get-top250',
+        page: page,
+        limit: 20
+      });
+      const data = await apiRequest(params);
+      return extractFilms(data);
+    }
+
+    // Новинки (фильмы текущего и прошлого года)
+    async function getNew(page = 1) {
+      const currentYear = new Date().getFullYear();
+      const params = new URLSearchParams({
+        method: 'search',
+        query: '',
+        year: `${currentYear - 1}-${currentYear}`,
+        page: page,
+        limit: 20,
+        sort: 'year',
+        order: 'desc'
+      });
+      const data = await apiRequest(params);
+      return extractFilms(data);
+    }
+
+    // Случайный фильм с возможностью фильтрации
+    async function getRandomFilm() {
+      const params = new URLSearchParams({
+        method: 'get-random',
+        count: 1
+      });
+      const data = await apiRequest(params);
+      const films = extractFilms(data);
+      return films.length ? films[0] : null;
+    }
+
+    // Поиск фильмов по ключевому слову
+    async function searchFilms(query, page = 1) {
+      const params = new URLSearchParams({
+        method: 'search',
+        query: query,
+        page: page,
+        limit: 20
+      });
+      const data = await apiRequest(params);
+      return extractFilms(data);
+    }
+
+    // ------------------------- UI ФУНКЦИИ -------------------------
+    let currentCategory = null;
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
+
+    const content = document.getElementById('content');
+    const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loaderText');
+    const filmGrid = document.getElementById('filmGrid');
+    const searchInput = document.getElementById('searchInput');
+
+    function toggleTheme() {
+      const isLight = document.body.classList.contains('light-theme');
+      document.body.classList.toggle('light-theme');
+      localStorage.setItem('theme', isLight ? 'dark' : 'light');
+      const mt = document.querySelector('meta[name="theme-color"]');
+      if (mt) mt.content = isLight ? '#000000' : '#F2F2F7';
+    }
+
+    if (localStorage.getItem('theme') === 'light') {
+      document.body.classList.add('light-theme');
+      const mt = document.querySelector('meta[name="theme-color"]');
+      if (mt) mt.content = '#F2F2F7';
+    }
+
+    function showLoader(msg) {
+      content.classList.remove('hidden');
+      loader.classList.remove('hidden');
+      loaderText.textContent = msg || 'Загрузка...';
+    }
+
+    function hideLoader() {
+      loader.classList.add('hidden');
+    }
+
+    function clearFilms() {
+      filmGrid.innerHTML = '';
+      filmGrid.classList.remove('centered');
+    }
+
+    function showEmptyState(msg, hint) {
+      hideLoader();
+      filmGrid.classList.remove('centered');
+      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🎬</div>
+        <div class="empty-text">${msg}</div>
+        ${hint ? `<div class="empty-hint">${hint}</div>` : ''}
+      </div>`;
+    }
+
+    function renderFilms(films, options = {}) {
+      if (!options.append) clearFilms();
+      if (!films || !films.length) {
+        if (!options.append) showEmptyState('Фильмы не найдены');
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      films.forEach((film) => {
+        const filmId = film.kinopoisk_id;
+        const title = film.title_ru || film.title_en || 'Без названия';
+        const year = film.year || 'Н/Д';
+        // Рейтинг может быть вложенным объектом или числом
+        let rating = 'Н/Д';
+        if (film.rating) {
+          if (typeof film.rating === 'object') {
+            rating = film.rating.kinopoisk?.value || film.rating.imdb?.value || 'Н/Д';
+          } else {
+            rating = film.rating;
+          }
+        } else if (film.rating_kp) {
+          rating = film.rating_kp;
+        }
+        // Формируем URL постера: выбираем poster_small или poster_big
+        const poster = film.poster_small || film.poster_big || '';
+        const card = document.createElement('div');
+        card.className = 'film-card';
+        card.innerHTML = `
+          <img src="${poster}" class="film-poster" alt="${title}" loading="lazy" onerror="this.closest('.film-card').remove()">
+          <div class="film-info">
+            <div class="film-title">${escapeHtml(title)}</div>
+            <div class="film-meta">
+              <span>${year}</span>
+              ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
+            </div>
+          </div>`;
+        card.onclick = () => openPlayer(filmId, title);
+        frag.appendChild(card);
+      });
+      filmGrid.appendChild(frag);
+      hideLoader();
+      if (films.length === 1) filmGrid.classList.add('centered');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+
+    function openPlayer(filmId, title) {
+      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+    }
+
+    async function loadCategory(category) {
+      currentCategory = category;
+      currentPage = 1;
+      hasMore = true;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      try {
+        if (category === 'random') {
+          const film = await getRandomFilm();
+          film ? renderFilms([film]) : showEmptyState('Фильм не найден');
+        } else {
+          await loadMoreFilms();
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки', e.message);
+      }
+    }
+
+    async function loadMoreFilms() {
+      if (isLoading || !hasMore || !currentCategory) return;
+      isLoading = true;
+      try {
+        let films = [];
+        if (currentCategory === 'popular') films = await getPopular(currentPage);
+        else if (currentCategory === 'top250') films = await getTop250(currentPage);
+        else if (currentCategory === 'new') films = await getNew(currentPage);
+        if (films.length) {
+          renderFilms(films, { append: currentPage > 1 });
+          currentPage++;
+        } else {
+          hasMore = false;
+          if (!filmGrid.children.length) showEmptyState('Фильмы не найдены');
+          else hideLoader();
+        }
+      } catch (e) {
+        hasMore = false;
+        showEmptyState('Ошибка загрузки', 'Проверьте подключение или баланс API');
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    let searchTimeout;
+    searchInput.addEventListener('input', e => {
+      clearTimeout(searchTimeout);
+      const val = e.target.value.trim();
+      if (!val || val.length < 2) {
+        if (!currentCategory) {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+        return;
+      }
+      searchTimeout = setTimeout(async () => {
+        currentCategory = null;
+        currentPage = 1;
+        hasMore = false;
+        clearFilms();
+        showLoader('Поиск...');
+        try {
+          const films = await searchFilms(val);
+          renderFilms(films);
+        } catch (e) {
+          showEmptyState('Ошибка поиска', e.message);
+        }
+      }, 500);
+    });
+
+    let scrollTimer;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 800 &&
+            currentCategory && currentCategory !== 'random' && !isLoading && hasMore) {
+          loadMoreFilms();
+        }
+      }, 100);
+    });
+
+    // ------------------------- ГОЛОСОВОЙ ВВОД -------------------------
+    const voiceBtn = document.getElementById('voiceBtn');
+    const voiceTooltip = document.getElementById('voiceTooltip');
+    const voiceTooltipT = document.getElementById('voiceTooltipText');
+    const voiceError = document.getElementById('voiceError');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
+    let recognition = null, isListening = false;
+
+    function setVoiceTip(text, show) {
+      voiceTooltipT.textContent = text;
+      voiceTooltip.classList.toggle('visible', show);
+    }
+
+    function showVErr(msg) {
+      voiceError.textContent = msg;
+      setTimeout(() => { voiceError.textContent = ''; }, 4000);
+    }
+
+    if (SR) {
+      recognition = new SR();
+      recognition.lang = 'ru-RU';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.onstart = () => {
+        isListening = true;
+        voiceBtn.classList.add('listening');
+        setVoiceTip('Говорите...', true);
+      };
+      recognition.onresult = event => {
+        let interim = '', final = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          event.results[i].isFinal ? (final += t) : (interim += t);
+        }
+        const display = final || interim;
+        if (display) {
+          searchInput.value = display;
+          setVoiceTip('«' + display + '»', true);
+        }
+        if (final) {
+          recognition.stop();
+          const val = final.trim();
+          if (val.length >= 2) {
+            currentCategory = null;
+            currentPage = 1;
+            hasMore = false;
+            clearFilms();
+            showLoader('Поиск...');
+            searchFilms(val).then(renderFilms).catch(() => showEmptyState('Ошибка поиска'));
+          }
+        }
+      };
+      recognition.onerror = event => {
+        isListening = false;
+        voiceBtn.classList.remove('listening');
+        setVoiceTip('', false);
+        const errors = {
+          'no-speech': 'Речь не обнаружена',
+          'not-allowed': 'Разрешите доступ к микрофону в браузере',
+          'audio-capture': 'Микрофон не найден',
+          'network': 'Ошибка сети',
+          'aborted': ''
+        };
+        const msg = errors[event.error] || ('Ошибка: ' + event.error);
+        if (msg) showVErr(msg);
+      };
+      recognition.onend = () => {
+        isListening = false;
+        voiceBtn.classList.remove('listening');
+        setTimeout(() => setVoiceTip('', false), 800);
+      };
+      voiceBtn.addEventListener('click', () => {
+        if (isListening) {
+          recognition.stop();
+          return;
+        }
+        try {
+          recognition.start();
+        } catch(e) {
+          try { recognition.stop(); } catch(_) {}
+          setTimeout(() => {
+            try { recognition.start(); } catch(_) {}
+          }, 200);
+        }
+      });
+    } else {
+      voiceBtn.style.opacity = '0.4';
+      voiceBtn.addEventListener('click', () => {
+        searchInput.focus();
+        showVErr('Голосовой ввод не поддерживается этим браузером');
+      });
+    }
+  </script>
 </body>
 </html>

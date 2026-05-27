@@ -12,407 +12,96 @@
   <title>Genopoisk</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-    :root {
-      --ios-blue: #007AFF;
-      --ios-purple: #5856D6;
-      --ios-pink: #FF2D55;
-    }
-    body {
-      --bg-primary: #000;
-      --bg-secondary: #1C1C1E;
-      --bg-tertiary: #2C2C2E;
-      --text-primary: #FFF;
-      --text-secondary: #98989D;
-      --separator: rgba(84, 84, 88, 0.6);
-      --fill: rgba(120, 120, 128, 0.2);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.5;
-      min-height: 100vh;
-      overflow-x: hidden;
-      transition: background 0.3s, color 0.3s;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    body.light-theme {
-      --bg-primary: #F2F2F7;
-      --bg-secondary: #FFF;
-      --bg-tertiary: #F2F2F7;
-      --text-primary: #000;
-      --text-secondary: #6E6E73;
-      --separator: rgba(60, 60, 67, 0.29);
-    }
-    html {
-      scroll-behavior: smooth;
-      -webkit-font-smoothing: antialiased;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px 16px;
-    }
-    .hero {
-      text-align: center;
-      padding: 40px 20px;
-      margin-bottom: 32px;
-      border-radius: 32px;
-      background: linear-gradient(135deg, rgba(0,122,255,0.15), rgba(88,86,214,0.15), rgba(255,45,85,0.15));
-      backdrop-filter: blur(40px);
-      -webkit-backdrop-filter: blur(40px);
-      border: 1px solid var(--separator);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
-    }
-    .hero-title {
-      font-size: clamp(32px, 6vw, 48px);
-      font-weight: 800;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, #007AFF, #5856D6, #FF2D55);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: -0.03em;
-      line-height: 1.1;
-      cursor: pointer;
-      transition: transform 0.2s;
-    }
-    .hero-title:active {
-      transform: scale(0.98);
-    }
-    .hero-subtitle {
-      font-size: clamp(14px, 2vw, 17px);
-      color: var(--text-secondary);
-      font-weight: 500;
-    }
-    .search-wrapper {
-      margin-bottom: 24px;
-    }
-    .search-container {
-      position: relative;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .search-input {
-      width: 100%;
-      padding: 14px 52px 14px 44px;
-      font-size: 17px;
-      font-weight: 500;
-      background: var(--fill);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--separator);
-      border-radius: 16px;
-      color: var(--text-primary);
-      outline: none;
-      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
-      font-family: inherit;
-    }
-    .search-input::placeholder {
-      color: var(--text-secondary);
-    }
-    .search-input:focus {
-      background: var(--bg-tertiary);
-      border-color: var(--ios-blue);
-      box-shadow: 0 0 0 4px rgba(0,122,255,0.2);
-      transform: translateY(-2px);
-    }
-    .search-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 18px;
-      pointer-events: none;
-      opacity: 0.6;
-    }
-    .voice-btn {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: none;
-      background: var(--fill);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      color: var(--text-secondary);
-      transition: all 0.2s;
-    }
-    .voice-btn:hover {
-      background: rgba(0,122,255,0.25);
-      color: var(--ios-blue);
-    }
-    .voice-btn:active {
-      transform: translateY(-50%) scale(0.9);
-    }
-    .voice-btn.listening {
-      background: rgba(255,45,85,0.2);
-      color: var(--ios-pink);
-      animation: pulse-ring 1s ease-out infinite;
-    }
-    @keyframes pulse-ring {
-      0% {
-        box-shadow: 0 0 0 0 rgba(255,45,85,0.5);
-      }
-      70% {
-        box-shadow: 0 0 0 10px rgba(255,45,85,0);
-      }
-      100% {
-        box-shadow: 0 0 0 0 rgba(255,45,85,0);
-      }
-    }
-    .voice-tooltip {
-      position: fixed;
-      bottom: 32px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: rgba(28,28,30,0.95);
-      color: #fff;
-      border-radius: 16px;
-      padding: 12px 20px;
-      font-size: 15px;
-      font-weight: 500;
-      border: 1px solid var(--separator);
-      backdrop-filter: blur(20px);
-      opacity: 0;
-      transition: all 0.3s;
-      pointer-events: none;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .voice-tooltip.visible {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    .voice-tooltip .mic-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--ios-pink);
-      animation: blink 0.8s ease-in-out infinite;
-      flex-shrink: 0;
-    }
-    @keyframes blink {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.2;
-      }
-    }
-    .voice-error {
-      text-align: center;
-      font-size: 13px;
-      color: var(--ios-pink);
-      margin-top: 6px;
-      min-height: 18px;
-    }
-    .actions {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin-bottom: 32px;
-    }
-    .action-card {
-      background: var(--fill);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--separator);
-      border-radius: 20px;
-      padding: 24px 16px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
-    }
-    .action-card:hover {
-      transform: translateY(-4px) scale(1.02);
-      border-color: var(--ios-blue);
-      box-shadow: 0 12px 40px rgba(0,122,255,0.3);
-    }
-    .action-card:active {
-      transform: scale(0.96);
-    }
-    .action-icon {
-      font-size: 40px;
-      margin-bottom: 8px;
-      display: block;
-    }
-    .action-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-    .content {
-      background: var(--fill);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--separator);
-      border-radius: 24px;
-      padding: 24px;
-      min-height: 400px;
-      margin-bottom: 32px;
-      position: relative;
-      overflow: hidden;
-    }
-    .content.hidden {
-      display: none;
-    }
-    .loader {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-primary);
-      backdrop-filter: blur(40px);
-      z-index: 10;
-    }
-    .loader.hidden {
-      display: none;
-    }
-    .spinner {
-      width: 44px;
-      height: 44px;
-      border: 3px solid var(--fill);
-      border-top-color: var(--ios-blue);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-bottom: 16px;
-    }
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-    .loader-text {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--text-secondary);
-    }
-    .film-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 16px;
-    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
+    body{--bg-primary:#000;--bg-secondary:#1C1C1E;--bg-tertiary:#2C2C2E;--text-primary:#FFF;--text-secondary:#98989D;--separator:rgba(84,84,88,0.6);--fill:rgba(120,120,128,0.2);--fill-secondary:rgba(120,120,128,0.16);--fill-tertiary:rgba(118,118,128,0.12);font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5;min-height:100vh;overflow-x:hidden;transition:background 0.3s,color 0.3s;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;}
+    body.light-theme{--bg-primary:#F2F2F7;--bg-secondary:#FFF;--bg-tertiary:#F2F2F7;--text-primary:#000;--text-secondary:#6E6E73;--separator:rgba(60,60,67,0.29);}
+    html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    .container{max-width:1200px;margin:0 auto;padding:20px 16px;}
+    .hero{text-align:center;padding:40px 20px;margin-bottom:32px;position:relative;overflow:hidden;border-radius:32px;background:linear-gradient(135deg,rgba(0,122,255,0.15) 0%,rgba(88,86,214,0.15) 50%,rgba(255,45,85,0.15) 100%);backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid var(--separator);box-shadow:0 8px 32px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.1);}
+    .hero-title{font-size:clamp(32px,6vw,48px);font-weight:800;margin-bottom:12px;background:linear-gradient(135deg,#007AFF 0%,#5856D6 50%,#FF2D55 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.03em;line-height:1.1;cursor:pointer;user-select:none;transition:transform 0.2s;}
+    .hero-title:active{transform:scale(0.98);}
+    .hero-subtitle{font-size:clamp(14px,2vw,17px);color:var(--text-secondary);font-weight:500;letter-spacing:-0.01em;}
+    .search-wrapper{margin-bottom:24px;}
+    .search-container{position:relative;max-width:600px;margin:0 auto;}
+    .search-input{width:100%;padding:14px 20px 14px 44px;font-size:17px;font-weight:500;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:16px;color:var(--text-primary);outline:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);font-family:inherit;}
+    .search-input::placeholder{color:var(--text-secondary);}
+    .search-input:focus{background:var(--bg-tertiary);border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);transform:translateY(-2px);}
+    .search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;opacity:0.6;}
+    .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
+    .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
+    .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
+    .action-card:active{transform:scale(0.96);}
+    .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));}
+    .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;}
+    .content{background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:24px;padding:24px;min-height:400px;margin-bottom:32px;position:relative;overflow:hidden;}
+    .content.hidden{display:none;}
+    .loader{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);z-index:10;}
+    .loader.hidden{display:none;}
+    .spinner{width:44px;height:44px;border:3px solid var(--fill);border-top-color:var(--ios-blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .loader-text{font-size:15px;font-weight:500;color:var(--text-secondary);letter-spacing:-0.01em;}
+    .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
     .film-grid.centered {
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 300px;
+      gap: 0;
+      min-height:300px;
     }
-    .film-card {
-      border-radius: 16px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
-      background: var(--bg-secondary);
-    }
-    .film-card:hover {
-      transform: translateY(-8px) scale(1.03);
-      box-shadow: 0 20px 60px rgba(0,122,255,0.4);
-      z-index: 2;
-    }
-    .film-poster {
-      width: 100%;
-      aspect-ratio: 2 / 3;
-      object-fit: cover;
-      display: block;
-      background: var(--bg-tertiary);
-    }
-    .film-info {
-      padding: 12px;
-    }
-    .film-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 4px;
-      line-height: 1.3;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .film-meta {
-      font-size: 12px;
-      color: var(--text-secondary);
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .rating {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 2px 6px;
-      background: rgba(0,122,255,0.2);
-      border-radius: 6px;
-      font-weight: 600;
-      color: var(--ios-blue);
-    }
-    .empty-state {
-      text-align: center;
-      padding: 80px 20px;
-      color: var(--text-secondary);
-    }
-    .empty-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-      opacity: 0.4;
-    }
-    .empty-text {
-      font-size: 17px;
-      font-weight: 500;
-    }
-    .empty-hint {
-      font-size: 13px;
-      margin-top: 8px;
-      opacity: 0.7;
-      line-height: 1.5;
-    }
-    @media (max-width: 768px) {
-      .container {
-        padding: 16px 12px;
-      }
-      .hero {
-        padding: 32px 16px;
-        margin-bottom: 24px;
-      }
-      .actions {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .film-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-      }
-    }
-    @media (max-width: 480px) {
-      .hero-title {
-        font-size: 28px;
-      }
-      .action-icon {
-        font-size: 32px;
-      }
-      .film-grid {
-        gap: 10px;
-      }
-    }
+    .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);background:var(--bg-secondary);}
+    .film-card:hover{transform:translateY(-8px) scale(1.03);box-shadow:0 20px 60px rgba(0,122,255,0.4);z-index:2;}
+    .film-poster {width: 140px;height:210px;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;}
+    .film-info{padding:12px;background:linear-gradient(to top,var(--bg-secondary) 0%,transparent 100%);}
+    .film-title{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-0.01em;}
+    .film-meta{font-size:12px;color:var(--text-secondary);font-weight:500;display:flex;align-items:center;gap:6px;}
+    .rating{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:rgba(0,122,255,0.2);border-radius:6px;font-weight:600;color:var(--ios-blue);}
+    .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
+    .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
+    .empty-text{font-size:17px;font-weight:500;letter-spacing:-0.01em;}
+    @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
+    @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
+  
+<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+   (function(m,e,t,r,i,k,a){
+       m[i]=m[i]||function(){
+           (m[i].a=m[i].a||[]).push(arguments)
+       };
+       m[i].l=1*new Date();
+
+       for (var j = 0; j < document.scripts.length; j++) {
+           if (document.scripts[j].src === r) {
+               return;
+           }
+       }
+
+       k=e.createElement(t),
+       a=e.getElementsByTagName(t)[0],
+       k.async=1,
+       k.src=r,
+       a.parentNode.insertBefore(k,a)
+
+   })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+   ym(109195109, "init", {
+        clickmap:true,
+        trackLinks:true,
+        accurateTrackBounce:true,
+        webvisor:true
+   });
+</script>
+
+<noscript>
+  <div>
+    <img src="https://mc.yandex.ru/watch/109195109"
+         style="position:absolute; left:-9999px;"
+         alt="" />
+  </div>
+</noscript>
+<!-- /Yandex.Metrika counter -->
+
 </head>
 <body>
   <div class="container">
@@ -420,158 +109,59 @@
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
       <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
     </div>
-
     <div class="search-wrapper">
       <div class="search-container">
         <span class="search-icon">🔍</span>
-        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off"/>
-        <button class="voice-btn" id="voiceBtn" title="Голосовой поиск" aria-label="Голосовой поиск">🎙️</button>
+        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" />
       </div>
-      <div class="voice-error" id="voiceError"></div>
     </div>
-
     <div class="actions">
-      <div class="action-card" onclick="loadCategory('popular')"><span class="action-icon">🔥</span><div class="action-title">Популярные</div></div>
-      <div class="action-card" onclick="loadCategory('top250')"><span class="action-icon">⭐</span><div class="action-title">Топ 250</div></div>
-      <div class="action-card" onclick="loadCategory('new')"><span class="action-icon">🎬</span><div class="action-title">Новинки</div></div>
-      <div class="action-card" onclick="loadCategory('random')"><span class="action-icon">🎯</span><div class="action-title">Случайный</div></div>
+      <div class="action-card" onclick="loadCategory('popular')">
+        <span class="action-icon">🔥</span>
+        <div class="action-title">Популярные</div>
+      </div>
+      <div class="action-card" onclick="loadCategory('top250')">
+        <span class="action-icon">⭐</span>
+        <div class="action-title">Топ 250</div>
+      </div>
+      <div class="action-card" onclick="loadCategory('new')">
+        <span class="action-icon">🎬</span>
+        <div class="action-title">Новинки</div>
+      </div>
+      <div class="action-card" onclick="loadCategory('random')">
+        <span class="action-icon">🎯</span>
+        <div class="action-title">Случайный</div>
+      </div>
     </div>
-
     <div class="content hidden" id="content">
       <div class="loader" id="loader">
         <div class="spinner"></div>
-        <div class="loader-text" id="loaderText">Загрузка...</div>
+        <div class="loader-text">Загрузка...</div>
       </div>
       <div class="film-grid" id="filmGrid"></div>
     </div>
   </div>
-
-  <div class="voice-tooltip" id="voiceTooltip">
-    <span class="mic-dot"></span>
-    <span id="voiceTooltipText">Говорите...</span>
-  </div>
-
   <script>
-    // Защита от копирования
+    // Защита от копирования / инспектора
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
     document.onkeydown = function(e) {
-      const k = e.key || '';
-      if (e.ctrlKey && 'cxusCXUS'.includes(k)) { e.preventDefault(); return false; }
-      if (k === 'F12') { e.preventDefault(); return false; }
+      const key = e.key || '';
+      if (e.ctrlKey && (key === 'c' || key === 'C' || key === 'x' || key === 'X' || key === 'u' || key === 'U' || key === 's' || key === 'S')) {
+        e.preventDefault();
+        return false;
+      }
+      if (key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
     };
 
-    // ------------------------- НАСТРОЙКИ API -------------------------
-    const API_KEY = '8b1a6c709677304a06dbdae1465a56bf';
-    const API_URL = 'https://apiget.ru/API/';
+    const API_KEY = '2162133a-a4d6-4712-84bd-88652fe904ea';
+    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
 
-    // Базовый метод для запросов к API (прямые запросы, CORS работает)
-    async function apiRequest(params) {
-      const url = new URL(API_URL);
-      if (!params.has('key')) params.set('key', API_KEY);
-      url.search = params.toString();
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      const data = await response.json();
-      if (data.error !== 0) {
-        const errors = {
-          1: 'Материал не существует',
-          4: 'Неверный ключ доступа',
-          10: 'Нет информации по данному ID',
-          16: 'Ошибка формата ID',
-          17: 'Недопустимый GET параметр',
-          18: 'Недостаточно средств на балансе',
-          19: 'Превышено количество ID (макс. 100)',
-          20: 'Неверный метод API',
-          22: 'Отсутствует обязательный параметр',
-          24: 'Недопустимый ID',
-          25: 'Неверный секретный ключ',
-          26: 'Секретный ключ не найден'
-        };
-        throw new Error(errors[data.error] || `Ошибка API ${data.error}: ${data.message || ''}`);
-      }
-      return data;
-    }
-
-    function extractFilms(data) {
-      if (!data) return [];
-      if (data.results && Array.isArray(data.results)) return data.results;
-      if (Array.isArray(data)) return data;
-      if (data.kinopoisk_id) return [data];
-      return [];
-    }
-
-    // ------------------------- МЕТОДЫ API (ИСПРАВЛЕНЫ) -------------------------
-    // Популярные: сортировка по количеству оценок (votes) — то, что нужно для "Популярных"
-    async function getPopular(page = 1, limit = 20) {
-      const params = new URLSearchParams({
-        method: 'search',
-        query: '',
-        page: page,
-        limit: limit,
-        sort: 'votes',
-        order: 'desc'
-      });
-      const data = await apiRequest(params);
-      return extractFilms(data);
-    }
-
-    // Топ-250 работает отлично
-    async function getTop250(page = 1, limit = 20) {
-      const params = new URLSearchParams({
-        method: 'get-top250',
-        page: page,
-        limit: limit
-      });
-      const data = await apiRequest(params);
-      return extractFilms(data);
-    }
-
-    // Новинки: поиск по текущему году (диапазон не принимается, только конкретный год)
-    async function getNew(page = 1, limit = 20) {
-      const currentYear = new Date().getFullYear();
-      const params = new URLSearchParams({
-        method: 'search',
-        query: '',
-        year: String(currentYear),
-        page: page,
-        limit: limit,
-        sort: 'year',
-        order: 'desc'
-      });
-      const data = await apiRequest(params);
-      return extractFilms(data);
-    }
-
-    // Случайный фильм
-    async function getRandomFilm() {
-      const params = new URLSearchParams({ method: 'get-random', count: 1 });
-      const data = await apiRequest(params);
-      const films = extractFilms(data);
-      return films.length ? films[0] : null;
-    }
-
-    // Поиск по ключевому слову (работает)
-    async function searchFilms(query, page = 1, limit = 20, signal = null) {
-      const params = new URLSearchParams({
-        method: 'search',
-        query: query,
-        page: page,
-        limit: limit
-      });
-      const url = new URL(API_URL);
-      params.set('key', API_KEY);
-      url.search = params.toString();
-      const response = await fetch(url, { signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (data.error !== 0) throw new Error(`API error ${data.error}`);
-      return extractFilms(data);
-    }
-
-    // ------------------------- UI ФУНКЦИИ -------------------------
     let currentCategory = null;
     let currentPage = 1;
     let isLoading = false;
@@ -579,77 +169,129 @@
 
     const content = document.getElementById('content');
     const loader = document.getElementById('loader');
-    const loaderText = document.getElementById('loaderText');
     const filmGrid = document.getElementById('filmGrid');
     const searchInput = document.getElementById('searchInput');
 
     function toggleTheme() {
-      const isLight = document.body.classList.contains('light-theme');
-      document.body.classList.toggle('light-theme');
+      const body = document.body;
+      const isLight = body.classList.contains('light-theme');
+      body.classList.toggle('light-theme');
       localStorage.setItem('theme', isLight ? 'dark' : 'light');
-      const mt = document.querySelector('meta[name="theme-color"]');
-      if (mt) mt.content = isLight ? '#000000' : '#F2F2F7';
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.content = isLight ? '#000000' : '#F2F2F7';
     }
+
+    // Load saved theme
     if (localStorage.getItem('theme') === 'light') {
       document.body.classList.add('light-theme');
-      const mt = document.querySelector('meta[name="theme-color"]');
-      if (mt) mt.content = '#F2F2F7';
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.content = '#F2F2F7';
     }
 
-    function showLoader(msg) {
+    async function apiGet(url) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'X-API-KEY': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        return await res.json();
+      } catch (e) {
+        console.error('API Error:', e);
+        throw e;
+      }
+    }
+
+    function extractFilms(data) {
+      if (!data) return [];
+      return data.films || data.items || data.results || [];
+    }
+
+    async function getPopular(page = 1) {
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getTop250(page = 1) {
+      const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;
+      const d = await apiGet(url);
+      const f = extractFilms(d);
+      if (f.length === 0) {
+        const fb = `${API_BASE}/v2.2/films?order=RATING&type=FILM&ratingFrom=8&ratingTo=10&page=${page}`;
+        return extractFilms(await apiGet(fb));
+      }
+      return f;
+    }
+
+    async function getNew(page = 1) {
+      const currentYear = new Date().getFullYear();
+      const url = `${API_BASE}/v2.2/films?order=YEAR&type=FILM&ratingFrom=6&ratingTo=10&yearFrom=${currentYear - 1}&yearTo=${currentYear}&page=${page}`;
+      const films = extractFilms(await apiGet(url));
+      // Отбрасываем совсем пустые карточки без постера
+      return films.filter(f => f.posterUrlPreview || f.posterUrl);
+    }
+
+    async function getRandomFilm() {
+      const randomPage = Math.floor(Math.random() * 5) + 1;
+      const films = await getTop250(randomPage);
+      if (films && films.length > 0) return films[Math.floor(Math.random() * films.length)];
+      return null;
+    }
+
+    async function searchFilms(query) {
+      const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
+      return extractFilms(await apiGet(url));
+    }
+
+    function showLoader() {
       content.classList.remove('hidden');
       loader.classList.remove('hidden');
-      loaderText.textContent = msg || 'Загрузка...';
     }
-    function hideLoader() { loader.classList.add('hidden'); }
-    function clearFilms() { filmGrid.innerHTML = ''; filmGrid.classList.remove('centered'); }
-    function showEmptyState(msg, hint) {
+
+    function hideLoader() {
+      loader.classList.add('hidden');
+    }
+
+    function clearFilms() {
+      filmGrid.innerHTML = '';
+      filmGrid.classList.remove('centered');
+    }
+
+    function showEmptyState(msg) {
       hideLoader();
       filmGrid.classList.remove('centered');
-      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">🎬</div>
-        <div class="empty-text">${escapeHtml(msg)}</div>
-        ${hint ? `<div class="empty-hint">${escapeHtml(hint)}</div>` : ''}
-      </div>`;
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
-    }
-
-    function formatRating(rating) {
-      if (rating === null || rating === undefined || rating === 'Н/Д') return null;
-      const num = parseFloat(rating);
-      return isNaN(num) ? null : num.toFixed(1);
+      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
     }
 
     function renderFilms(films, options = {}) {
-      if (!options.append) clearFilms();
-      if (!films || !films.length) {
-        if (!options.append) showEmptyState('Фильмы не найдены');
+      const append = !!options.append;
+      const forceCenter = !!options.forceCenter;
+      if (!append) {
+        clearFilms();
+      }
+      if (!films || films.length === 0) {
+        if (!append) showEmptyState('Фильмы не найдены');
         return;
       }
       const frag = document.createDocumentFragment();
-      films.forEach(film => {
-        const filmId = film.kinopoisk_id;
-        const title = film.title_ru || film.title_en || 'Без названия';
+      films.forEach((film, index) => {
+        const filmId = film.filmId || film.kinopoiskId;
+        const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
-        let rating = null;
-        if (film.rating_kp) rating = film.rating_kp;
-        else if (film.rating && typeof film.rating === 'object') rating = film.rating.kinopoisk?.value;
-        else if (film.rating && typeof film.rating === 'number') rating = film.rating;
-        const ratingFormatted = formatRating(rating);
-        const poster = film.poster_small || film.poster_big || '';
+        const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+        const poster = film.posterUrlPreview || film.posterUrl || '';
         const card = document.createElement('div');
         card.className = 'film-card';
+        card.style.animationDelay = `${index * 0.05}s`;
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${escapeHtml(title)}" loading="lazy" onerror="this.closest('.film-card').remove()">
+          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.closest('.film-card').remove()">
           <div class="film-info">
-            <div class="film-title">${escapeHtml(title)}</div>
+            <div class="film-title">${title}</div>
             <div class="film-meta">
-              <span>${escapeHtml(year)}</span>
-              ${ratingFormatted ? `<span class="rating">⭐ ${ratingFormatted}</span>` : ''}
+              <span>${year}</span>
+              ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
             </div>
           </div>`;
         card.onclick = () => openPlayer(filmId, title);
@@ -657,7 +299,13 @@
       });
       filmGrid.appendChild(frag);
       hideLoader();
-      if (films.length === 1) filmGrid.classList.add('centered');
+      if (forceCenter || films.length === 1) {
+        filmGrid.classList.add('centered');
+      }
+    }
+
+    function displayFilms(films, forceCenter = false) {
+      renderFilms(films, { append: false, forceCenter });
     }
 
     function openPlayer(filmId, title) {
@@ -674,12 +322,13 @@
       try {
         if (category === 'random') {
           const film = await getRandomFilm();
-          film ? renderFilms([film]) : showEmptyState('Фильм не найден');
+          if (film) displayFilms([film], true);
+          else showEmptyState('Не удалось загрузить случайный фильм');
         } else {
           await loadMoreFilms();
         }
       } catch (e) {
-        showEmptyState('Ошибка загрузки', e.message);
+        showEmptyState('Ошибка загрузки: ' + e.message);
       }
     }
 
@@ -688,155 +337,88 @@
       isLoading = true;
       try {
         let films = [];
-        if (currentCategory === 'popular') films = await getPopular(currentPage);
-        else if (currentCategory === 'top250') films = await getTop250(currentPage);
-        else if (currentCategory === 'new') films = await getNew(currentPage);
-        if (films.length) {
+        switch (currentCategory) {
+          case 'popular':
+            films = await getPopular(currentPage);
+            break;
+          case 'top250':
+            films = await getTop250(currentPage);
+            break;
+          case 'new':
+            films = await getNew(currentPage);
+            break;
+        }
+        if (films.length > 0) {
           renderFilms(films, { append: currentPage > 1 });
           currentPage++;
-          if (films.length < 20) hasMore = false;
         } else {
           hasMore = false;
-          if (!filmGrid.children.length) showEmptyState('Фильмы не найдены');
+          if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
           else hideLoader();
         }
       } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
         hasMore = false;
-        showEmptyState('Ошибка загрузки', e.message);
       } finally {
         isLoading = false;
       }
     }
 
-    // ---------- УЛУЧШЕННЫЙ ПОИСК (с отменой запросов и задержкой 300 мс) ----------
-    let searchAbortController = null;
-    let searchTimeout = null;
-
-    searchInput.addEventListener('input', e => {
+    let searchTimeout;
+    searchInput.addEventListener('input', function(e) {
+      clearTimeout(searchTimeout);
       const val = e.target.value.trim();
-      // Отменяем предыдущий таймаут
-      if (searchTimeout) clearTimeout(searchTimeout);
-      
-      // Если поле пустое или меньше 2 букв — скрываем контент (если не активна категория)
-      if (val.length < 2) {
+      if (!val || val.length < 2) {
         if (!currentCategory) {
           content.classList.add('hidden');
           clearFilms();
         }
-        // Отменяем любой идущий поиск
-        if (searchAbortController) {
-          searchAbortController.abort();
-          searchAbortController = null;
-        }
         return;
       }
-      
-      // Задержка 300 мс для комфортного ввода
       searchTimeout = setTimeout(async () => {
-        // Отменяем предыдущий запрос, если он ещё не завершился
-        if (searchAbortController) {
-          searchAbortController.abort();
-        }
-        searchAbortController = new AbortController();
-        
         currentCategory = null;
+        currentPage = 1;
         hasMore = false;
         clearFilms();
-        showLoader('Поиск...');
-        
+        showLoader();
         try {
-          const films = await searchFilms(val, 1, 20, searchAbortController.signal);
-          renderFilms(films);
+          const films = await searchFilms(val);
+          displayFilms(films);
         } catch (e) {
-          if (e.name === 'AbortError') {
-            console.log('Поиск отменён');
-          } else {
-            showEmptyState('Ошибка поиска', e.message);
-          }
-        } finally {
-          searchAbortController = null;
+          showEmptyState('Ошибка поиска: ' + e.message);
         }
-      }, 300);
+      }, 500);
     });
 
-    // Бесконечная прокрутка только для категорий
-    let scrollTimer;
+    let scrollTimeout;
     window.addEventListener('scroll', () => {
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 800 &&
-            currentCategory && currentCategory !== 'random' && !isLoading && hasMore) {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const threshold = document.documentElement.scrollHeight - 800;
+        if (scrollPosition >= threshold &&
+            currentCategory &&
+            currentCategory !== 'random' &&
+            !isLoading &&
+            hasMore) {
           loadMoreFilms();
         }
       }, 100);
     });
 
-    // ------------------------- ГОЛОСОВОЙ ВВОД (без изменений, работает) -------------------------
-    const voiceBtn = document.getElementById('voiceBtn');
-    const voiceTooltip = document.getElementById('voiceTooltip');
-    const voiceTooltipT = document.getElementById('voiceTooltipText');
-    const voiceError = document.getElementById('voiceError');
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition = null, isListening = false;
-
-    function setVoiceTip(text, show) {
-      voiceTooltipT.textContent = text;
-      voiceTooltip.classList.toggle('visible', show);
+    // TODO: Telegram WebApp integration
+    // Блок пока отключён, так как Telegram WebApp в проекте сейчас не используется,
+    // а optional chaining может ломать выполнение скрипта на старых Android WebView и проекторах.
+    /*
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.expand();
+      const themeParams = window.Telegram.WebApp.themeParams;
+      if (themeParams && themeParams.bg_color) {
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.content = themeParams.bg_color;
+      }
     }
-    function showVErr(msg) {
-      voiceError.textContent = msg;
-      setTimeout(() => voiceError.textContent = '', 4000);
-    }
-    if (SR) {
-      recognition = new SR();
-      recognition.lang = 'ru-RU';
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.onstart = () => {
-        isListening = true;
-        voiceBtn.classList.add('listening');
-        setVoiceTip('Говорите...', true);
-      };
-      recognition.onresult = event => {
-        let final = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) final += event.results[i][0].transcript;
-        }
-        if (final) {
-          searchInput.value = final;
-          setVoiceTip('«' + final + '»', true);
-          recognition.stop();
-          if (final.length >= 2) {
-            currentCategory = null;
-            hasMore = false;
-            clearFilms();
-            showLoader('Поиск...');
-            searchFilms(final).then(renderFilms).catch(e => showEmptyState('Ошибка поиска', e.message));
-          }
-        }
-      };
-      recognition.onerror = event => {
-        isListening = false;
-        voiceBtn.classList.remove('listening');
-        setVoiceTip('', false);
-        if (event.error !== 'aborted') showVErr('Ошибка микрофона');
-      };
-      recognition.onend = () => {
-        isListening = false;
-        voiceBtn.classList.remove('listening');
-        setTimeout(() => setVoiceTip('', false), 800);
-      };
-      voiceBtn.addEventListener('click', () => {
-        if (isListening) recognition.stop();
-        else recognition.start();
-      });
-    } else {
-      voiceBtn.style.opacity = '0.4';
-      voiceBtn.addEventListener('click', () => {
-        searchInput.focus();
-        showVErr('Голосовой ввод не поддерживается');
-      });
-    }
+    */
   </script>
 </body>
 </html>

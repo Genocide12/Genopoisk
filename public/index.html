@@ -354,6 +354,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      flex-wrap: wrap;
     }
     .rating {
       display: inline-flex;
@@ -452,7 +453,7 @@
   </div>
 
   <script>
-    // Защита от копирования и девелоперских инструментов
+    // ---------- ЗАЩИТА ОТ КОПИРОВАНИЯ ----------
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
@@ -463,26 +464,22 @@
       if (k === 'F12') { e.preventDefault(); return false; }
     };
 
-    // ------------------------- НАСТРОЙКИ API -------------------------
+    // ---------- НАСТРОЙКИ API (ApiGet.ru) ----------
     const API_KEY = '8b1a6c709677304a06dbdae1465a56bf';
     const API_URL = 'https://apiget.ru/API/';
 
-    // Базовый метод для запросов к API
+    // Универсальный запрос к API
     async function apiRequest(params) {
-      const url = new URL(API_URL);
-      // Добавляем ключ к параметрам, если его нет
-      if (!params.has('key')) {
-        params.set('key', API_KEY);
-      }
-      url.search = params.toString();
+      params.set('key', API_KEY);
+      const url = `${API_URL}?${params.toString()}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
+      // В ответе приходит поле error: 0 - успех, иначе ошибка
       if (data.error !== 0) {
-        // Обрабатываем известные ошибки
-        const errors = {
+        const errorMessages = {
           1: 'Материал не существует',
           4: 'Неверный ключ доступа',
           10: 'Нет информации по данному ID',
@@ -496,66 +493,69 @@
           25: 'Неверный секретный ключ',
           26: 'Секретный ключ не найден'
         };
-        throw new Error(errors[data.error] || `API Error ${data.error}: ${data.message || 'Unknown error'}`);
+        throw new Error(errorMessages[data.error] || `Ошибка API ${data.error}: ${data.message || 'Unknown'}`);
       }
       return data;
     }
 
-    // Преобразование ответа API в единый массив фильмов
+    // Извлечение массива фильмов из ответа API
     function extractFilms(data) {
       if (!data) return [];
-      // Для методов search и get-top250 результаты в поле results
+      // Для метода search данные находятся в поле results
       if (data.results && Array.isArray(data.results)) return data.results;
-      // Для get-random ответ — массив напрямую
+      // Для метода get-random ответом является массив
       if (Array.isArray(data)) return data;
-      // Если прилетел один фильм
+      // Для одиночного фильма (get-info)
       if (data.kinopoisk_id) return [data];
       return [];
     }
 
-    // ------------------------- МЕТОДЫ API -------------------------
-    // Популярные фильмы (используем поиск с сортировкой по рейтингу КП)
-    async function getPopular(page = 1) {
+    // ---------- МЕТОДЫ API ДЛЯ РАЗНЫХ КАТЕГОРИЙ ----------
+    // Популярные фильмы: сортируем по количеству оценок (votes)
+    async function getPopular(page = 1, limit = 20) {
       const params = new URLSearchParams({
         method: 'search',
         query: '',
+        sort: 'votes',
+        order: 'desc',
         page: page,
-        limit: 20,
-        sort: 'rating_kp',
-        order: 'desc'
+        limit: limit
       });
       const data = await apiRequest(params);
       return extractFilms(data);
     }
 
-    // Топ-250 фильмов по версии Кинопоиска
-    async function getTop250(page = 1) {
+    // Топ-250: сортируем по рейтингу Кинопоиска (rating_kp) убыванию
+    async function getTop250(page = 1, limit = 20) {
       const params = new URLSearchParams({
-        method: 'get-top250',
+        method: 'search',
+        query: '',
+        sort: 'rating_kp',
+        order: 'desc',
         page: page,
-        limit: 20
+        limit: limit
       });
       const data = await apiRequest(params);
       return extractFilms(data);
     }
 
-    // Новинки (фильмы текущего и прошлого года)
-    async function getNew(page = 1) {
+    // Новинки: фильмы за последние 2 года с сортировкой по году (новые выше)
+    async function getNew(page = 1, limit = 20) {
       const currentYear = new Date().getFullYear();
       const params = new URLSearchParams({
         method: 'search',
         query: '',
-        year: `${currentYear - 1}-${currentYear}`,
-        page: page,
-        limit: 20,
+        year: `${currentYear-1}-${currentYear}`,
         sort: 'year',
-        order: 'desc'
+        order: 'desc',
+        page: page,
+        limit: limit
       });
       const data = await apiRequest(params);
       return extractFilms(data);
     }
 
-    // Случайный фильм с возможностью фильтрации
+    // Случайный фильм (один)
     async function getRandomFilm() {
       const params = new URLSearchParams({
         method: 'get-random',
@@ -566,19 +566,19 @@
       return films.length ? films[0] : null;
     }
 
-    // Поиск фильмов по ключевому слову
-    async function searchFilms(query, page = 1) {
+    // Поиск по ключевому слову
+    async function searchFilms(query, page = 1, limit = 20) {
       const params = new URLSearchParams({
         method: 'search',
         query: query,
         page: page,
-        limit: 20
+        limit: limit
       });
       const data = await apiRequest(params);
       return extractFilms(data);
     }
 
-    // ------------------------- UI ФУНКЦИИ -------------------------
+    // ---------- UI ЛОГИКА ----------
     let currentCategory = null;
     let currentPage = 1;
     let isLoading = false;
@@ -590,6 +590,7 @@
     const filmGrid = document.getElementById('filmGrid');
     const searchInput = document.getElementById('searchInput');
 
+    // Тема оформления
     function toggleTheme() {
       const isLight = document.body.classList.contains('light-theme');
       document.body.classList.toggle('light-theme');
@@ -597,7 +598,6 @@
       const mt = document.querySelector('meta[name="theme-color"]');
       if (mt) mt.content = isLight ? '#000000' : '#F2F2F7';
     }
-
     if (localStorage.getItem('theme') === 'light') {
       document.body.classList.add('light-theme');
       const mt = document.querySelector('meta[name="theme-color"]');
@@ -609,24 +609,41 @@
       loader.classList.remove('hidden');
       loaderText.textContent = msg || 'Загрузка...';
     }
-
     function hideLoader() {
       loader.classList.add('hidden');
     }
-
     function clearFilms() {
       filmGrid.innerHTML = '';
       filmGrid.classList.remove('centered');
     }
-
     function showEmptyState(msg, hint) {
       hideLoader();
       filmGrid.classList.remove('centered');
       filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
         <div class="empty-icon">🎬</div>
-        <div class="empty-text">${msg}</div>
-        ${hint ? `<div class="empty-hint">${hint}</div>` : ''}
+        <div class="empty-text">${escapeHtml(msg)}</div>
+        ${hint ? `<div class="empty-hint">${escapeHtml(hint)}</div>` : ''}
       </div>`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+
+    // Извлекаем рейтинг из разных возможных форматов
+    function getRatingValue(film) {
+      if (film.rating_kp) return film.rating_kp;
+      if (film.rating && typeof film.rating === 'object') {
+        return film.rating.kinopoisk?.value || film.rating.imdb?.value || null;
+      }
+      if (film.rating && typeof film.rating === 'number') return film.rating;
+      return null;
     }
 
     function renderFilms(films, options = {}) {
@@ -640,28 +657,18 @@
         const filmId = film.kinopoisk_id;
         const title = film.title_ru || film.title_en || 'Без названия';
         const year = film.year || 'Н/Д';
-        // Рейтинг может быть вложенным объектом или числом
-        let rating = 'Н/Д';
-        if (film.rating) {
-          if (typeof film.rating === 'object') {
-            rating = film.rating.kinopoisk?.value || film.rating.imdb?.value || 'Н/Д';
-          } else {
-            rating = film.rating;
-          }
-        } else if (film.rating_kp) {
-          rating = film.rating_kp;
-        }
-        // Формируем URL постера: выбираем poster_small или poster_big
+        const rating = getRatingValue(film);
+        const ratingDisplay = rating ? rating.toFixed(1) : 'Н/Д';
         const poster = film.poster_small || film.poster_big || '';
         const card = document.createElement('div');
         card.className = 'film-card';
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" loading="lazy" onerror="this.closest('.film-card').remove()">
+          <img src="${poster}" class="film-poster" alt="${escapeHtml(title)}" loading="lazy" onerror="this.closest('.film-card').remove()">
           <div class="film-info">
             <div class="film-title">${escapeHtml(title)}</div>
             <div class="film-meta">
-              <span>${year}</span>
-              ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
+              <span>${escapeHtml(year)}</span>
+              ${rating !== null ? `<span class="rating">⭐ ${ratingDisplay}</span>` : ''}
             </div>
           </div>`;
         card.onclick = () => openPlayer(filmId, title);
@@ -670,16 +677,6 @@
       filmGrid.appendChild(frag);
       hideLoader();
       if (films.length === 1) filmGrid.classList.add('centered');
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-      });
     }
 
     function openPlayer(filmId, title) {
@@ -696,11 +693,12 @@
       try {
         if (category === 'random') {
           const film = await getRandomFilm();
-          film ? renderFilms([film]) : showEmptyState('Фильм не найден');
+          film ? renderFilms([film]) : showEmptyState('Фильм не найден', 'Попробуйте другую категорию');
         } else {
           await loadMoreFilms();
         }
       } catch (e) {
+        console.error(e);
         showEmptyState('Ошибка загрузки', e.message);
       }
     }
@@ -713,22 +711,28 @@
         if (currentCategory === 'popular') films = await getPopular(currentPage);
         else if (currentCategory === 'top250') films = await getTop250(currentPage);
         else if (currentCategory === 'new') films = await getNew(currentPage);
+        
         if (films.length) {
           renderFilms(films, { append: currentPage > 1 });
           currentPage++;
+          // Если пришло меньше 20 фильмов, считаем, что больше нет
+          if (films.length < 20) hasMore = false;
         } else {
           hasMore = false;
           if (!filmGrid.children.length) showEmptyState('Фильмы не найдены');
           else hideLoader();
         }
       } catch (e) {
+        console.error(e);
         hasMore = false;
-        showEmptyState('Ошибка загрузки', 'Проверьте подключение или баланс API');
+        if (!filmGrid.children.length) showEmptyState('Ошибка загрузки', 'Проверьте подключение или баланс API');
+        else hideLoader();
       } finally {
         isLoading = false;
       }
     }
 
+    // Поиск с debounce
     let searchTimeout;
     searchInput.addEventListener('input', e => {
       clearTimeout(searchTimeout);
@@ -755,6 +759,7 @@
       }, 500);
     });
 
+    // Бесконечная прокрутка (только для категорий)
     let scrollTimer;
     window.addEventListener('scroll', () => {
       clearTimeout(scrollTimer);
@@ -766,7 +771,7 @@
       }, 100);
     });
 
-    // ------------------------- ГОЛОСОВОЙ ВВОД -------------------------
+    // ---------- ГОЛОСОВОЙ ПОИСК ----------
     const voiceBtn = document.getElementById('voiceBtn');
     const voiceTooltip = document.getElementById('voiceTooltip');
     const voiceTooltipT = document.getElementById('voiceTooltipText');
@@ -778,7 +783,6 @@
       voiceTooltipT.textContent = text;
       voiceTooltip.classList.toggle('visible', show);
     }
-
     function showVErr(msg) {
       voiceError.textContent = msg;
       setTimeout(() => { voiceError.textContent = ''; }, 4000);
@@ -814,7 +818,7 @@
             hasMore = false;
             clearFilms();
             showLoader('Поиск...');
-            searchFilms(val).then(renderFilms).catch(() => showEmptyState('Ошибка поиска'));
+            searchFilms(val).then(renderFilms).catch(err => showEmptyState('Ошибка поиска', err.message));
           }
         }
       };

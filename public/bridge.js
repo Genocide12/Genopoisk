@@ -17,11 +17,31 @@
     try { parent.postMessage(msg, '*'); } catch(_) {}
   }
 
-  // ====== 0. Layout note ======
-  // We do NOT inject any layout CSS — it breaks venoplayer's internal
-  // CSS variable calculations (--vp-vh, --vp-vw computed from body height).
-  // venoplayer manages its own layout. We only track time and seek via
-  // postMessage, and block tracking endpoints.
+  // ====== 0. Force #player to fill iframe height ======
+  // venoplayer sets #player height to 180px inline (default aspect ratio).
+  // --vp-vh CSS variable is computed FROM #player height (1.8px = 180/100),
+  // so making #player taller is safe — --vp-vh will just be larger.
+  // We do NOT touch html/body height (that would break things).
+  function injectLayoutCSS() {
+    if (document.querySelector('style[data-genopoisk-layout]')) return;
+    var css = '#player { height: 100% !important; }';
+    var style = document.createElement('style');
+    style.setAttribute('data-genopoisk-layout', 'true');
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+    log('Layout CSS injected (#player height:100%)');
+  }
+  if (document.head) {
+    injectLayoutCSS();
+  } else {
+    var headObs = new MutationObserver(function() {
+      if (document.head) { injectLayoutCSS(); headObs.disconnect(); }
+    });
+    headObs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  // Re-inject after delays — venoplayer sets inline styles during init
+  setTimeout(injectLayoutCSS, 500);
+  setTimeout(injectLayoutCSS, 2000);
 
   // ====== 1. Block tracking endpoints (s.myangular.life) ======
   // We do NOT block ad domains — ad blocking broke video playback.

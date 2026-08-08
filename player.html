@@ -321,7 +321,7 @@
     var lastKnownTime = 0;
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
-    var seekAttempted = false;
+    var seekRetries = 0;
 
     function sendToPlayer(msg) {
       try {
@@ -329,12 +329,30 @@
       } catch (_) {}
     }
 
+    // Seek to saved position with retries. venoplayer may not be ready on
+    // first attempt, so we retry up to 10 times with 1s interval.
+    // We also check if currentTime is close to target — if so, seek succeeded.
     function attemptSeekToSaved() {
-      if (!savedPos || seekAttempted || !playerReady) return;
-      seekAttempted = true;
+      if (!savedPos || !playerReady) return;
       var target = savedPos.t;
+      // If we're already close to target (within 5s), seek succeeded
+      if (lastKnownTime > 0 && Math.abs(lastKnownTime - target) < 5) {
+        console.log('[player] Seek confirmed at', lastKnownTime);
+        return;
+      }
+      // If we've tried 10 times, give up
+      if (seekRetries >= 10) {
+        console.warn('[player] Seek failed after 10 retries');
+        return;
+      }
+      seekRetries++;
+      console.log('[player] Seek attempt ' + seekRetries + ' to', target);
       sendToPlayer({ type: 'seek', time: target });
-      showToast('▶️ Продолжаем с ' + formatTime(target), 3500);
+      if (seekRetries === 1) {
+        showToast('▶️ Продолжаем с ' + formatTime(target), 3500);
+      }
+      // Retry after 1s
+      setTimeout(attemptSeekToSaved, 1000);
     }
 
     function maybeSavePosition(t) {
@@ -362,6 +380,7 @@
         if (typeof data.duration === 'number' && data.duration > 0) {
           lastKnownDuration = data.duration;
         }
+        // Start seek retry loop
         setTimeout(attemptSeekToSaved, 500);
       }
       if (data.type === 'timeupdate' || data.type === 'currentTime') {
@@ -452,11 +471,8 @@
     });
 
     if (savedPos) {
-      var age = Date.now() - new Date(savedPos.ts).getTime();
-      var ageMin = Math.floor(age / 60000);
-      var ageStr = ageMin < 60 ? ageMin + ' мин назад' : Math.floor(ageMin / 60) + ' ч назад';
       setTimeout(function() {
-        showToast('⏱ Позиция: ' + formatTime(savedPos.t) + ' (' + ageStr + ')', 4000);
+        showToast('⏱ Позиция: ' + formatTime(savedPos.t), 4000);
       }, 1000);
     }
   </script>

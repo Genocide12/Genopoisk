@@ -216,6 +216,11 @@
     var params = new URLSearchParams(window.location.search);
     var kid = params.get('id') || '4910542';
     var title = params.get('title') || 'Фильм';
+    // Read &t= parameter for resume playback (venoplayer natively supports it)
+    var startTime = params.get('t') || '0';
+    if (startTime && parseInt(startTime, 10) > 0) {
+      console.log('[player] Resume from t=' + startTime + 's');
+    }
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     var iframe = document.getElementById('playerIframe');
     var playerMain = document.getElementById('playerMain');
@@ -393,7 +398,11 @@
     // (confirmed: hye1eaipby4w.interkh.com works without Referer).
     var loadStartTime = performance.now();
     function loadPlayer() {
+      // Append &t= for resume playback — venoplayer natively seeks to this time
       var upstreamUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+      if (startTime && parseInt(startTime, 10) > 0) {
+        upstreamUrl += '?t=' + encodeURIComponent(startTime);
+      }
       console.log('[player] Fetching', upstreamUrl);
       fetch(upstreamUrl, {
         headers: { 'Accept': 'text/html,application/xhtml+xml' }
@@ -426,7 +435,12 @@
       })
       .catch(function(e) {
         console.error('[player] Browser fetch failed:', e.message);
-        iframe.src = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+        // Fallback: direct iframe with &t= for resume
+        var fallbackUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+        if (startTime && parseInt(startTime, 10) > 0) {
+          fallbackUrl += '?t=' + encodeURIComponent(startTime);
+        }
+        iframe.src = fallbackUrl;
         loadingOverlay.classList.add('hidden');
         showToast('⚠️ Режим без блокировки рекламы', 4000);
       });

@@ -17,6 +17,37 @@
     try { parent.postMessage(msg, '*'); } catch(_) {}
   }
 
+  // ====== 0. Force player container to fill iframe height ======
+  // venoplayer creates #player div with its own sizing. On mobile, the video
+  // was only stretching horizontally, not vertically. This CSS forces #player
+  // and all its children to fill 100% height of the iframe.
+  function injectLayoutCSS() {
+    if (document.querySelector('style[data-genopoisk-layout]')) return;
+    var css = '' +
+      'html, body { width:100% !important; height:100% !important; margin:0 !important; padding:0 !important; background:#000 !important; overflow:hidden !important; }' +
+      '#player { width:100% !important; height:100% !important; min-height:100% !important; max-height:100% !important; }' +
+      '#player > div, #player > div > div, #player > div > div > div { width:100% !important; height:100% !important; }' +
+      'video { width:100% !important; height:100% !important; max-width:100% !important; max-height:100% !important; object-fit:contain !important; background:#000 !important; }' +
+      '.vp-player, .vp-player-container, .vjs-tech, .video-js { width:100% !important; height:100% !important; }';
+    var style = document.createElement('style');
+    style.setAttribute('data-genopoisk-layout', 'true');
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+    log('Layout CSS injected (force 100% height)');
+  }
+
+  if (document.head) {
+    injectLayoutCSS();
+  } else {
+    var headObs = new MutationObserver(function() {
+      if (document.head) { injectLayoutCSS(); headObs.disconnect(); }
+    });
+    headObs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  // Re-inject after DOM is fully loaded (venoplayer may override styles)
+  setTimeout(injectLayoutCSS, 1000);
+  setTimeout(injectLayoutCSS, 3000);
+
   // ====== 1. Block tracking endpoints (s.myangular.life) ======
   // We do NOT block ad domains — ad blocking broke video playback.
   // We do NOT block P2P tracker (t6.zcvh.net) — venoplayer needs it to

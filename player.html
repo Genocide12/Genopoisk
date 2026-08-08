@@ -400,10 +400,12 @@
           console.log('[player] Ignored ended event during resume');
           return;
         }
-        // Only clear position if video actually reached the end (within last 30s).
-        if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30) {
+        // Only clear position if video ACTUALLY reached the end.
+        // Require: duration known AND currentTime > duration - 30 AND
+        // currentTime > duration / 2 (to avoid false positives from reset-to-0).
+        if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30 && lastKnownTime > lastKnownDuration / 2) {
           clearPosition();
-          console.log('[player] Position cleared (video reached end)');
+          console.log('[player] Position cleared (video reached end at', lastKnownTime + ')');
         } else {
           console.log('[player] Ignored ended event (currentTime:', lastKnownTime, 'duration:', lastKnownDuration + ')');
         }

@@ -11,7 +11,27 @@ const {
 const SITE_URL = process.env.SITE_URL || 'https://genopoisk.vercel.app';
 const DEBUG_URL = SITE_URL.replace(/\/$/, '') + '/debug-index.html';
 
-// ---- Main menu keyboard (shown under every admin message) ----
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ---- In-memory cache for "My films" lists ----
+// Telegram callback_data is limited to 64 bytes. We can't fit film titles
+// (Russian, multi-byte UTF-8). Instead we cache the films list per user
+// and use 'myfilm_<index>' as callback_data.
+const myFilmsCache = new Map(); // userId -> films array
+function cacheMyFilms(userId, films) {
+  myFilmsCache.set(String(userId), films);
+  // Clean old entries (keep last 50 users)
+  if (myFilmsCache.size > 50) {
+    const firstKey = myFilmsCache.keys().next().value;
+    myFilmsCache.delete(firstKey);
+  }
+}
+function getCachedMyFilms(userId) {
+  return myFilmsCache.get(String(userId)) || [];
+}
 function mainMenuKeyboard() {
   return {
     inline_keyboard: [
@@ -251,7 +271,7 @@ async function buildMyFilmsText(targetUserId) {
   }
   var lines = films.slice(0, 20).map(function(f, i) {
     var time = new Date(f.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return (i + 1) + '. «' + f.title + '» — ' + time;
+    return (i + 1) + '. «' + escapeHtml(f.title) + '» — ' + time;
   }).join('\n');
   return {
     text: '🎬 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
@@ -263,10 +283,13 @@ function myFilmsKeyboard(films, page) {
   var pageSize = 8;
   var totalPages = Math.max(1, Math.ceil(films.length / pageSize));
   var curPage = Math.min(Math.max(0, page), totalPages - 1);
-  var entries = films.slice(curPage * pageSize, (curPage + 1) * pageSize);
+  var startIdx = curPage * pageSize;
+  var entries = films.slice(startIdx, startIdx + pageSize);
 
-  var buttons = entries.map(function(f) {
-    return [{ text: '🎬 ' + f.title.slice(0, 40), callback_data: 'myfilm_' + f.filmId + '_' + encodeURIComponent(f.title.slice(0, 40)) }];
+  // Use index in callback_data (short, ASCII-safe). Film titles are cached.
+  var buttons = entries.map(function(f, i) {
+    var idx = startIdx + i;
+    return [{ text: '🎬 ' + f.title.slice(0, 40), callback_data: 'myfilm_' + idx }];
   });
 
   var navRow = [];
@@ -493,6 +516,7 @@ async function handleCallback(update) {
     if (data === 'menu_myfilms') {
       // Show films watched by the user who clicked (identified by fromId)
       const result = await buildMyFilmsText(String(fromId));
+      cacheMyFilms(fromId, result.films); // cache for film button callbacks
       await edit(result.text, myFilmsKeyboard(result.films, 0));
       return;
     }
@@ -545,15 +569,19 @@ async function handleCallback(update) {
       return;
     }
 
-    // ---- My films: open player for specific film ----
-    const myFilmMatch = data.match(/^myfilm_(\d+)_(.+)$/);
+    // ---- My films: open player for specific film (by index) ----
+    const myFilmMatch = data.match(/^myfilm_(\d+)$/);
     if (myFilmMatch) {
-      const filmId = myFilmMatch[1];
-      const filmTitle = decodeURIComponent(myFilmMatch[2]);
-      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId + '&title=' + encodeURIComponent(filmTitle);
+      const idx = parseInt(myFilmMatch[1], 10);
+      const films = getCachedMyFilms(fromId);
+      const film = films[idx];
+      if (!film) {
+        await answerCallback(cq.id, 'Фильм не найден. Обновите список.');
+        return;
+      }
+      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
       await answerCallback(cq.id, 'Открываю плеер...');
-      // Send a new message with web_app button to open the player
-      await sendMessage(chatId, '🎬 <b>' + filmTitle + '</b>\n\nНажмите кнопку, чтобы открыть плеер:', {
+      await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите кнопку, чтобы открыть плеер:', {
         reply_markup: {
           inline_keyboard: [[
             { text: '▶ Смотреть', web_app: { url: playerUrl } }
@@ -568,6 +596,7 @@ async function handleCallback(update) {
     if (myFilmsPageMatch) {
       const page = parseInt(myFilmsPageMatch[1], 10);
       const result = await buildMyFilmsText(String(fromId));
+      cacheMyFilms(fromId, result.films);
       await edit(result.text, myFilmsKeyboard(result.films, page));
       return;
     }

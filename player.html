@@ -378,7 +378,14 @@
     });
 
     function saveBeforeLeave() {
-      if (lastKnownTime > 5) savePosition(lastKnownTime, lastKnownDuration);
+      if (lastKnownTime > 5) {
+        savePosition(lastKnownTime, lastKnownDuration);
+      } else if (savedPos && savedPos.t > 5) {
+        // No bridge (cross-origin iframe) — keep the existing saved position
+        // (user came with &t= but video didn't send timeupdate via bridge).
+        // This ensures the resume card still works on next visit.
+        savePosition(savedPos.t, savedPos.d || 0);
+      }
     }
     window.addEventListener('pagehide', saveBeforeLeave);
     window.addEventListener('beforeunload', saveBeforeLeave);
@@ -386,66 +393,22 @@
       if (document.visibilityState === 'hidden') saveBeforeLeave();
     });
 
-    // ====== Load player via browser fetch + srcdoc ======
-    // We fetch embess.ws HTML, inject bridge.js as first <head> element + a
-    // <meta name="referrer" content="no-referrer-when-downgrade"> + <base>, then
-    // set as iframe.srcdoc.
+    // ====== Load player via direct iframe.src ======
+    // We use direct iframe.src (not srcdoc) because:
+    // 1. venoplayer manages its own layout — srcdoc + bridge CSS was breaking
+    //    the player on some devices (player disappeared)
+    // 2. Resume works via ?t= URL parameter (venoplayer native support)
+    // 3. Referer is correct (api.embess.ws) so video CDN returns 200
     //
-    // Bridge.js blocks P2P (wss://t6.zcvh.net) and WebRTC, forcing venoplayer
-    // to use direct HTTP fetches from hye1eaipby4w.interkh.com (the working CDN).
-    //
-    // With no-referrer policy, video CDN receives no Referer → returns 200
-    // (confirmed: hye1eaipby4w.interkh.com works without Referer).
-    var loadStartTime = performance.now();
-    function loadPlayer() {
-      // Append &t= for resume playback — venoplayer natively seeks to this time
-      var upstreamUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
-      if (startTime && parseInt(startTime, 10) > 0) {
-        upstreamUrl += '?t=' + encodeURIComponent(startTime);
-      }
-      console.log('[player] Fetching', upstreamUrl);
-      fetch(upstreamUrl, {
-        headers: { 'Accept': 'text/html,application/xhtml+xml' }
-      })
-      .then(function(res) {
-        console.log('[player] Fetch response:', res.status, 'in', ((performance.now() - loadStartTime) / 1000).toFixed(2) + 's');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.text();
-      })
-      .then(function(html) {
-        console.log('[player] Got HTML, size:', html.length);
-        var bridgeTag = '<script src="https://' + window.location.host + '/bridge.js"><\/script>';
-        var baseTag = '<base href="https://api.embess.ws/">';
-        // no-referrer so video CDN doesn't see our domain as Referer
-        // (CDN returns 410 if Referer is set to anything other than embess.ws)
-        var referrerMeta = '<meta name="referrer" content="no-referrer">';
-
-        if (/<head[^>]*>/i.test(html)) {
-          html = html.replace(/<head[^>]*>/i, function(match) {
-            return match + bridgeTag + referrerMeta + baseTag;
-          });
-        } else if (/<html[^>]*>/i.test(html)) {
-          html = html.replace(/(<html[^>]*>)/i, '$1<head>' + bridgeTag + referrerMeta + baseTag + '</head>');
-        } else {
-          html = '<head>' + bridgeTag + referrerMeta + baseTag + '</head>' + html;
-        }
-
-        iframe.srcdoc = html;
-        console.log('[player] srcdoc set, bridge + no-referrer + base injected');
-      })
-      .catch(function(e) {
-        console.error('[player] Browser fetch failed:', e.message);
-        // Fallback: direct iframe with &t= for resume
-        var fallbackUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
-        if (startTime && parseInt(startTime, 10) > 0) {
-          fallbackUrl += '?t=' + encodeURIComponent(startTime);
-        }
-        iframe.src = fallbackUrl;
-        loadingOverlay.classList.add('hidden');
-        showToast('⚠️ Режим без блокировки рекламы', 4000);
-      });
+    // Trade-off: no bridge.js (no tracking block, no postMessage resume)
+    // But resume via ?t= is more reliable anyway.
+    console.log('[player] Setting iframe.src to embess.ws');
+    var playerUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+    if (startTime && parseInt(startTime, 10) > 0) {
+      playerUrl += '?t=' + encodeURIComponent(startTime);
+      console.log('[player] Resume from t=' + startTime + 's');
     }
-    loadPlayer();
+    iframe.src = playerUrl;
 
     // Safety timeout
     setTimeout(function() {

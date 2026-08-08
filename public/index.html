@@ -274,11 +274,23 @@
       return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
     }
 
-    resumeCard.addEventListener('click', (e) => {
+    resumeCard.addEventListener('click', async (e) => {
       if (e.target === resumeClose) return;
       if (resumeFilm) {
-        trackEvent('movies_opened', { filmId: resumeFilm.filmId, title: resumeFilm.title });
-        // Resume is handled by player.html via bridge.js postMessage seek
+        // Send track event and WAIT before navigating (same as openPlayer)
+        try {
+          await fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'movies_opened',
+              initData: tgInitData,
+              userId: browserUserId,
+              filmId: resumeFilm.filmId,
+              title: resumeFilm.title
+            })
+          });
+        } catch (err) { console.warn('track error:', err); }
         window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
       }
     });
@@ -435,10 +447,24 @@
       }
     }
 
-    function openPlayer(filmId, title) {
-      trackEvent('movies_opened', { filmId, title });
-      // Resume is handled by player.html via bridge.js postMessage seek
-      // (venoplayer does NOT support ?t= URL parameter)
+    async function openPlayer(filmId, title) {
+      // Send track event and WAIT for it before navigating.
+      // Previously: trackEvent() was async, window.location.href fired immediately,
+      // fetch was cancelled by navigation → movies_opened never recorded.
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'movies_opened',
+            initData: tgInitData,
+            userId: browserUserId,
+            filmId: filmId,
+            title: title
+          })
+        });
+      } catch (e) { console.warn('track error:', e); }
+      // Now navigate to player
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
 

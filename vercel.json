@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "functions": {
     "api/**/*.js": {
       "maxDuration": 10
@@ -17,6 +16,5 @@
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
     }
-  ],
-  "cleanUrls": true
+  ]
 }

@@ -18,6 +18,35 @@ function getClientIp(req) {
   return null;
 }
 
+// Extract human-readable device name from User-Agent
+function getDeviceName(ua) {
+  if (!ua) return 'Unknown';
+  // iOS
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/iPad/i.test(ua)) return 'iPad';
+  if (/iPod/i.test(ua)) return 'iPod';
+  // Android
+  if (/Android/i.test(ua)) {
+    if (/Mobile/i.test(ua)) return 'Android-Phone';
+    return 'Android-Tablet';
+  }
+  // Windows
+  if (/Windows NT 10/i.test(ua)) return 'Windows-10';
+  if (/Windows NT 6\.3/i.test(ua)) return 'Windows-8.1';
+  if (/Windows NT 6\.2/i.test(ua)) return 'Windows-8';
+  if (/Windows NT 6\.1/i.test(ua)) return 'Windows-7';
+  // Mac
+  if (/Mac OS X/i.test(ua)) return 'Mac';
+  // Linux
+  if (/Linux/i.test(ua)) return 'Linux';
+  // Browser
+  if (/Edg/i.test(ua)) return 'Edge';
+  if (/Chrome/i.test(ua)) return 'Chrome';
+  if (/Firefox/i.test(ua)) return 'Firefox';
+  if (/Safari/i.test(ua)) return 'Safari';
+  return 'Unknown';
+}
+
 module.exports = async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -53,13 +82,25 @@ module.exports = async (req, res) => {
         }
       } catch (_) {}
     }
-    // Fallback to userId (browser users)
-    if (userId === 'anon' && body.userId) {
-      userId = String(body.userId);
-    }
 
     // Capture client IP for per-user stats
     const ip = getClientIp(req);
+
+    // Fallback for browser users: identify by IP + device (User-Agent).
+    // This gives a stable ID per device+network, so the same user sees their
+    // own history across browser sessions (not random web_<random> each time).
+    if (userId === 'anon') {
+      if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
+        // Browser user — use IP + device hash instead of random web_<random>
+        const ua = req.headers['user-agent'] || 'unknown';
+        const deviceName = getDeviceName(ua);
+        // Create stable ID: ip_<device> (e.g. "193.233.129.161_iPhone")
+        userId = (ip || 'unknown') + '_' + deviceName;
+        username = deviceName + ' @ ' + (ip || 'unknown');
+      } else if (body.userId) {
+        userId = String(body.userId);
+      }
+    }
 
     const payload = {
       userId,

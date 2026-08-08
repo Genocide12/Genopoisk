@@ -277,21 +277,28 @@
     resumeCard.addEventListener('click', async (e) => {
       if (e.target === resumeClose) return;
       if (resumeFilm) {
-        // Send track event and WAIT before navigating (same as openPlayer)
+        const payload = JSON.stringify({
+          type: 'movies_opened',
+          initData: tgInitData,
+          userId: browserUserId,
+          filmId: resumeFilm.filmId,
+          title: resumeFilm.title
+        });
         try {
-          await fetch('/api/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'movies_opened',
-              initData: tgInitData,
-              userId: browserUserId,
-              filmId: resumeFilm.filmId,
-              title: resumeFilm.title
-            })
-          });
+          if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon('/api/track', blob);
+          } else {
+            await fetch('/api/track', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload
+            });
+          }
         } catch (err) { console.warn('track error:', err); }
-        window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
+        setTimeout(function() {
+          window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
+        }, 50);
       }
     });
     resumeClose.addEventListener('click', (e) => {
@@ -448,24 +455,41 @@
     }
 
     async function openPlayer(filmId, title) {
-      // Send track event and WAIT for it before navigating.
-      // Previously: trackEvent() was async, window.location.href fired immediately,
-      // fetch was cancelled by navigation → movies_opened never recorded.
+      // Send track event reliably before navigating.
+      // Use sendBeacon (fire-and-forget, survives navigation) + fetch fallback.
+      const payload = JSON.stringify({
+        type: 'movies_opened',
+        initData: tgInitData,
+        userId: browserUserId,
+        filmId: filmId,
+        title: title
+      });
       try {
-        await fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'movies_opened',
-            initData: tgInitData,
-            userId: browserUserId,
-            filmId: filmId,
-            title: title
-          })
-        });
-      } catch (e) { console.warn('track error:', e); }
-      // Now navigate to player
-      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+        if (navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon('/api/track', blob);
+        } else {
+          await fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+          });
+        }
+      } catch (e) {
+        console.warn('track error:', e);
+        // Try fetch as last resort
+        try {
+          await fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+          });
+        } catch (_) {}
+      }
+      // Small delay to ensure sendBeacon is queued before navigation
+      setTimeout(function() {
+        window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+      }, 50);
     }
 
     async function loadCategory(category) {

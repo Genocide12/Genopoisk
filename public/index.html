@@ -259,18 +259,8 @@
       if (e.target === resumeClose) return;
       if (resumeFilm) {
         trackEvent('movies_opened', { filmId: resumeFilm.filmId, title: resumeFilm.title });
-        let url = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
-        // Pass saved position as &t= for venoplayer native seek
-        try {
-          const raw = localStorage.getItem(`genopoisk_position_${resumeFilm.filmId}`);
-          if (raw) {
-            const data = JSON.parse(raw);
-            if (data && data.t && data.t > 5) {
-              url += `&t=${Math.floor(data.t)}`;
-            }
-          }
-        } catch (_) {}
-        window.location.href = url;
+        // Resume is handled by player.html via bridge.js postMessage seek
+        window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
       }
     });
     resumeClose.addEventListener('click', (e) => {
@@ -428,19 +418,9 @@
 
     function openPlayer(filmId, title) {
       trackEvent('movies_opened', { filmId, title });
-      // Read saved position from localStorage and pass as &t= parameter
-      // venoplayer natively supports this and will seek to the position
-      let url = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
-      try {
-        const raw = localStorage.getItem(`genopoisk_position_${filmId}`);
-        if (raw) {
-          const data = JSON.parse(raw);
-          if (data && data.t && data.t > 5 && (!data.d || data.t < data.d - 5)) {
-            url += `&t=${Math.floor(data.t)}`;
-          }
-        }
-      } catch (_) {}
-      window.location.href = url;
+      // Resume is handled by player.html via bridge.js postMessage seek
+      // (venoplayer does NOT support ?t= URL parameter)
+      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
 
     async function loadCategory(category) {

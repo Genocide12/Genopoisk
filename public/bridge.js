@@ -17,36 +17,11 @@
     try { parent.postMessage(msg, '*'); } catch(_) {}
   }
 
-  // ====== 0. Force player container to fill iframe height ======
-  // venoplayer creates #player div with its own sizing. On mobile, the video
-  // was only stretching horizontally, not vertically.
-  // IMPORTANT: Do NOT set height:100% on html/body — venoplayer uses CSS
-  // variables (--vp-vh, --vp-vw) computed from body height, and forcing
-  // body height breaks those calculations, making the player disappear.
-  // Only set #player and video to 100% height — these inherit from the
-  // iframe's natural height (set by player.html CSS).
-  function injectLayoutCSS() {
-    if (document.querySelector('style[data-genopoisk-layout]')) return;
-    var css = '' +
-      '#player { width:100% !important; height:100% !important; }' +
-      'video { width:100% !important; height:100% !important; object-fit:contain !important; background:#000 !important; }';
-    var style = document.createElement('style');
-    style.setAttribute('data-genopoisk-layout', 'true');
-    style.textContent = css;
-    (document.head || document.documentElement).appendChild(style);
-    log('Layout CSS injected (force 100% height)');
-  }
-
-  if (document.head) {
-    injectLayoutCSS();
-  } else {
-    var headObs = new MutationObserver(function() {
-      if (document.head) { injectLayoutCSS(); headObs.disconnect(); }
-    });
-    headObs.observe(document.documentElement, { childList: true, subtree: true });
-  }
-  // Re-inject after DOM is fully loaded (venoplayer may override styles)
-  setTimeout(injectLayoutCSS, 2000);
+  // ====== 0. Layout note ======
+  // We do NOT inject any layout CSS — it breaks venoplayer's internal
+  // CSS variable calculations (--vp-vh, --vp-vw computed from body height).
+  // venoplayer manages its own layout. We only track time and seek via
+  // postMessage, and block tracking endpoints.
 
   // ====== 1. Block tracking endpoints (s.myangular.life) ======
   // We do NOT block ad domains — ad blocking broke video playback.

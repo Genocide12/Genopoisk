@@ -29,10 +29,13 @@ module.exports = async (req, res) => {
     let userId = null;
     if (req.method === 'POST') {
       const body = req.body || {};
+      // Try initData first (Telegram Mini App)
       if (body.initData) {
         const u = extractUser(body.initData);
         if (u) userId = u.id;
-      } else if (body.userId) {
+      }
+      // Fallback to userId (browser users)
+      if (!userId && body.userId) {
         userId = String(body.userId);
       }
     } else if (req.method === 'GET') {
@@ -40,7 +43,8 @@ module.exports = async (req, res) => {
       if (q.initData) {
         const u = extractUser(q.initData);
         if (u) userId = u.id;
-      } else if (q.userId) {
+      }
+      if (!userId && q.userId) {
         userId = String(q.userId);
       }
     }

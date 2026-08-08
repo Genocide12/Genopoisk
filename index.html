@@ -4,13 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
   <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Genopoisk">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <title>Genopoisk</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    // ====== Performance & error logging ======
+    window.addEventListener('DOMContentLoaded', function() {
+      console.log('[perf] DOMContentLoaded at', (performance.now() / 1000).toFixed(2) + 's');
+    });
+    window.addEventListener('load', function() {
+      console.log('[perf] Window load at', (performance.now() / 1000).toFixed(2) + 's');
+    });
+    window.addEventListener('error', function(e) {
+      console.error('[error]', e.message, e.filename + ':' + e.lineno);
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('[unhandled rejection]', e.reason && e.reason.message ? e.reason.message : e.reason);
+    });
+  </script>
+  <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('[tg] telegram-web-app.js failed to load (blocked?). Running without Telegram WebApp.')"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -149,16 +165,6 @@
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
 
-    // --- Telegram WebApp init ---
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.expand();
-      tg.ready();
-      tg.setHeaderColor?.('#000000');
-      tg.setBackgroundColor?.('#000000');
-    }
-    const tgInitData = tg?.initData || '';
-
     // --- User identification: works in Telegram Mini App AND in regular browser ---
     // Telegram user ID from initData takes precedence on the server;
     // for browser users (no initData) we generate a stable UUID in localStorage.
@@ -173,6 +179,29 @@
       return id;
     }
     const browserUserId = getBrowserUserId();
+
+    // --- Telegram WebApp init (lazy — telegram-web-app.js loads async) ---
+    // We don't block on this. tgInitData is read on demand.
+    let tgInitData = '';
+    function initTelegramWebApp() {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg) return null;
+      try {
+        tg.ready();
+        tg.expand();
+        if (tg.setHeaderColor) tg.setHeaderColor('#000000');
+        if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
+      } catch (_) {}
+      tgInitData = tg.initData || '';
+      console.log('[tg] Telegram WebApp initialized, has initData:', !!tgInitData);
+      return tg;
+    }
+    // Try immediately (script may already be loaded in Mini App)
+    let tg = initTelegramWebApp();
+    // Also retry after window load (async script)
+    window.addEventListener('load', function() {
+      if (!tg) tg = initTelegramWebApp();
+    });
 
     // --- Tracking ---
     async function trackEvent(type, payload = {}) {

@@ -52,7 +52,9 @@ module.exports = async (req, res) => {
           username = u.username;
         }
       } catch (_) {}
-    } else if (body.userId) {
+    }
+    // Fallback to userId (browser users)
+    if (userId === 'anon' && body.userId) {
       userId = String(body.userId);
     }
 

@@ -42,21 +42,20 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 2. Block ad URLs AND tracking endpoints AND P2P at network level ======
+  // ====== 2. Block ad URLs AND tracking endpoints at network level ======
   // adUrlPattern blocks VAST/VPAID ad providers (distribrey.com etc.)
   // trackingPattern blocks embess.ws's stats/telemetry endpoints that slow
   // down player init by waiting on WebSocket connections to s.myangular.life.
-  // p2pPattern blocks venoplayer's P2P tracker (t6.zcvh.net) and the broken
-  // P2P CDN subdomains (x-bc.interkh.com, ghzbfjzbazc.interkh.com) that
-  // timeout after 30s. Without P2P, venoplayer falls back to direct HTTP
-  // from hye1eaipby4w.interkh.com (the working CDN).
+  // p2pPattern blocks venoplayer's P2P tracker WebSocket only (t6.zcvh.net).
+  // We do NOT block x-bc/ghzbfjzbazc.interkh.com — those are video segment CDNs
+  // that venoplayer tries via P2P; blocking them entirely prevents fallback.
   var adUrlPattern = /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain|distribrey|load-xml|admixer|adservice|popads|propellerads|popcash|adsterra/i;
   var trackingPattern = /s\.myangular\.life|stats\.myangular\.life|myangular\.life/i;
-  var p2pPattern = /t6\.zcvh\.net|x-bc\.interkh\.com|ghzbfjzbazc\.interkh\.com/i;
+  var p2pTrackerPattern = /t6\.zcvh\.net/i;
 
   function isBlocked(url) {
     if (typeof url !== 'string') return false;
-    return adUrlPattern.test(url) || trackingPattern.test(url) || p2pPattern.test(url);
+    return adUrlPattern.test(url) || trackingPattern.test(url) || p2pTrackerPattern.test(url);
   }
 
   // Override fetch
@@ -73,14 +72,38 @@
   } catch(e) {}
 
   // Override XMLHttpRequest
+  // IMPORTANT: Don't replace URL with 'about:blank' — that causes CORS errors
+  // when venoplayer tries to actually send the request. Instead, we let the
+  // open() call proceed but immediately abort the send() and fake a 204 response.
   try {
     var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open = function(method, url) {
-      if (isBlocked(url)) {
-        log('Blocked XHR:', url.slice(0, 100));
-        url = 'about:blank';
+      this._genopoiskBlocked = isBlocked(url);
+      if (this._genopoiskBlocked) {
+        log('Blocked XHR (will fake response):', url.slice(0, 100));
       }
       return origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function(body) {
+      if (this._genopoiskBlocked) {
+        // Fake a successful empty response
+        var self = this;
+        setTimeout(function() {
+          try {
+            Object.defineProperty(self, 'readyState', { value: 4, configurable: true });
+            Object.defineProperty(self, 'status', { value: 204, configurable: true });
+            Object.defineProperty(self, 'responseText', { value: '', configurable: true });
+            Object.defineProperty(self, 'response', { value: '', configurable: true });
+            if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
+            if (typeof self.onload === 'function') self.onload();
+            self.dispatchEvent(new Event('load'));
+            self.dispatchEvent(new Event('loadend'));
+          } catch(e) {}
+        }, 0);
+        return;
+      }
+      return origSend.apply(this, arguments);
     };
   } catch(e) {}
 
@@ -235,17 +258,13 @@
   });
   adObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-  // ====== 5b. Block WebRTC (P2P peer connections) ======
-  // venoplayer uses WebRTC for P2P video segment sharing between users.
-  // P2P peers (x-bc.interkh.com, ghzbfjzbazc.interkh.com) timeout because
-  // they're unreachable from most client IPs. Blocking RTCPeerConnection
-  // forces venoplayer to fetch segments via HTTP from hye1eaipby4w.interkh.com.
-  try {
-    window.RTCPeerConnection = undefined;
-    window.webkitRTCPeerConnection = undefined;
-    window.mozRTCPeerConnection = undefined;
-    log('WebRTC blocked (RTCPeerConnection undefined)');
-  } catch(e) {}
+  // ====== 5b. WebRTC note ======
+  // We do NOT block RTCPeerConnection anymore. venoplayer needs WebRTC for
+  // P2P video segment loading. If we block it, venoplayer has no fallback
+  // and shows 'No video bytes to push'. P2P may work for some users
+  // (depends on their network — symmetric NAT, firewall, etc.).
+  // If P2P fails, venoplayer should timeout and try direct HTTP from
+  // hye1eaipby4w.interkh.com, but this is venoplayer's internal logic.
 
   // ====== 6. Setup video element when it appears ======
   function setupVideo(video) {

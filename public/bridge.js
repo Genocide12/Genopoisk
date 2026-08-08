@@ -97,26 +97,33 @@
     }
   } catch(e) { log('src override failed', e); }
 
-  // Override WebSocket to block stats.myangular.life connections
+  // Override WebSocket to block stats.myangular.life connections.
+  // We can't return a fake object — venoplayer checks `instanceof WebSocket`
+  // and throws "No valid WebSocket class provided" if it's not a real WebSocket.
+  // Instead, we let the real WebSocket constructor run, but rewrite blocked
+  // URLs to a non-existent local path → connection fails fast, venoplayer
+  // catches the error and continues without stats.
   try {
     var OrigWebSocket = window.WebSocket;
-    window.WebSocket = function(url, protocols) {
+    var WrappedWebSocket = function(url, protocols) {
       if (typeof url === 'string' && trackingPattern.test(url)) {
-        log('Blocked WebSocket:', url.slice(0, 100));
-        // Return a fake WebSocket that does nothing
-        return {
-          readyState: 0,
-          send: function() {},
-          close: function() {},
-          addEventListener: function() {},
-          removeEventListener: function() {},
-          onopen: null, onclose: null, onmessage: null, onerror: null
-        };
+        log('Blocked WebSocket (rewriting URL):', url.slice(0, 100));
+        // Rewrite to invalid URL → instant connection error, no real network attempt
+        url = 'ws://localhost:0/blocked';
       }
-      return protocols !== undefined ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
+      if (protocols !== undefined) {
+        return new OrigWebSocket(url, protocols);
+      }
+      return new OrigWebSocket(url);
     };
-    window.WebSocket.prototype = OrigWebSocket.prototype;
-  } catch(e) {}
+    // Preserve prototype + static props so instanceof checks pass
+    WrappedWebSocket.prototype = OrigWebSocket.prototype;
+    WrappedWebSocket.CONNECTING = OrigWebSocket.CONNECTING;
+    WrappedWebSocket.OPEN = OrigWebSocket.OPEN;
+    WrappedWebSocket.CLOSING = OrigWebSocket.CLOSING;
+    WrappedWebSocket.CLOSED = OrigWebSocket.CLOSED;
+    window.WebSocket = WrappedWebSocket;
+  } catch(e) { log('WebSocket override failed', e); }
 
   // ====== 3. CSS to hide ad elements ======
   function injectAdCSS() {

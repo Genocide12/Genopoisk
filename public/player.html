@@ -186,19 +186,17 @@
     // Загружаем плеер Embess
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
 
-    // --- Close button: closes the Telegram Mini App (not navigate back) ---
-    function closeApp() {
-      if (tg && typeof tg.close === 'function') {
-        try { tg.close(); return; } catch (_) {}
-      }
-      // Fallbacks for non-Telegram environments
-      if (window.history.length > 1) {
+    // --- Close button: returns to the main page (does NOT close the Mini App) ---
+    function closePlayer() {
+      // Prefer history back (works inside Mini App without closing the app)
+      if (window.history.length > 1 && document.referrer && document.referrer.includes(window.location.origin)) {
         window.history.back();
-      } else {
-        try { window.close(); } catch (_) { window.location.href = '/'; }
+        return;
       }
+      // Fallback: navigate to the main page directly
+      window.location.href = '/';
     }
-    document.getElementById('closeBtn').addEventListener('click', closeApp);
+    document.getElementById('closeBtn').addEventListener('click', closePlayer);
 
     // --- Picture-in-Picture ---
     // True cross-origin iframe PiP isn't reliable, so we use Document PiP API
@@ -272,10 +270,14 @@
       );
       if (popup) {
         showToast('PiP окно открыто');
-        // In Telegram Mini App, close the main view since we have the popup
-        if (tg && typeof tg.close === 'function') {
-          setTimeout(() => { try { tg.close(); } catch (_) {} }, 300);
-        }
+        // Return to main page so user can browse while popup plays
+        setTimeout(() => {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.location.href = '/';
+          }
+        }, 300);
       } else {
         showToast('Разрешите всплывающие окна для PiP', 3500);
       }

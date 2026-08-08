@@ -338,6 +338,9 @@
 
       if (data.type === 'bridge_ready') {
         console.log('[player] Bridge ready');
+        // Hide loading overlay as soon as the bridge is alive — even before video element is found.
+        // The video might take a few more seconds to appear, but the player is responsive.
+        loadingOverlay.classList.add('hidden');
       }
       if (data.type === 'ready' || data.type === 'loaded') {
         playerReady = true;
@@ -562,6 +565,25 @@
       }
     }
 
+    // Safety timeout: hide loading overlay after 6 seconds no matter what,
+    // in case bridge_ready never arrives (e.g., iframe load error, JS error inside srcdoc)
+    setTimeout(() => {
+      if (!loadingOverlay.classList.contains('hidden')) {
+        console.warn('[player] Safety timeout — hiding loading overlay');
+        loadingOverlay.classList.add('hidden');
+      }
+    }, 6000);
+
+    // Also hide overlay when iframe finishes loading (even without bridge)
+    iframe.addEventListener('load', () => {
+      // Give bridge 1s to send ready, then hide overlay
+      setTimeout(() => {
+        if (!loadingOverlay.classList.contains('hidden')) {
+          loadingOverlay.classList.add('hidden');
+        }
+      }, 1500);
+    });
+
     loadPlayer();
 
     // Notify user we have a saved position
@@ -574,16 +596,20 @@
       }, 1000);
     }
 
-    // --- Close button ---
+    // --- Close button: returns to main page (works in Mini App and browser) ---
     function closePlayer() {
       saveBeforeLeave();
-      if (window.history.length > 1 && document.referrer && document.referrer.includes(window.location.origin)) {
-        window.history.back();
-        return;
-      }
+      // Always navigate to main page — most reliable across browsers and Mini App
       window.location.href = '/';
     }
-    document.getElementById('closeBtn').addEventListener('click', closePlayer);
+    // Use multiple event bindings for reliability
+    const closeBtn = document.getElementById('closeBtn');
+    closeBtn.addEventListener('click', closePlayer);
+    // Also handle touchend for mobile reliability (some mobile browsers miss 'click' on certain elements)
+    closeBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      closePlayer();
+    });
 
     // --- Auto-fullscreen on orientation change (mobile) ---
     function isMobile() {

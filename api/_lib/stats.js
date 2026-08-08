@@ -109,7 +109,7 @@ async function writeStats(stats) {
 async function recordEvent(eventType, payload = {}) {
   // Retry the entire read-modify-write cycle on conflict (409/422).
   // This handles concurrent writes from multiple /api/track requests.
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 5;
   let lastError = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -189,6 +189,11 @@ async function recordEvent(eventType, payload = {}) {
       }
       throw e; // non-conflict error, don't retry
     }
+    // Add jitter so concurrent retries don't collide again
+    // Base delay 200ms * (attempt+1) + random 0-300ms
+    var baseDelay = 200 * (attempt + 1);
+    var jitter = Math.floor(Math.random() * 300);
+    await new Promise(r => setTimeout(r, baseDelay + jitter));
   }
   throw lastError;
 }

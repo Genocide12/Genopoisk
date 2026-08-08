@@ -249,10 +249,29 @@
         if (age > 48 * 60 * 60 * 1000) return;
         resumeFilm = data.film;
         resumeTitle.textContent = data.film.title;
-        const watchedAt = new Date(data.film.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
-        resumeMeta.textContent = `Открыт: ${watchedAt}`;
+        // Read saved position from localStorage (stored by player.html)
+        let positionText = '';
+        try {
+          const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
+          if (raw) {
+            const pos = JSON.parse(raw);
+            if (pos && pos.t && pos.t > 5) {
+              positionText = '▶ с ' + formatResumeTime(pos.t);
+            }
+          }
+        } catch (_) {}
+        resumeMeta.textContent = positionText || 'Продолжить просмотр';
         resumeCard.classList.add('visible');
       } catch (e) { console.warn('resume load error:', e); }
+    }
+
+    function formatResumeTime(s) {
+      if (!s || s < 0 || !isFinite(s)) s = 0;
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      const pad = (n) => n < 10 ? '0' + n : '' + n;
+      return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
     }
 
     resumeCard.addEventListener('click', (e) => {

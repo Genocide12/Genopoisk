@@ -348,9 +348,7 @@
       seekRetries++;
       console.log('[player] Seek attempt ' + seekRetries + ' to', target, '(currentTime:', lastKnownTime + ')');
       sendToPlayer({ type: 'seek', time: target });
-      if (seekRetries === 1) {
-        showToast('▶️ Продолжаем с ' + formatTime(target), 3500);
-      }
+      // No toast — resume happens silently
       // Retry after 2s (bridge needs time for play → canplay → seek)
       setTimeout(attemptSeekToSaved, 2000);
     }
@@ -474,11 +472,8 @@
       }, 1500);
     });
 
-    if (savedPos) {
-      setTimeout(function() {
-        showToast('⏱ Позиция: ' + formatTime(savedPos.t), 4000);
-      }, 1000);
-    }
+    // Resume happens silently — no toast. Position is shown on the main page
+    // in the "Continue watching" card instead.
   </script>
 </body>
 </html>

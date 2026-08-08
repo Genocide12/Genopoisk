@@ -17,24 +17,23 @@
     try { parent.postMessage(msg, '*'); } catch(_) {}
   }
 
-  // ====== 1. Block tracking endpoints (s.myangular.life) and broken P2P CDN ======
-  // We do NOT block ad domains anymore — ad blocking broke video playback.
-  // trackingPattern: embess.ws stats/telemetry (slow WebSocket connections)
-  // p2pTrackerPattern: venoplayer P2P tracker (slow init)
-  // p2pCdnPattern: broken P2P CDN nodes (30s timeout → instant network error
-  //                so venoplayer falls back to working HTTP CDN fast)
+  // ====== 1. Block tracking endpoints (s.myangular.life) ======
+  // We do NOT block ad domains — ad blocking broke video playback.
+  // We do NOT block P2P tracker (t6.zcvh.net) — venoplayer needs it to
+  //   discover P2P peers and segment URLs. Blocking it caused
+  //   'No video bytes to push' because venoplayer couldn't get segment list.
+  // We do NOT block P2P CDN nodes (x-bc, ghzbfjzbazc) — let venoplayer try
+  //   them via P2P; if they fail, venoplayer falls back on its own.
+  // Only block s.myangular.life (stats/telemetry that slows init).
   var trackingPattern = /s\.myangular\.life|stats\.myangular\.life|myangular\.life/i;
-  var p2pTrackerPattern = /t6\.zcvh\.net/i;
-  var p2pCdnPattern = /x-bc\.interkh\.com|ghzbfjzbazc\.interkh\.com/i;
 
   function isBlocked(url) {
     if (typeof url !== 'string') return false;
-    return trackingPattern.test(url) || p2pTrackerPattern.test(url);
+    return trackingPattern.test(url);
   }
 
   function isP2pCdn(url) {
-    if (typeof url !== 'string') return false;
-    return p2pCdnPattern.test(url);
+    return false; // don't block P2P CDN
   }
 
   // Override fetch
@@ -97,14 +96,12 @@
     };
   } catch(e) {}
 
-  // Override WebSocket to block tracking/P2P tracker connections.
-  // Use real WebSocket instance (not fake object) so venoplayer's instanceof
-  // check passes. Blocked URLs are rewritten to invalid local URL → instant
-  // connection error, venoplayer catches it and continues.
+  // Override WebSocket to block tracking connections only (s.myangular.life).
+  // Do NOT block t6.zcvh.net (P2P tracker) — venoplayer needs it.
   try {
     var OrigWebSocket = window.WebSocket;
     var WrappedWebSocket = function(url, protocols) {
-      if (typeof url === 'string' && (trackingPattern.test(url) || p2pTrackerPattern.test(url))) {
+      if (typeof url === 'string' && trackingPattern.test(url)) {
         log('Blocked WebSocket (rewriting URL):', url.slice(0, 100));
         url = 'ws://localhost:0/blocked';
       }

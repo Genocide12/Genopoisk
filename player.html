@@ -18,12 +18,11 @@
       background:#000;
       width:100vw;
       height:100vh;
+      height:100dvh;
       min-height:100vh;
       min-width:100vw;
       font-family:system-ui,sans-serif;
       overflow:hidden;
-      display:flex;
-      flex-direction:column;
     }
     *, *:after, *:before {
       -webkit-user-select: none!important;
@@ -31,6 +30,10 @@
       user-select: none!important;
     }
     .player-header {
+      position:absolute;
+      top:0;
+      left:0;
+      right:0;
       display:flex;
       align-items:center;
       justify-content:space-between;
@@ -41,8 +44,6 @@
       font-size:17px;
       font-weight:600;
       box-sizing:border-box;
-      flex-shrink:0;
-      position:relative;
       z-index:20;
     }
     .title {
@@ -72,26 +73,22 @@
     .btn-close { background:#f33; margin-left:4px; }
     .btn-close:active { background:#a00; transform: scale(0.95); }
     .player-main {
-      width:100vw;
-      flex:1 1 auto;
-      height:calc(100vh - 52px);
-      display:flex;
-      align-items:stretch;
-      justify-content:stretch;
+      position:absolute;
+      top:52px;
+      left:0;
+      right:0;
+      bottom:0;
       background:#000;
-      margin:0;
-      padding:0;
-      box-sizing:border-box;
-      position:relative;
+      overflow:hidden;
     }
     .player-iframe {
+      position:absolute;
+      top:0;
+      left:0;
       width:100%;
       height:100%;
-      flex:1 1 auto;
       border:none;
-      display:block;
       background:#111;
-      border-radius:0;
     }
     .toast {
       position:absolute;
@@ -137,38 +134,32 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* True fullscreen via Fullscreen API */
+    /* Fullscreen via Fullscreen API */
     :fullscreen .player-header { display:none; }
     :-webkit-full-screen .player-header { display:none; }
-    :fullscreen .player-main { height:100vh; }
-    :-webkit-full-screen .player-main { height:100vh; }
+    :fullscreen .player-main { top:0; }
+    :-webkit-full-screen .player-main { top:0; }
 
-    /* CSS-based fullscreen on mobile landscape.
-       Triggers when viewport is wider than tall AND device is touch-based or small.
-       Uses dvh for mobile browser chrome compensation. */
+    /* CSS-based fullscreen on mobile landscape — fill the whole viewport */
     @media (orientation: landscape) and (max-width: 1180px) {
-      body { position: fixed; top:0; left:0; right:0; bottom:0; height:100vh; height:100dvh; }
       .player-header { display:none !important; }
       .player-main {
-        position: fixed;
         top:0;
+        position:fixed;
         left:0;
+        right:0;
+        bottom:0;
         width:100vw;
         height:100vh;
         height:100dvh;
-        z-index: 99999;
-      }
-      .player-iframe {
-        width:100vw;
-        height:100vh;
-        height:100dvh;
+        z-index:99999;
       }
     }
 
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .btn{padding:6px 10px;font-size:13px;}
-      .player-main { height:calc(100vh - 44px); height:calc(100dvh - 44px); }
+      .player-main { top:44px; }
     }
   </style>
 </head>
@@ -188,8 +179,7 @@
     <div class="toast" id="toast"></div>
   </div>
   <script>
-    // ====== Phase 1: Bind close button IMMEDIATELY (before any async code) ======
-    // This guarantees ✕ works even if player JS fails to load.
+    // ====== Phase 1: Bind close button IMMEDIATELY ======
     (function bindCloseButtonEarly() {
       var btn = document.getElementById('closeBtn');
       if (!btn) return;
@@ -217,7 +207,6 @@
     var toastEl = document.getElementById('toast');
     var loadingOverlay = document.getElementById('loadingOverlay');
 
-    // Telegram WebApp init
     var tg = window.Telegram && window.Telegram.WebApp;
     if (tg) {
       try {
@@ -229,7 +218,6 @@
       } catch(_) {}
     }
 
-    // User identification (browser + Mini App)
     function getBrowserUserId() {
       var id = localStorage.getItem('genopoisk_user_id');
       if (!id) {
@@ -243,7 +231,6 @@
     var browserUserId = getBrowserUserId();
     var tgInitData = (tg && tg.initData) || '';
 
-    // Toast helper
     var toastTimer = null;
     function showToast(msg, ms) {
       ms = ms || 2500;
@@ -253,7 +240,6 @@
       toastTimer = setTimeout(function() { toastEl.style.display = 'none'; }, ms);
     }
 
-    // Tracking
     function trackEvent(type, payload) {
       payload = payload || {};
       var body = { type: type, initData: tgInitData, userId: browserUserId };
@@ -268,17 +254,13 @@
     }
     trackEvent('page_views', { path: '/player' });
 
-    // Resume position storage (localStorage, per filmId)
     function positionKey(filmId) { return 'genopoisk_position_' + filmId; }
 
     function savePosition(seconds, duration) {
       if (!seconds || seconds < 5 || !isFinite(seconds)) return;
       try {
         localStorage.setItem(positionKey(kid), JSON.stringify({
-          t: seconds,
-          d: duration || 0,
-          ts: new Date().toISOString(),
-          title: title
+          t: seconds, d: duration || 0, ts: new Date().toISOString(), title: title
         }));
       } catch (_) {}
     }
@@ -315,6 +297,7 @@
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
     var seekAttempted = false;
+    var videoIsPlaying = false;
 
     function sendToPlayer(msg) {
       try {
@@ -338,7 +321,6 @@
       savePosition(t, lastKnownDuration);
     }
 
-    // Listen for messages from the iframe bridge
     window.addEventListener('message', function(e) {
       var data = e.data;
       if (typeof data === 'string') {
@@ -359,29 +341,33 @@
         setTimeout(attemptSeekToSaved, 500);
       }
       if (data.type === 'timeupdate' || data.type === 'currentTime') {
-        if (typeof data.currentTime === 'number') {
-          lastKnownTime = data.currentTime;
-        }
-        if (typeof data.duration === 'number' && data.duration > 0) {
-          lastKnownDuration = data.duration;
-        }
+        if (typeof data.currentTime === 'number') lastKnownTime = data.currentTime;
+        if (typeof data.duration === 'number' && data.duration > 0) lastKnownDuration = data.duration;
         maybeSavePosition(lastKnownTime);
       }
+      if (data.type === 'play') videoIsPlaying = true;
+      if (data.type === 'pause') videoIsPlaying = false;
       if (data.type === 'ended') {
         clearPosition();
         showToast('🎬 Фильм досмотрен — позиция сброшена', 3000);
       }
+      if (data.type === 'pip_enter') showToast('⛶ PiP активен', 2000);
+      if (data.type === 'pip_error') showToast('PiP: ' + data.message, 3000);
     });
 
     function saveBeforeLeave() {
-      if (lastKnownTime > 5) {
-        savePosition(lastKnownTime, lastKnownDuration);
-      }
+      if (lastKnownTime > 5) savePosition(lastKnownTime, lastKnownDuration);
     }
     window.addEventListener('pagehide', saveBeforeLeave);
     window.addEventListener('beforeunload', saveBeforeLeave);
     document.addEventListener('visibilitychange', function() {
       if (document.visibilityState === 'hidden') saveBeforeLeave();
+      // Try to enter PiP when minimizing on mobile (Android only)
+      if (document.visibilityState === 'hidden' && videoIsPlaying && document.pictureInPictureEnabled) {
+        try {
+          sendToPlayer({ type: 'requestPiP' });
+        } catch (_) {}
+      }
     });
 
     // Load embed via browser-side fetch + srcdoc
@@ -395,47 +381,41 @@
         return res.text();
       })
       .then(function(html) {
-        // Inject <base> for relative URLs
-        var baseTag = '<base href="https://api.embess.ws/">';
-        if (/<head>/i.test(html)) {
-          html = html.replace(/<head>/i, '<head>' + baseTag);
-        } else if (/<html[^>]*>/i.test(html)) {
-          html = html.replace(/(<html[^>]*>)/i, '$1<head>' + baseTag + '</head>');
-        } else {
-          html = baseTag + html;
-        }
-
-        // Inject bridge script tag (loaded from same origin as the parent page)
-        // Note: the closing tag below is escaped so the HTML parser of THIS page
-        // doesn't terminate our own inline script block prematurely.
+        // CRITICAL: Inject bridge script as the FIRST element in <head>,
+        // BEFORE embess.ws's ad config script runs. This lets us intercept
+        // window.adsConfig and override fetch/XHR before player-venom captures them.
         var bridgeTag = '<script src="https://' + window.location.host + '/bridge.js"><\/script>';
-        if (/<\/body>/i.test(html)) {
-          html = html.replace(/<\/body>/i, bridgeTag + '<\/body>');
+        var baseTag = '<base href="https://api.embess.ws/">';
+
+        if (/<head[^>]*>/i.test(html)) {
+          html = html.replace(/<head[^>]*>/i, function(match) {
+            return match + bridgeTag + baseTag;
+          });
+        } else if (/<html[^>]*>/i.test(html)) {
+          html = html.replace(/(<html[^>]*>)/i, '$1<head>' + bridgeTag + baseTag + '</head>');
         } else {
-          html = html + bridgeTag;
+          html = '<head>' + bridgeTag + baseTag + '</head>' + html;
         }
 
         iframe.srcdoc = html;
-        console.log('[player] Loaded via browser fetch');
+        console.log('[player] Loaded via browser fetch, bridge injected first in <head>');
       })
       .catch(function(e) {
         console.warn('[player] Browser fetch failed:', e);
-        // Fallback: direct iframe (no ad block, no resume)
         iframe.src = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
         loadingOverlay.classList.add('hidden');
         showToast('⚠️ Режим без блокировки рекламы', 4000);
       });
     }
 
-    // Safety timeout: hide loading overlay after 8 seconds no matter what
+    // Safety timeout
     setTimeout(function() {
       if (!loadingOverlay.classList.contains('hidden')) {
-        console.warn('[player] Safety timeout — hiding loading overlay');
+        console.warn('[player] Safety timeout');
         loadingOverlay.classList.add('hidden');
       }
     }, 8000);
 
-    // Hide overlay when iframe finishes loading
     iframe.addEventListener('load', function() {
       setTimeout(function() {
         if (!loadingOverlay.classList.contains('hidden')) {
@@ -446,7 +426,6 @@
 
     loadPlayer();
 
-    // Notify user about saved position
     if (savedPos) {
       var age = Date.now() - new Date(savedPos.ts).getTime();
       var ageMin = Math.floor(age / 60000);
@@ -456,7 +435,7 @@
       }, 1000);
     }
 
-    // Auto-fullscreen on orientation change (mobile)
+    // ====== Auto-fullscreen on rotation (mobile) ======
     function isMobile() {
       return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent) ||
              (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
@@ -484,6 +463,7 @@
           return true;
         } catch (e) { console.warn('Fullscreen error:', e); }
       }
+      // iOS Safari: try iframe fullscreen
       if (iframe.webkitEnterFullscreen) {
         try { iframe.webkitEnterFullscreen(); return true; } catch (e) {}
       }
@@ -510,12 +490,21 @@
     if (screen.orientation && screen.orientation.addEventListener) {
       screen.orientation.addEventListener('change', handleOrientationChange);
     }
-    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('orientationchange', function() {
+      setTimeout(handleOrientationChange, 300);
+    });
 
     var resizeTimer = null;
     window.addEventListener('resize', function() {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(handleOrientationChange, 200);
+    });
+
+    // First tap on player in landscape = request fullscreen (user gesture required by API)
+    playerMain.addEventListener('click', function() {
+      if (isMobile() && isLandscape() && !isFullscreen()) {
+        requestFullscreen();
+      }
     });
 
     setTimeout(handleOrientationChange, 500);

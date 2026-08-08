@@ -20,7 +20,7 @@ function mainMenuKeyboard() {
         { text: '👥 Пользователи', callback_data: 'menu_users' }
       ],
       [
-        { text: '📋 События', callback_data: 'menu_visits' },
+        { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
         { text: '🚀 Деплой', callback_data: 'menu_deploy' }
       ],
       [
@@ -236,6 +236,45 @@ async function buildVisitsText() {
   return `📋 <b>Последние события</b>\n\n${lines}`;
 }
 
+// ---- My films view (films watched by the user who clicked the button) ----
+async function buildMyFilmsText(targetUserId) {
+  const u = await readUser(targetUserId);
+  if (!u) {
+    return { text: `❌ Пользователь <code>${targetUserId}</code> не найден.`, films: [] };
+  }
+  const films = u.watched_films || (u.last_film ? [u.last_film] : []);
+  if (films.length === 0) {
+    return { text: `🎬 <b>Мои фильмы</b>\n\nВы ещё не смотрели фильмы.`, films: [] };
+  }
+  var lines = films.slice(0, 20).map(function(f, i) {
+    var time = new Date(f.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return (i + 1) + '. «' + f.title + '» — ' + time;
+  }).join('\n');
+  return {
+    text: '🎬 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    films: films
+  };
+}
+
+function myFilmsKeyboard(films, page) {
+  var pageSize = 8;
+  var totalPages = Math.max(1, Math.ceil(films.length / pageSize));
+  var curPage = Math.min(Math.max(0, page), totalPages - 1);
+  var entries = films.slice(curPage * pageSize, (curPage + 1) * pageSize);
+
+  var buttons = entries.map(function(f) {
+    return [{ text: '🎬 ' + f.title.slice(0, 40), callback_data: 'myfilm_' + f.filmId + '_' + encodeURIComponent(f.title.slice(0, 40)) }];
+  });
+
+  var navRow = [];
+  if (curPage > 0) navRow.push({ text: '⬅️', callback_data: 'myfilms_' + (curPage - 1) });
+  navRow.push({ text: (curPage + 1) + '/' + totalPages, callback_data: 'noop' });
+  if (curPage < totalPages - 1) navRow.push({ text: '➡️', callback_data: 'myfilms_' + (curPage + 1) });
+  buttons.push(navRow);
+  buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
+  return { inline_keyboard: buttons };
+}
+
 // ---- Deploy views ----
 async function buildStatusText() {
   try {
@@ -444,7 +483,14 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'menu_visits') {
-      await edit(await buildVisitsText(), mainMenuKeyboard());
+      // Removed — visits view disabled
+      await answerCallback(cq.id, 'Раздел удалён');
+      return;
+    }
+    if (data === 'menu_myfilms') {
+      // Show films watched by the user who clicked (identified by fromId)
+      const result = await buildMyFilmsText(String(fromId));
+      await edit(result.text, myFilmsKeyboard(result.films, 0));
       return;
     }
     if (data === 'menu_users') {
@@ -493,6 +539,33 @@ async function handleCallback(update) {
       const page = parseInt(pageMatch[1], 10);
       const stats = await readStats();
       await edit(await buildUsersListText(), usersListKeyboard(stats.users || {}, page));
+      return;
+    }
+
+    // ---- My films: open player for specific film ----
+    const myFilmMatch = data.match(/^myfilm_(\d+)_(.+)$/);
+    if (myFilmMatch) {
+      const filmId = myFilmMatch[1];
+      const filmTitle = decodeURIComponent(myFilmMatch[2]);
+      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId + '&title=' + encodeURIComponent(filmTitle);
+      await answerCallback(cq.id, 'Открываю плеер...');
+      // Send a new message with web_app button to open the player
+      await sendMessage(chatId, '🎬 <b>' + filmTitle + '</b>\n\nНажмите кнопку, чтобы открыть плеер:', {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '▶ Смотреть', web_app: { url: playerUrl } }
+          ]]
+        }
+      });
+      return;
+    }
+
+    // ---- My films pagination ----
+    const myFilmsPageMatch = data.match(/^myfilms_(\d+)$/);
+    if (myFilmsPageMatch) {
+      const page = parseInt(myFilmsPageMatch[1], 10);
+      const result = await buildMyFilmsText(String(fromId));
+      await edit(result.text, myFilmsKeyboard(result.films, page));
       return;
     }
 

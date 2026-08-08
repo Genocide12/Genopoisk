@@ -29,6 +29,47 @@
   <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('[tg] telegram-web-app.js failed to load (blocked?). Running without Telegram WebApp.')"></script>
   <script src="https://cdn.jsdelivr.net/npm/vconsole@3.15.1/dist/vconsole.min.js"></script>
   <script>if (window.VConsole) { window.__vconsole = new VConsole(); console.log("[debug] vConsole initialized"); }</script>
+  <script>
+    // Add "Copy all logs" button to vConsole toolbar
+    (function() {
+      function addCopyButton() {
+        var vc = document.querySelector('.vc-toolbar');
+        if (!vc) { setTimeout(addCopyButton, 500); return; }
+        if (document.getElementById('vc-copy-all-btn')) return;
+        var btn = document.createElement('div');
+        btn.id = 'vc-copy-all-btn';
+        btn.className = 'vc-toolbar-item';
+        btn.innerHTML = '<a class="vc-toolbar-btn"><div class="vc-btn-content"><div class="vc-btn-name" style="padding:8px 4px">📋 Copy</div></div></a>';
+        btn.addEventListener('click', function() {
+          var logs = [];
+          try {
+            var rows = document.querySelectorAll('.vc-log-row');
+            for (var i = 0; i < rows.length; i++) {
+              var typeMatch = rows[i].className.match(/vc-log-(\w+)/);
+              var typeStr = typeMatch ? '[' + typeMatch[1] + '] ' : '';
+              logs.push(typeStr + rows[i].textContent);
+            }
+          } catch (e) { logs.push('Error: ' + e.message); }
+          var text = logs.join('\n');
+          var label = btn.querySelector('.vc-btn-name');
+          function done(msg) { label.textContent = msg; setTimeout(function() { label.textContent = '📋 Copy'; }, 2000); }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() { done('✅ ' + text.length); }).catch(function() { fallback(text); });
+          } else { fallback(text); }
+          function fallback(text) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed'; ta.style.top = '-9999px';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done('✅ ' + text.length); } catch (e) { done('❌ Error'); }
+            document.body.removeChild(ta);
+          }
+        });
+        vc.appendChild(btn);
+      }
+      window.addEventListener('load', function() { setTimeout(addCopyButton, 1000); setTimeout(addCopyButton, 3000); });
+    })();
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}

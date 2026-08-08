@@ -145,11 +145,16 @@ async function recordEvent(eventType, payload = {}) {
 
         // Track last film opened (for "continue watching" feature)
         if (eventType === 'movies_opened' && payload.filmId) {
-          u.last_film = {
-            filmId: String(payload.filmId).slice(0, 20),
-            title: (payload.title || 'Фильм').slice(0, 100),
-            ts: new Date().toISOString()
-          };
+          const filmId = String(payload.filmId).slice(0, 20);
+          const filmTitle = (payload.title || 'Фильм').slice(0, 100);
+          const filmTs = new Date().toISOString();
+          u.last_film = { filmId: filmId, title: filmTitle, ts: filmTs };
+          // Also add to watched_films array (dedupe by filmId, most recent first)
+          if (!u.watched_films) u.watched_films = [];
+          u.watched_films = u.watched_films.filter(f => f.filmId !== filmId);
+          u.watched_films.unshift({ filmId: filmId, title: filmTitle, ts: filmTs });
+          // Keep last 50 films
+          if (u.watched_films.length > 50) u.watched_films = u.watched_films.slice(0, 50);
         }
       }
 

@@ -1,11 +1,9 @@
-// Server-side proxy for the movie player iframe.
-// Fetches the embed page from api.embess.ws, injects a bridge script that:
-//   1. Captures real video.currentTime and posts it to the parent window
-//   2. Listens for seek commands from the parent (for resume playback)
-//   3. Blocks pre-roll/mid-roll ads via CSS injection + auto-click skip buttons
-//     + URL filtering on video.src + ad-iframe removal via MutationObserver
+// This endpoint is now a fallback when browser fetch is blocked.
+// The primary approach is browser-side: fetch embess.ws HTML directly (CORS is enabled),
+// inject bridge script, and set as iframe.srcdoc. See player.html for the implementation.
 //
-// Route: /api/embed?id=<kinopoisk_id>
+// This server-side proxy is kept as a fallback but may return 410 if embess.ws blocks
+// Vercel's datacenter IPs. In that case, the client will retry with browser fetch.
 
 const EMBESS_BASE = 'https://api.embess.ws';
 
@@ -18,10 +16,14 @@ module.exports = async (req, res) => {
   try {
     const upstream = await fetch(`${EMBESS_BASE}/embed/kp/${id}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
         'Referer': EMBESS_BASE + '/',
         'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
+        'Accept-Language': 'ru-RU,ru;q=0.9',
+        'Sec-Fetch-Dest': 'iframe',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'cross-site',
+        'Upgrade-Insecure-Requests': '1'
       }
     });
 
@@ -30,19 +32,30 @@ module.exports = async (req, res) => {
     }
 
     let html = await upstream.text();
+    html = injectBridge(html);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
+    res.setHeader('X-Frame-Options', 'ALLOWALL');
+    res.status(200).send(html);
+  } catch (e) {
+    console.error('Embed proxy error:', e.message);
+    res.status(500).send('Proxy error');
+  }
+};
 
-    // Inject <base> so relative URLs (CSS, JS, images) still resolve to embess.ws
-    const baseTag = '<base href="https://api.embess.ws/">';
-    if (html.includes('<head>')) {
-      html = html.replace(/<head>/i, '<head>' + baseTag);
-    } else if (/<html[^>]*>/i.test(html)) {
-      html = html.replace(/(<html[^>]*>)/i, '$1<head>' + baseTag + '</head>');
-    } else {
-      html = baseTag + html;
-    }
+// Shared bridge injection — also used by the client-side fetch fallback.
+// Exported via global for re-use, but in Vercel this is just a local helper.
+function injectBridge(html) {
+  const baseTag = '<base href="https://api.embess.ws/">';
+  if (/<head>/i.test(html)) {
+    html = html.replace(/<head>/i, '<head>' + baseTag);
+  } else if (/<html[^>]*>/i.test(html)) {
+    html = html.replace(/(<html[^>]*>)/i, '$1<head>' + baseTag + '</head>');
+  } else {
+    html = baseTag + html;
+  }
 
-    // Bridge script — runs inside the iframe (same-origin to our proxy)
-    const bridge = `
+  const bridge = `
 <script>
 (function() {
   if (window.__genopoiskBridge) return;
@@ -63,35 +76,29 @@ module.exports = async (req, res) => {
   function setupVideo(video) {
     if (videoEl === video) return;
     videoEl = video;
-    log('Video element attached', video);
+    log('Video element attached');
 
     post({ type: 'ready', currentTime: video.currentTime || 0, duration: video.duration || 0 });
 
     video.addEventListener('timeupdate', function() {
       post({ type: 'timeupdate', currentTime: video.currentTime, duration: video.duration });
     });
-
     video.addEventListener('durationchange', function() {
       post({ type: 'duration', duration: video.duration });
     });
-
     video.addEventListener('play', function() {
       post({ type: 'play', currentTime: video.currentTime });
     });
-
     video.addEventListener('pause', function() {
       post({ type: 'pause', currentTime: video.currentTime });
     });
-
     video.addEventListener('ended', function() {
       post({ type: 'ended' });
     });
-
     video.addEventListener('loadedmetadata', function() {
       post({ type: 'loaded', currentTime: video.currentTime, duration: video.duration });
     });
 
-    // Listen for commands from parent
     window.addEventListener('message', function(e) {
       if (!e.data) return;
       var d = e.data;
@@ -123,7 +130,6 @@ module.exports = async (req, res) => {
   function startAdBlocking() {
     log('Ad blocking started');
 
-    // 1) CSS to hide ad containers
     var adCSS = \`
       [class*="ad-container"], [class*="ad-overlay"], [class*="ads-"],
       [class*="vast-"], [class*="vpaid"], [id*="ad-"], [id*="ads-"],
@@ -148,7 +154,6 @@ module.exports = async (req, res) => {
         position: absolute !important;
         left: -9999px !important;
       }
-      /* Don't hide the video itself even if it has "ad" in class */
       video, video[class] { display: block !important; visibility: visible !important; }
     \`;
     var style = document.createElement('style');
@@ -156,7 +161,6 @@ module.exports = async (req, res) => {
     style.textContent = adCSS;
     (document.head || document.documentElement).appendChild(style);
 
-    // 2) Auto-click "Skip ad" buttons every 300ms
     setInterval(function() {
       var selectors = [
         '.ytp-ad-skip-button', '.ytp-ad-skip-button-modern',
@@ -172,14 +176,13 @@ module.exports = async (req, res) => {
         for (var j = 0; j < btns.length; j++) {
           var b = btns[j];
           if (b.offsetParent !== null || b.getClientRects().length > 0) {
-            log('Clicking skip button', b);
+            log('Clicking skip button');
             try { b.click(); } catch(_) {}
           }
         }
       }
     }, 300);
 
-    // 3) Block ad URLs in video.src setter
     try {
       var proto = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
       if (proto && proto.set) {
@@ -198,7 +201,6 @@ module.exports = async (req, res) => {
       }
     } catch(e) { log('src override failed', e); }
 
-    // 4) Block fetch/XHR to ad domains
     try {
       var origFetch = window.fetch;
       window.fetch = function(input, init) {
@@ -223,14 +225,12 @@ module.exports = async (req, res) => {
       };
     } catch(e) {}
 
-    // 5) MutationObserver: remove ad iframes/elements as they appear
     var observer = new MutationObserver(function(mutations) {
       for (var i = 0; i < mutations.length; i++) {
         var added = mutations[i].addedNodes;
         for (var j = 0; j < added.length; j++) {
           var node = added[j];
           if (node.nodeType !== 1) continue;
-          // If it's an ad iframe, remove it
           if (node.tagName === 'IFRAME') {
             var src = node.src || '';
             if (/doubleclick|googlesyndication|google_ads|googleads|adserver|taboola|outbrain/i.test(src)) {
@@ -238,7 +238,6 @@ module.exports = async (req, res) => {
               node.remove();
             }
           }
-          // If it's a div that looks like an ad, hide it
           if (node.tagName === 'DIV' || node.tagName === 'INS') {
             var cls = (node.className || '') + ' ' + (node.id || '');
             if (/(?:^|[-_])ad(?:[-_]|$)|adsbygoogle|ad-container|ad-slot/i.test(cls)) {
@@ -251,45 +250,28 @@ module.exports = async (req, res) => {
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
 
-    // 6) Try to skip pre-roll: when video starts, jump currentTime forward if duration is short (likely ad)
-    // Many pre-roll ads are 10-30s. If duration < 60s after metadata loads, skip.
-    // (Risk: short films < 60s would also be skipped — disabled for safety.)
-    // Instead: detect ad by checking if "skip ad" button is visible and click it.
-
     log('Ad blocking fully initialized');
   }
 
-  // Find video element by polling
   var videoCheckInterval = setInterval(function() {
     var v = document.querySelector('video');
     if (v) setupVideo(v);
   }, 250);
 
-  // Also use MutationObserver for video element appearance
   var videoObserver = new MutationObserver(function() {
     var v = document.querySelector('video');
     if (v) setupVideo(v);
   });
   videoObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-  // Notify parent that the bridge is alive (even before video element exists)
   post({ type: 'bridge_ready' });
 })();
 </script>`;
 
-    // Inject bridge before </body> (or at end if no </body>)
-    if (/<\/body>/i.test(html)) {
-      html = html.replace(/<\/body>/i, bridge + '</body>');
-    } else {
-      html = html + bridge;
-    }
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
-    res.setHeader('X-Frame-Options', 'ALLOWALL');
-    res.status(200).send(html);
-  } catch (e) {
-    console.error('Embed proxy error:', e.message);
-    res.status(500).send('Proxy error');
+  if (/<\/body>/i.test(html)) {
+    html = html.replace(/<\/body>/i, bridge + '</body>');
+  } else {
+    html = html + bridge;
   }
-};
+  return html;
+}

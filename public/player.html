@@ -330,9 +330,9 @@
       } catch (_) {}
     }
 
-    // Seek to saved position with retries. venoplayer may not be ready on
-    // first attempt, so we retry up to 8 times with 2s interval.
-    // Bridge now does play() → wait canplay → seek, so each attempt takes time.
+    // Seek to saved position with retries. venoplayer may reset currentTime
+    // to 0 after our seek (it calls play() which restarts from beginning).
+    // We monitor currentTime after each seek and re-seek if it drops.
     function attemptSeekToSaved() {
       if (!savedPos || !playerReady) return;
       var target = savedPos.t;
@@ -342,9 +342,9 @@
         isResuming = false;
         return;
       }
-      // If we've tried 8 times, give up
-      if (seekRetries >= 8) {
-        console.warn('[player] Seek failed after 8 retries, lastKnownTime:', lastKnownTime);
+      // If we've tried 15 times, give up
+      if (seekRetries >= 15) {
+        console.warn('[player] Seek failed after 15 retries, lastKnownTime:', lastKnownTime);
         isResuming = false;
         return;
       }
@@ -352,9 +352,8 @@
       isResuming = true;
       console.log('[player] Seek attempt ' + seekRetries + ' to', target, '(currentTime:', lastKnownTime + ')');
       sendToPlayer({ type: 'seek', time: target });
-      // No toast — resume happens silently
-      // Retry after 2s (bridge needs time for play → canplay → seek)
-      setTimeout(attemptSeekToSaved, 2000);
+      // Retry after 1.5s — monitor if venoplayer reset currentTime to 0
+      setTimeout(attemptSeekToSaved, 1500);
     }
 
     function maybeSavePosition(t) {

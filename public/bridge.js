@@ -288,55 +288,61 @@
         var targetTime = d.time;
         log('Seek requested to', targetTime, 'readyState:', video.readyState);
 
+        // venoplayer resets currentTime to 0 after play(). We need to seek
+        // MULTIPLE times to win the race: seek, wait, check if reset, re-seek.
         function performSeek() {
           try {
             video.currentTime = targetTime;
-            log('Seeked to', targetTime, '→ actual:', video.currentTime);
+            log('Seek set to', targetTime, '→ actual:', video.currentTime);
             post({ type: 'seeked', currentTime: video.currentTime });
           } catch(err) {
             log('Seek failed', err);
           }
         }
 
-        // venoplayer/dash.js may ignore currentTime if video not playing.
-        // Strategy: play() first, wait for canplay, then seek.
+        // Aggressive seek: repeat 5 times with 300ms interval to override
+        // venoplayer's reset-to-0 behavior
+        var seekCount = 0;
+        var aggressiveSeek = function() {
+          seekCount++;
+          performSeek();
+          if (seekCount < 5) {
+            setTimeout(aggressiveSeek, 300);
+          }
+        };
+
         if (video.readyState < 2) {
           log('Video not ready, waiting for canplay...');
           var seekOnCanPlay = function() {
             video.removeEventListener('canplay', seekOnCanPlay);
             video.removeEventListener('loadeddata', seekOnCanPlay);
-            // Small delay to let MSE buffer settle
-            setTimeout(performSeek, 200);
+            setTimeout(aggressiveSeek, 200);
           };
           video.addEventListener('canplay', seekOnCanPlay);
           video.addEventListener('loadeddata', seekOnCanPlay);
-          // Also try to play — some browsers require play() before seek
           try { video.play().then(function() {
-            log('Video playing, will seek on canplay');
+            log('Video playing, will aggressive-seek on canplay');
           }).catch(function(e) { log('play() failed', e); }); } catch(_) {}
-          // Fallback: try seek after 3s even if canplay doesn't fire
           setTimeout(function() {
             video.removeEventListener('canplay', seekOnCanPlay);
             video.removeEventListener('loadeddata', seekOnCanPlay);
-            performSeek();
+            aggressiveSeek();
           }, 3000);
         } else {
-          // Video ready — seek immediately, but play first for reliability
           try {
             var playPromise = video.play();
             if (playPromise && playPromise.then) {
               playPromise.then(function() {
-                log('Video playing, seeking...');
-                setTimeout(performSeek, 100);
+                log('Video playing, aggressive seeking...');
+                setTimeout(aggressiveSeek, 100);
               }).catch(function() {
-                // play() rejected (autoplay policy) — try seek anyway
-                performSeek();
+                aggressiveSeek();
               });
             } else {
-              performSeek();
+              aggressiveSeek();
             }
           } catch(_) {
-            performSeek();
+            aggressiveSeek();
           }
         }
       } else if (d.type === 'getTime') {

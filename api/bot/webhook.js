@@ -94,7 +94,10 @@ async function cmdStart(chatId, user) {
   const keyboard = {
     inline_keyboard: [
       [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
-      [{ text: '🐛 Debug версия (с консолью)', web_app: { url: DEBUG_URL } }]
+      [
+        { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
+        { text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }
+      ]
     ]
   };
   await sendMessage(chatId, welcome, { reply_markup: keyboard });

@@ -322,6 +322,7 @@
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
     var seekRetries = 0;
+    var isResuming = false; // true while we're seeking to saved position
 
     function sendToPlayer(msg) {
       try {
@@ -338,14 +339,17 @@
       // If we're already close to target (within 10s), seek succeeded
       if (lastKnownTime > 0 && Math.abs(lastKnownTime - target) < 10) {
         console.log('[player] Seek confirmed at', lastKnownTime, '(target:', target + ')');
+        isResuming = false;
         return;
       }
       // If we've tried 8 times, give up
       if (seekRetries >= 8) {
         console.warn('[player] Seek failed after 8 retries, lastKnownTime:', lastKnownTime);
+        isResuming = false;
         return;
       }
       seekRetries++;
+      isResuming = true;
       console.log('[player] Seek attempt ' + seekRetries + ' to', target, '(currentTime:', lastKnownTime + ')');
       sendToPlayer({ type: 'seek', time: target });
       // No toast — resume happens silently
@@ -391,10 +395,21 @@
         if (typeof data.currentTime === 'number') lastKnownTime = data.currentTime;
       }
       if (data.type === 'ended') {
-        clearPosition();
-        showToast('🎬 Фильм досмотрен — позиция сброшена', 3000);
+        // Ignore 'ended' events while resuming (venoplayer fires false ended
+        // during seek when buffer underrun happens).
+        if (isResuming) {
+          console.log('[player] Ignored ended event during resume');
+          return;
+        }
+        // Only clear position if video actually reached the end (within last 30s).
+        if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30) {
+          clearPosition();
+          console.log('[player] Position cleared (video reached end)');
+        } else {
+          console.log('[player] Ignored ended event (currentTime:', lastKnownTime, 'duration:', lastKnownDuration + ')');
+        }
       }
-      if (data.type === 'pip_enter') showToast('⛶ PiP активен', 2000);
+      if (data.type === 'pip_enter') console.log('[player] PiP active');
       if (data.type === 'pip_error') console.warn('PiP error:', data.message);
     });
 

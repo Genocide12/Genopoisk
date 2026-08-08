@@ -9,6 +9,7 @@ const {
 } = require('../_lib/vercel');
 
 const SITE_URL = process.env.SITE_URL || 'https://genopoisk.vercel.app';
+const DEBUG_URL = SITE_URL.replace(/\/$/, '') + '/debug-index.html';
 
 // ---- Main menu keyboard (shown under every admin message) ----
 function mainMenuKeyboard() {
@@ -23,7 +24,8 @@ function mainMenuKeyboard() {
         { text: '🚀 Деплой', callback_data: 'menu_deploy' }
       ],
       [
-        { text: '🎬 Открыть сайт', web_app: { url: SITE_URL } }
+        { text: '🎬 Открыть сайт', web_app: { url: SITE_URL } },
+        { text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }
       ]
     ]
   };
@@ -91,7 +93,8 @@ async function cmdStart(chatId, user) {
 
   const keyboard = {
     inline_keyboard: [
-      [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }]
+      [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
+      [{ text: '🐛 Debug версия (с консолью)', web_app: { url: DEBUG_URL } }]
     ]
   };
   await sendMessage(chatId, welcome, { reply_markup: keyboard });

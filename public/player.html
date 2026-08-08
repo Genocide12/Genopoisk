@@ -70,12 +70,6 @@
       background:rgba(50,150,225,0.23);
       transform: scale(0.95);
     }
-    .btn-pip {
-      background:rgba(0,122,255,0.3);
-    }
-    .btn-pip:active {
-      background:rgba(0,122,255,0.6);
-    }
     .btn-close {
       background:#f33;
       margin-left:4px;
@@ -106,7 +100,7 @@
       background:#111;
       border-radius:0;
     }
-    .pip-toast {
+    .toast {
       position:absolute;
       bottom:20px;
       left:50%;
@@ -122,6 +116,11 @@
       box-shadow:0 4px 12px rgba(0,0,0,0.5);
       pointer-events:none;
     }
+    /* Hide header in fullscreen — iframe takes the whole screen */
+    :fullscreen .player-header { display:none; }
+    :-webkit-full-screen .player-header { display:none; }
+    :fullscreen .player-main { height:100vh; }
+    :-webkit-full-screen .player-main { height:100vh; }
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
@@ -133,13 +132,12 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
-      <button class="btn btn-pip" id="pipBtn" title="Картинка в картинке">🖴 PiP</button>
       <button class="btn btn-close" id="closeBtn" title="Закрыть">✕</button>
     </div>
   </div>
-  <div class="player-main">
-    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; document-picture-in-picture"></iframe>
-    <div class="pip-toast" id="pipToast"></div>
+  <div class="player-main" id="playerMain">
+    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>
+    <div class="toast" id="toast"></div>
   </div>
   <script>
     // Защита от копирования
@@ -159,6 +157,8 @@
     const title = params.get('title') || 'Фильм';
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
+    const playerMain = document.getElementById('playerMain');
+    const toastEl = document.getElementById('toast');
 
     // --- Telegram WebApp init ---
     const tg = window.Telegram?.WebApp;
@@ -167,8 +167,16 @@
       tg.expand();
       tg.setHeaderColor?.('#000000');
       tg.setBackgroundColor?.('#000000');
-      // Hide BackButton — we close the app instead of navigating back
       tg.BackButton?.hide?.();
+    }
+
+    // --- Toast helper ---
+    let toastTimer = null;
+    function showToast(msg, ms = 2500) {
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, ms);
     }
 
     // --- Tracking ---
@@ -183,111 +191,240 @@
     }
     trackEvent('page_views', { path: '/player' });
 
+    // --- Resume position storage ---
+    // Key per film: genopoisk_position_<filmId>
+    // Stores: { t: seconds, ts: ISO date, title: string }
+    function positionKey(filmId) { return `genopoisk_position_${filmId}`; }
+
+    function savePosition(seconds) {
+      if (!seconds || seconds < 5 || !isFinite(seconds)) return;
+      try {
+        localStorage.setItem(positionKey(kid), JSON.stringify({
+          t: seconds,
+          ts: new Date().toISOString(),
+          title: title
+        }));
+      } catch (_) {}
+    }
+
+    function loadPosition() {
+      try {
+        const raw = localStorage.getItem(positionKey(kid));
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || !data.t || data.t < 5) return null;
+        // Expire after 30 days
+        const age = Date.now() - new Date(data.ts).getTime();
+        if (age > 30 * 24 * 60 * 60 * 1000) return null;
+        return data;
+      } catch (_) { return null; }
+    }
+
+    function clearPosition() {
+      try { localStorage.removeItem(positionKey(kid)); } catch (_) {}
+    }
+
+    // --- Bridge to iframe player (postMessage protocol with embess.ws) ---
+    // We attempt multiple known protocols (videojs, shaka, HTML5 media, custom).
+    // The iframe is cross-origin, so we can only use postMessage — we can't read
+    // the video element directly. Most embed players ignore unknown messages,
+    // but we try anyway. If the player doesn't respond, we still save position
+    // based on elapsed wall-clock time as a rough estimate.
+
+    const savedPos = loadPosition();
+    let playerReady = false;
+    let lastKnownTime = 0;
+    let lastSavedAt = 0;
+    let startedAtWallClock = Date.now();
+
+    function sendToPlayer(msg) {
+      try {
+        iframe.contentWindow?.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), '*');
+      } catch (_) {}
+    }
+
+    // Listen for messages from the iframe player
+    window.addEventListener('message', (e) => {
+      let data = e.data;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (_) { /* not JSON, ignore */ }
+      }
+      if (!data || typeof data !== 'object') return;
+
+      // Common ready signals
+      if (data.event === 'ready' || data.type === 'ready' || data.event === 'playerReady' || data.action === 'ready') {
+        playerReady = true;
+        attemptSeekToSaved();
+      }
+      // Common time updates (videojs, shaka, jwplayer, custom)
+      if (data.event === 'timeupdate' || data.type === 'timeupdate' || data.event === 'timeUpdate') {
+        const t = data.currentTime || data.time || data.position || data.t;
+        if (typeof t === 'number' && t > 0) {
+          lastKnownTime = t;
+          maybeSavePosition(t);
+        }
+      }
+      if (data.event === 'ended' || data.type === 'ended') {
+        clearPosition();
+      }
+    });
+
+    function attemptSeekToSaved() {
+      if (!savedPos || !playerReady) return;
+      const target = savedPos.t;
+      // Try multiple seek protocols
+      sendToPlayer({ event: 'command', func: 'seekTo', args: [target] });
+      sendToPlayer({ event: 'seek', time: target });
+      sendToPlayer({ event: 'command', command: 'seek', value: target });
+      sendToPlayer({ method: 'seek', args: [target] });
+      // YouTube-style
+      sendToPlayer({ event: 'listening' });
+      sendToPlayer(JSON.stringify({ event: 'command', func: 'seekTo', args: [target, true] }));
+      showToast(`▶️ Продолжаем с ${formatTime(target)}`, 3000);
+    }
+
+    function formatTime(s) {
+      if (!s || s < 0 || !isFinite(s)) s = 0;
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      const pad = (n) => String(n).padStart(2, '0');
+      return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+    }
+
+    let lastSaveTime = 0;
+    function maybeSavePosition(t) {
+      const now = Date.now();
+      // Throttle: save at most once every 5 seconds
+      if (now - lastSaveTime < 5000) return;
+      lastSaveTime = now;
+      savePosition(t);
+    }
+
+    // If player doesn't send time updates, save elapsed wall-clock time as fallback
+    setInterval(() => {
+      if (lastKnownTime > 0) return; // real time from player — don't override
+      const elapsed = (Date.now() - startedAtWallClock) / 1000;
+      if (elapsed > 5) maybeSavePosition(elapsed);
+    }, 5000);
+
+    // On close, save the last known position one final time
+    function saveBeforeLeave() {
+      if (lastKnownTime > 5) savePosition(lastKnownTime);
+    }
+    window.addEventListener('pagehide', saveBeforeLeave);
+    window.addEventListener('beforeunload', saveBeforeLeave);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveBeforeLeave();
+    });
+
     // Загружаем плеер Embess
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
 
-    // --- Close button: returns to the main page (does NOT close the Mini App) ---
+    // After load, send ready listener + try seek after a delay (in case iframe doesn't send ready event)
+    iframe.addEventListener('load', () => {
+      playerReady = true;
+      // Try seek after 2.5s if not already seeked
+      setTimeout(() => {
+        if (savedPos && lastKnownTime < savedPos.t - 5) {
+          attemptSeekToSaved();
+        }
+      }, 2500);
+    });
+
+    // Notify user we have a saved position
+    if (savedPos) {
+      const age = Date.now() - new Date(savedPos.ts).getTime();
+      const ageMin = Math.floor(age / 60000);
+      const ageStr = ageMin < 60 ? `${ageMin} мин назад` : `${Math.floor(ageMin / 60)} ч назад`;
+      setTimeout(() => {
+        showToast(`⏱ Продолжить с ${formatTime(savedPos.t)} (${ageStr})`, 4000);
+      }, 800);
+    }
+
+    // --- Close button: returns to main page (does NOT close Mini App) ---
     function closePlayer() {
-      // Prefer history back (works inside Mini App without closing the app)
+      saveBeforeLeave();
       if (window.history.length > 1 && document.referrer && document.referrer.includes(window.location.origin)) {
         window.history.back();
         return;
       }
-      // Fallback: navigate to the main page directly
       window.location.href = '/';
     }
     document.getElementById('closeBtn').addEventListener('click', closePlayer);
 
-    // --- Picture-in-Picture ---
-    // True cross-origin iframe PiP isn't reliable, so we use Document PiP API
-    // (Chrome 116+) or fall back to a pop-out window.
-    const pipBtn = document.getElementById('pipBtn');
-    const pipToast = document.getElementById('pipToast');
-    let pipWindow = null;
-    let originalParent = null;
-
-    function showToast(msg, ms = 2500) {
-      pipToast.textContent = msg;
-      pipToast.style.display = 'block';
-      clearTimeout(showToast._t);
-      showToast._t = setTimeout(() => { pipToast.style.display = 'none'; }, ms);
+    // --- Auto-fullscreen on orientation change (mobile) ---
+    function isMobile() {
+      return window.innerWidth <= 768 ||
+        /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
     }
 
-    async function togglePiP() {
-      // 1) Try Document Picture-in-Picture API (Chrome 116+)
-      if ('documentPictureInPicture' in window && !pipWindow) {
+    function isLandscape() {
+      // Use screen orientation when available, fall back to dimensions
+      if (screen.orientation && screen.orientation.type) {
+        return screen.orientation.type.startsWith('landscape');
+      }
+      return window.innerWidth > window.innerHeight;
+    }
+
+    function requestFullscreen() {
+      const el = playerMain;
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (fn) {
         try {
-          pipWindow = await documentPictureInPicture.requestWindow({
-            width: 480,
-            height: 270
-          });
-          // Move the iframe into the PiP window
-          originalParent = iframe.parentNode;
-          pipWindow.document.body.style.margin = '0';
-          pipWindow.document.body.style.background = '#000';
-          pipWindow.document.title = title;
-          pipWindow.document.body.appendChild(iframe);
-          // Style iframe to fit PiP window
-          iframe.style.width = '100%';
-          iframe.style.height = '100%';
-          iframe.style.maxWidth = 'none';
-          iframe.style.maxHeight = 'none';
-          pipBtn.textContent = '🖴 ✕';
-          pipWindow.addEventListener('pagehide', () => {
-            // Restore iframe to main page when PiP closes
-            if (originalParent) {
-              iframe.style.width = '';
-              iframe.style.height = '';
-              iframe.style.maxWidth = '';
-              iframe.style.maxHeight = '';
-              originalParent.appendChild(iframe);
-            }
-            pipWindow = null;
-            pipBtn.textContent = '🖴 PiP';
-          });
-          showToast('PiP включён');
-          return;
-        } catch (e) {
-          console.warn('Document PiP failed:', e);
-          pipWindow = null;
-        }
-      } else if (pipWindow) {
-        // Close existing PiP
-        pipWindow.close();
-        pipWindow = null;
-        pipBtn.textContent = 'PiP';
-        return;
+          const p = fn.call(el);
+          if (p && p.catch) p.catch(err => console.warn('Fullscreen denied:', err));
+        } catch (e) { console.warn('Fullscreen error:', e); }
+      } else if (iframe.webkitEnterFullscreen) {
+        // iOS Safari: enter fullscreen on the iframe element directly
+        try { iframe.webkitEnterFullscreen(); } catch (e) {}
       }
+    }
 
-      // 2) Fallback: pop-out window
-      const w = 480, h = 270;
-      const left = Math.max(0, screen.width - w - 20);
-      const top = Math.max(0, screen.height - h - 80);
-      const popup = window.open(
-        window.location.href,
-        'genopoisk-pip',
-        `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
-      );
-      if (popup) {
-        showToast('PiP окно открыто');
-        // Return to main page so user can browse while popup plays
-        setTimeout(() => {
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            window.location.href = '/';
-          }
-        }, 300);
+    function exitFullscreen() {
+      const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if (fn) {
+        try { fn.call(document); } catch (e) {}
+      }
+    }
+
+    function isFullscreen() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+    }
+
+    function handleOrientationChange() {
+      const landscape = isLandscape();
+      if (landscape && isMobile()) {
+        // Entering landscape on mobile — go fullscreen automatically
+        if (!isFullscreen()) requestFullscreen();
       } else {
-        showToast('Разрешите всплывающие окна для PiP', 3500);
+        // Back to portrait — exit fullscreen if we entered it
+        if (isFullscreen()) exitFullscreen();
       }
     }
-    pipBtn.addEventListener('click', togglePiP);
 
-    // Hide PiP button if pop-ups are blocked and Document PiP is unavailable
-    if (!('documentPictureInPicture' in window)) {
-      // Keep the button — fallback uses window.open
+    // Listen for orientation changes via multiple APIs (cross-browser)
+    if (screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener('change', handleOrientationChange);
+    } else {
+      window.addEventListener('orientationchange', handleOrientationChange);
     }
+
+    // Also listen to resize as a fallback (some browsers fire resize first)
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(handleOrientationChange, 200);
+    });
+
+    // Trigger on initial load if already in landscape
+    setTimeout(handleOrientationChange, 500);
+
+    // Exit fullscreen on ESC (browser handles it automatically, but also restore header)
+    document.addEventListener('fullscreenchange', () => {
+      // No-op — CSS handles header visibility via :fullscreen selector
+    });
+    document.addEventListener('webkitfullscreenchange', () => {});
   </script>
 </body>
 </html>

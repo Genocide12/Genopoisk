@@ -18,18 +18,21 @@
   }
 
   // ====== 0. Force #player to fill iframe height ======
-  // venoplayer sets #player height to 180px inline (default aspect ratio).
-  // --vp-vh CSS variable is computed FROM #player height (1.8px = 180/100),
-  // so making #player taller is safe — --vp-vh will just be larger.
-  // We do NOT touch html/body height (that would break things).
+  // venoplayer sets #player height:180px inline. We need:
+  // 1. html, body { height:100% } so #player can be height:100%
+  // 2. #player { height:100% !important } to override inline 180px
+  // --vp-vh is computed FROM #player height, so this is safe.
   function injectLayoutCSS() {
     if (document.querySelector('style[data-genopoisk-layout]')) return;
-    var css = '#player { height: 100% !important; }';
+    var css =
+      'html { height:100% !important; }' +
+      'body { height:100% !important; margin:0 !important; padding:0 !important; }' +
+      '#player { height:100% !important; width:100% !important; }';
     var style = document.createElement('style');
     style.setAttribute('data-genopoisk-layout', 'true');
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
-    log('Layout CSS injected (#player height:100%)');
+    log('Layout CSS injected (html/body/#player height:100%)');
   }
   if (document.head) {
     injectLayoutCSS();
@@ -42,6 +45,7 @@
   // Re-inject after delays — venoplayer sets inline styles during init
   setTimeout(injectLayoutCSS, 500);
   setTimeout(injectLayoutCSS, 2000);
+  setTimeout(injectLayoutCSS, 5000);
 
   // ====== 1. Block tracking endpoints (s.myangular.life) ======
   // We do NOT block ad domains — ad blocking broke video playback.

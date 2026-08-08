@@ -1,5 +1,5 @@
 // Public stats endpoint (read-only, for embedding in Mini App if needed)
-const { readStats } = require('../_lib/stats');
+const { readStats } = require('./_lib/stats');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

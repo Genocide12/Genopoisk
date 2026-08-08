@@ -1,5 +1,5 @@
 // Tracking endpoint — receives events from the site
-const { recordEvent } = require('../_lib/stats');
+const { recordEvent } = require('./_lib/stats');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
 

@@ -106,12 +106,7 @@
       </div>
       <div class="film-grid" id="filmGrid"></div>
     </div>
-    <footer class="footer">
-      <div class="footer-title">О проекте</div>
-      <div class="footer-text">Genopoisk — веб-приложение для поиска информации о фильмах<br>Создано в образовательных целях</div>
-      <a href="https://github.com/Genocide12/Genopoisk" target="_blank" class="footer-link">GitHub</a>
-    </footer>
-  </div>
+    </div>
   <script>
     // Защита от копирования / инспектора
     document.addEventListener('contextmenu', e => e.preventDefault());
@@ -130,8 +125,7 @@
       }
     };
 
-    const API_KEY = '2162133a-a4d6-4712-84bd-88652fe904ea';
-    const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+    const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
 
     // --- Telegram WebApp init ---
     const tg = window.Telegram?.WebApp;
@@ -186,10 +180,7 @@
     async function apiGet(url) {
       try {
         const res = await fetch(url, {
-          headers: {
-            'X-API-KEY': API_KEY,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Content-Type': 'application/json' }
         });
         if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
         return await res.json();

@@ -60,6 +60,19 @@
     .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
     .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
     .empty-text{font-size:17px;font-weight:500;letter-spacing:-0.01em;}
+    .resume-card{display:none;align-items:center;gap:16px;background:linear-gradient(135deg,rgba(0,122,255,0.18) 0%,rgba(88,86,214,0.18) 100%);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:14px 16px;margin-bottom:24px;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);position:relative;overflow:hidden;}
+    .resume-card:hover{transform:translateY(-2px);border-color:var(--ios-blue);box-shadow:0 12px 36px rgba(0,122,255,0.3);}
+    .resume-card:active{transform:scale(0.99);}
+    .resume-icon{font-size:32px;flex-shrink:0;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.4));}
+    .resume-info{flex:1;min-width:0;}
+    .resume-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;}
+    .resume-title{font-size:16px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em;}
+    .resume-meta{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+    .resume-close{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:rgba(120,120,128,0.3);color:var(--text-primary);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;transition:all 0.2s;}
+    .resume-close:hover{background:rgba(255,45,85,0.4);}
+    .resume-close:active{transform:scale(0.9);}
+    @keyframes slideDown{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
+    .resume-card.visible{display:flex;animation:slideDown 0.3s ease;}
     .footer{text-align:center;padding:32px 20px;margin-top:40px;border-top:1px solid var(--separator);}
     .footer-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:-0.01em;}
     .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
@@ -74,6 +87,15 @@
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
       <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
+    </div>
+    <div class="resume-card" id="resumeCard">
+      <span class="resume-icon">▶️</span>
+      <div class="resume-info">
+        <div class="resume-label">Продолжить просмотр</div>
+        <div class="resume-title" id="resumeTitle">—</div>
+        <div class="resume-meta" id="resumeMeta">—</div>
+      </div>
+      <button class="resume-close" id="resumeClose" title="Скрыть">✕</button>
     </div>
     <div class="search-wrapper">
       <div class="search-container">
@@ -150,6 +172,52 @@
 
     // Track initial page view
     trackEvent('page_views', { path: '/' });
+
+    // --- Resume card: load last watched film ---
+    const resumeCard = document.getElementById('resumeCard');
+    const resumeTitle = document.getElementById('resumeTitle');
+    const resumeMeta = document.getElementById('resumeMeta');
+    const resumeClose = document.getElementById('resumeClose');
+    let resumeFilm = null;
+
+    async function loadResumeCard() {
+      // Skip if user dismissed recently (sessionStorage)
+      if (sessionStorage.getItem('genopoisk_resume_dismissed') === '1') return;
+      try {
+        const res = await fetch('/api/last-film', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tgInitData })
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.film) return;
+        // Only show if watched in last 48h
+        const age = Date.now() - new Date(data.film.ts).getTime();
+        if (age > 48 * 60 * 60 * 1000) return;
+        resumeFilm = data.film;
+        resumeTitle.textContent = data.film.title;
+        const watchedAt = new Date(data.film.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+        resumeMeta.textContent = `Открыт: ${watchedAt}`;
+        resumeCard.classList.add('visible');
+      } catch (e) { console.warn('resume load error:', e); }
+    }
+
+    resumeCard.addEventListener('click', (e) => {
+      if (e.target === resumeClose) return;
+      if (resumeFilm) {
+        trackEvent('movies_opened', { filmId: resumeFilm.filmId, title: resumeFilm.title });
+        window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
+      }
+    });
+    resumeClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resumeCard.classList.remove('visible');
+      sessionStorage.setItem('genopoisk_resume_dismissed', '1');
+    });
+
+    // Fire async — don't block page load
+    loadResumeCard();
 
     let currentCategory = null;
     let currentPage = 1;

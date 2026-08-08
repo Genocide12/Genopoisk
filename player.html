@@ -62,16 +62,25 @@
       font-weight:500;
       cursor:pointer;
       transition:all .15s;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
     }
-    .btn:active { 
+    .btn:active {
       background:rgba(50,150,225,0.23);
       transform: scale(0.95);
+    }
+    .btn-pip {
+      background:rgba(0,122,255,0.3);
+    }
+    .btn-pip:active {
+      background:rgba(0,122,255,0.6);
     }
     .btn-close {
       background:#f33;
       margin-left:4px;
     }
-    .btn-close:active { 
+    .btn-close:active {
       background:#a00;
       transform: scale(0.95);
     }
@@ -97,47 +106,26 @@
       background:#111;
       border-radius:0;
     }
-    .ad-notice {
+    .pip-toast {
       position:absolute;
-      top:10px;
+      bottom:20px;
       left:50%;
       transform:translateX(-50%);
       background:rgba(0,0,0,0.85);
       color:#fff;
-      padding:12px 24px;
+      padding:10px 18px;
       border-radius:8px;
-      font-size:14px;
+      font-size:13px;
       font-weight:500;
       z-index:999;
       display:none;
-      animation: fadeIn 0.3s ease;
       box-shadow:0 4px 12px rgba(0,0,0,0.5);
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
-    .mobile-hint {
-      position:absolute;
-      top:50%;
-      left:50%;
-      transform:translate(-50%,-50%);
-      background:rgba(0,0,0,0.88);
-      color:#fff;
-      padding:18px 26px;
-      border-radius:14px;
-      font-size:15px;
-      font-weight:500;
-      z-index:9999;
       pointer-events:none;
-      box-shadow:0 4px 20px rgba(0,0,0,0.7);
-      display:none;
-      text-align:center;
-      line-height:1.5;
     }
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .player-main{height:calc(100vh - 44px);}
+      .btn{padding:6px 10px;font-size:13px;}
     }
   </style>
 </head>
@@ -145,13 +133,13 @@
   <div class="player-header">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
-      <button class="btn btn-close" onclick="window.history.back()">✕</button>
+      <button class="btn btn-pip" id="pipBtn" title="Картинка в картинке">🖴 PiP</button>
+      <button class="btn btn-close" id="closeBtn" title="Закрыть">✕</button>
     </div>
   </div>
   <div class="player-main">
-    <div class="ad-notice" id="adNotice">⏳ Реклама закончится через <span id="adTimer">10</span> сек</div>
-    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
-    <div id="mobileHint" class="mobile-hint">Полный экран на кнопке внизу ⛶<br><br>через 10 сек</div>
+    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; document-picture-in-picture"></iframe>
+    <div class="pip-toast" id="pipToast"></div>
   </div>
   <script>
     // Защита от копирования
@@ -165,14 +153,12 @@
       }
       if(e.key === 'F12') return false;
     };
-    
+
     const params = new URLSearchParams(window.location.search);
     const kid = params.get('id') || '4910542';
     const title = params.get('title') || 'Фильм';
     document.getElementById('videoTitle').textContent = decodeURIComponent(title);
     const iframe = document.getElementById('playerIframe');
-    const adNotice = document.getElementById('adNotice');
-    const adTimer = document.getElementById('adTimer');
 
     // --- Telegram WebApp init ---
     const tg = window.Telegram?.WebApp;
@@ -181,13 +167,8 @@
       tg.expand();
       tg.setHeaderColor?.('#000000');
       tg.setBackgroundColor?.('#000000');
-      // Show back button to return to main page
-      if (tg.BackButton) {
-        tg.BackButton.show();
-        tg.BackButton.onClick(() => {
-          window.history.back();
-        });
-      }
+      // Hide BackButton — we close the app instead of navigating back
+      tg.BackButton?.hide?.();
     }
 
     // --- Tracking ---
@@ -204,34 +185,107 @@
 
     // Загружаем плеер Embess
     iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-    
-    // Показываем таймер рекламы
-    let adDuration = 10;
-    adNotice.style.display = 'block';
-    
-    const countdown = setInterval(() => {
-      adDuration--;
-      adTimer.textContent = adDuration;
-      
-      if(adDuration <= 0) {
-        clearInterval(countdown);
-        adNotice.style.display = 'none';
+
+    // --- Close button: closes the Telegram Mini App (not navigate back) ---
+    function closeApp() {
+      if (tg && typeof tg.close === 'function') {
+        try { tg.close(); return; } catch (_) {}
       }
-    }, 1000);
-    
-    function isMobile() {
-      return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+      // Fallbacks for non-Telegram environments
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        try { window.close(); } catch (_) { window.location.href = '/'; }
+      }
     }
-    
-    if(isMobile()) {
-      const hint = document.getElementById('mobileHint');
-      hint.style.display = 'block';
-      setTimeout(() => {
-        hint.style.display = 'none';
-      }, 2000);
+    document.getElementById('closeBtn').addEventListener('click', closeApp);
+
+    // --- Picture-in-Picture ---
+    // True cross-origin iframe PiP isn't reliable, so we use Document PiP API
+    // (Chrome 116+) or fall back to a pop-out window.
+    const pipBtn = document.getElementById('pipBtn');
+    const pipToast = document.getElementById('pipToast');
+    let pipWindow = null;
+    let originalParent = null;
+
+    function showToast(msg, ms = 2500) {
+      pipToast.textContent = msg;
+      pipToast.style.display = 'block';
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => { pipToast.style.display = 'none'; }, ms);
     }
-    
-    // Already initialized above
+
+    async function togglePiP() {
+      // 1) Try Document Picture-in-Picture API (Chrome 116+)
+      if ('documentPictureInPicture' in window && !pipWindow) {
+        try {
+          pipWindow = await documentPictureInPicture.requestWindow({
+            width: 480,
+            height: 270
+          });
+          // Move the iframe into the PiP window
+          originalParent = iframe.parentNode;
+          pipWindow.document.body.style.margin = '0';
+          pipWindow.document.body.style.background = '#000';
+          pipWindow.document.title = title;
+          pipWindow.document.body.appendChild(iframe);
+          // Style iframe to fit PiP window
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.maxWidth = 'none';
+          iframe.style.maxHeight = 'none';
+          pipBtn.textContent = '🖴 ✕';
+          pipWindow.addEventListener('pagehide', () => {
+            // Restore iframe to main page when PiP closes
+            if (originalParent) {
+              iframe.style.width = '';
+              iframe.style.height = '';
+              iframe.style.maxWidth = '';
+              iframe.style.maxHeight = '';
+              originalParent.appendChild(iframe);
+            }
+            pipWindow = null;
+            pipBtn.textContent = '🖴 PiP';
+          });
+          showToast('PiP включён');
+          return;
+        } catch (e) {
+          console.warn('Document PiP failed:', e);
+          pipWindow = null;
+        }
+      } else if (pipWindow) {
+        // Close existing PiP
+        pipWindow.close();
+        pipWindow = null;
+        pipBtn.textContent = 'PiP';
+        return;
+      }
+
+      // 2) Fallback: pop-out window
+      const w = 480, h = 270;
+      const left = Math.max(0, screen.width - w - 20);
+      const top = Math.max(0, screen.height - h - 80);
+      const popup = window.open(
+        window.location.href,
+        'genopoisk-pip',
+        `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
+      );
+      if (popup) {
+        showToast('PiP окно открыто');
+        // In Telegram Mini App, close the main view since we have the popup
+        if (tg && typeof tg.close === 'function') {
+          setTimeout(() => { try { tg.close(); } catch (_) {} }, 300);
+        }
+      } else {
+        showToast('Разрешите всплывающие окна для PiP', 3500);
+      }
+    }
+    pipBtn.addEventListener('click', togglePiP);
+
+    // Hide PiP button if pop-ups are blocked and Document PiP is unavailable
+    if (!('documentPictureInPicture' in window)) {
+      // Keep the button — fallback uses window.open
+    }
   </script>
 </body>
 </html>

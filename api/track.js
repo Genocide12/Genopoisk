@@ -3,6 +3,21 @@ const { recordEvent } = require('./_lib/stats');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
 
+function getClientIp(req) {
+  // Vercel sets these headers — x-forwarded-for contains client IP first
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) {
+    const first = String(xff).split(',')[0].trim();
+    if (first) return first;
+  }
+  if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
+  if (req.headers['x-vercel-forwarded-for']) {
+    return String(req.headers['x-vercel-forwarded-for']).split(',')[0].trim();
+  }
+  if (req.headers['x-vercel-ip']) return String(req.headers['x-vercel-ip']);
+  return null;
+}
+
 module.exports = async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,7 +43,6 @@ module.exports = async (req, res) => {
     let userId = 'anon';
     let username = null;
     if (body.initData) {
-      // We don't validate HMAC here for simplicity — add later if needed
       try {
         const params = new URLSearchParams(body.initData);
         const userJson = params.get('user');
@@ -42,9 +56,13 @@ module.exports = async (req, res) => {
       userId = String(body.userId);
     }
 
+    // Capture client IP for per-user stats
+    const ip = getClientIp(req);
+
     const payload = {
       userId,
       username,
+      ...(ip ? { ip } : {}),
       ...(body.query ? { query: String(body.query).slice(0, 100) } : {}),
       ...(body.title ? { title: String(body.title).slice(0, 100) } : {}),
       ...(body.filmId ? { filmId: String(body.filmId).slice(0, 20) } : {}),

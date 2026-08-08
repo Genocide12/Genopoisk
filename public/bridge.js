@@ -285,11 +285,60 @@
       }
       if (!d || typeof d !== 'object') return;
       if (d.type === 'seek' && typeof d.time === 'number') {
-        try {
-          video.currentTime = d.time;
-          log('Seeked to', d.time);
-          post({ type: 'seeked', currentTime: video.currentTime });
-        } catch(err) { log('Seek failed', err); }
+        var targetTime = d.time;
+        log('Seek requested to', targetTime, 'readyState:', video.readyState);
+
+        function performSeek() {
+          try {
+            video.currentTime = targetTime;
+            log('Seeked to', targetTime, '→ actual:', video.currentTime);
+            post({ type: 'seeked', currentTime: video.currentTime });
+          } catch(err) {
+            log('Seek failed', err);
+          }
+        }
+
+        // venoplayer/dash.js may ignore currentTime if video not playing.
+        // Strategy: play() first, wait for canplay, then seek.
+        if (video.readyState < 2) {
+          log('Video not ready, waiting for canplay...');
+          var seekOnCanPlay = function() {
+            video.removeEventListener('canplay', seekOnCanPlay);
+            video.removeEventListener('loadeddata', seekOnCanPlay);
+            // Small delay to let MSE buffer settle
+            setTimeout(performSeek, 200);
+          };
+          video.addEventListener('canplay', seekOnCanPlay);
+          video.addEventListener('loadeddata', seekOnCanPlay);
+          // Also try to play — some browsers require play() before seek
+          try { video.play().then(function() {
+            log('Video playing, will seek on canplay');
+          }).catch(function(e) { log('play() failed', e); }); } catch(_) {}
+          // Fallback: try seek after 3s even if canplay doesn't fire
+          setTimeout(function() {
+            video.removeEventListener('canplay', seekOnCanPlay);
+            video.removeEventListener('loadeddata', seekOnCanPlay);
+            performSeek();
+          }, 3000);
+        } else {
+          // Video ready — seek immediately, but play first for reliability
+          try {
+            var playPromise = video.play();
+            if (playPromise && playPromise.then) {
+              playPromise.then(function() {
+                log('Video playing, seeking...');
+                setTimeout(performSeek, 100);
+              }).catch(function() {
+                // play() rejected (autoplay policy) — try seek anyway
+                performSeek();
+              });
+            } else {
+              performSeek();
+            }
+          } catch(_) {
+            performSeek();
+          }
+        }
       } else if (d.type === 'getTime') {
         post({ type: 'currentTime', currentTime: video.currentTime, duration: video.duration });
       } else if (d.type === 'play') {

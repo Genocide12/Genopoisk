@@ -59,13 +59,43 @@ async function writeStats(stats) {
     content: Buffer.from(JSON.stringify(stats, null, 2)).toString('base64'),
     branch: 'main'
   };
+  // If we have a sha, supply it. If the server says it's stale (422), retry
+  // once by re-reading the file to get the latest sha.
   if (sha) body.sha = sha;
 
-  const res = await fetch(`${GH_API}/repos/${STATS_REPO}/contents/${STATS_FILE}`, {
+  let res = await fetch(`${GH_API}/repos/${STATS_REPO}/contents/${STATS_FILE}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify(body)
   });
+
+  // 422 = "sha wasn't supplied" or "sha does not match" — both mean we need
+  // to re-read the file first to get the current sha, then retry the write.
+  if (res.status === 422 && !sha) {
+    // We didn't have a sha — fetch current sha and retry
+    const head = await fetch(`${GH_API}/repos/${STATS_REPO}/contents/${STATS_FILE}`, { headers });
+    if (head.ok) {
+      const headData = await head.json();
+      body.sha = headData.sha;
+      res = await fetch(`${GH_API}/repos/${STATS_REPO}/contents/${STATS_FILE}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body)
+      });
+    }
+  } else if (res.status === 409 || res.status === 422) {
+    // Conflict / stale sha — re-read and retry once
+    const head = await fetch(`${GH_API}/repos/${STATS_REPO}/contents/${STATS_FILE}`, { headers });
+    if (head.ok) {
+      const headData = await head.json();
+      body.sha = headData.sha;
+      res = await fetch(`${GH_API}/repos/${STATS_REPO}/contents/${STATS_FILE}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body)
+      });
+    }
+  }
 
   if (!res.ok) {
     const err = await res.text();

@@ -134,27 +134,9 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* Fullscreen via Fullscreen API */
-    :fullscreen .player-header { display:none; }
-    :-webkit-full-screen .player-header { display:none; }
-    :fullscreen .player-main { top:0; }
-    :-webkit-full-screen .player-main { top:0; }
-
-    /* CSS-based fullscreen on mobile landscape — fill the whole viewport */
-    @media (orientation: landscape) and (max-width: 1180px) {
-      .player-header { display:none !important; }
-      .player-main {
-        top:0;
-        position:fixed;
-        left:0;
-        right:0;
-        bottom:0;
-        width:100vw;
-        height:100vh;
-        height:100dvh;
-        z-index:99999;
-      }
-    }
+    /* IMPORTANT: We do NOT define :fullscreen CSS rules here.
+       venoplayer inspects its own :fullscreen styles and breaks if it finds
+       external ones. We let venoplayer manage fullscreen entirely on its own. */
 
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
@@ -171,7 +153,7 @@
     </div>
   </div>
   <div class="player-main" id="playerMain">
-    <iframe id="playerIframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>
+    <iframe id="playerIframe" class="player-iframe" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
       <span>Загрузка плеера...</span>
@@ -352,7 +334,7 @@
         showToast('🎬 Фильм досмотрен — позиция сброшена', 3000);
       }
       if (data.type === 'pip_enter') showToast('⛶ PiP активен', 2000);
-      if (data.type === 'pip_error') showToast('PiP: ' + data.message, 3000);
+      if (data.type === 'pip_error') console.warn('PiP error:', data.message);
     });
 
     function saveBeforeLeave() {
@@ -361,52 +343,18 @@
     window.addEventListener('pagehide', saveBeforeLeave);
     window.addEventListener('beforeunload', saveBeforeLeave);
     document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'hidden') saveBeforeLeave();
-      // Try to enter PiP when minimizing on mobile (Android only)
-      if (document.visibilityState === 'hidden' && videoIsPlaying && document.pictureInPictureEnabled) {
-        try {
-          sendToPlayer({ type: 'requestPiP' });
-        } catch (_) {}
+      if (document.visibilityState === 'hidden') {
+        saveBeforeLeave();
+        if (videoIsPlaying && document.pictureInPictureEnabled) {
+          try { sendToPlayer({ type: 'requestPiP' }); } catch (_) {}
+        }
       }
     });
 
-    // Load embed via browser-side fetch + srcdoc
-    function loadPlayer() {
-      var upstreamUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
-      fetch(upstreamUrl, {
-        headers: { 'Accept': 'text/html,application/xhtml+xml' }
-      })
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.text();
-      })
-      .then(function(html) {
-        // CRITICAL: Inject bridge script as the FIRST element in <head>,
-        // BEFORE embess.ws's ad config script runs. This lets us intercept
-        // window.adsConfig and override fetch/XHR before player-venom captures them.
-        var bridgeTag = '<script src="https://' + window.location.host + '/bridge.js"><\/script>';
-        var baseTag = '<base href="https://api.embess.ws/">';
-
-        if (/<head[^>]*>/i.test(html)) {
-          html = html.replace(/<head[^>]*>/i, function(match) {
-            return match + bridgeTag + baseTag;
-          });
-        } else if (/<html[^>]*>/i.test(html)) {
-          html = html.replace(/(<html[^>]*>)/i, '$1<head>' + bridgeTag + baseTag + '</head>');
-        } else {
-          html = '<head>' + bridgeTag + baseTag + '</head>' + html;
-        }
-
-        iframe.srcdoc = html;
-        console.log('[player] Loaded via browser fetch, bridge injected first in <head>');
-      })
-      .catch(function(e) {
-        console.warn('[player] Browser fetch failed:', e);
-        iframe.src = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
-        loadingOverlay.classList.add('hidden');
-        showToast('⚠️ Режим без блокировки рекламы', 4000);
-      });
-    }
+    // ====== Load player via SERVER-SIDE proxy ======
+    // The proxy injects bridge.js into <head> FIRST, before embess.ws ad scripts.
+    // Server-side fetch is fast (no CORS preflight) and works around IP blocks.
+    iframe.src = '/api/embed?id=' + encodeURIComponent(kid);
 
     // Safety timeout
     setTimeout(function() {
@@ -421,10 +369,8 @@
         if (!loadingOverlay.classList.contains('hidden')) {
           loadingOverlay.classList.add('hidden');
         }
-      }, 2000);
+      }, 1500);
     });
-
-    loadPlayer();
 
     if (savedPos) {
       var age = Date.now() - new Date(savedPos.ts).getTime();
@@ -434,80 +380,6 @@
         showToast('⏱ Позиция: ' + formatTime(savedPos.t) + ' (' + ageStr + ')', 4000);
       }, 1000);
     }
-
-    // ====== Auto-fullscreen on rotation (mobile) ======
-    function isMobile() {
-      return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent) ||
-             (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
-    }
-
-    function isLandscape() {
-      if (screen.orientation && screen.orientation.type) {
-        return screen.orientation.type.indexOf('landscape') === 0;
-      }
-      return window.innerWidth > window.innerHeight;
-    }
-
-    function isFullscreen() {
-      return !!(document.fullscreenElement || document.webkitFullscreenElement ||
-                document.mozFullScreenElement || document.msFullscreenElement);
-    }
-
-    function requestFullscreen() {
-      var el = playerMain;
-      var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-      if (fn) {
-        try {
-          var p = fn.call(el);
-          if (p && p.catch) p.catch(function(err) { console.warn('Fullscreen denied:', err); });
-          return true;
-        } catch (e) { console.warn('Fullscreen error:', e); }
-      }
-      // iOS Safari: try iframe fullscreen
-      if (iframe.webkitEnterFullscreen) {
-        try { iframe.webkitEnterFullscreen(); return true; } catch (e) {}
-      }
-      return false;
-    }
-
-    function exitFullscreen() {
-      var fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-      if (fn) {
-        try { fn.call(document); } catch (e) {}
-      }
-    }
-
-    function handleOrientationChange() {
-      var landscape = isLandscape();
-      var mobile = isMobile();
-      if (landscape && mobile) {
-        if (!isFullscreen()) requestFullscreen();
-      } else {
-        if (isFullscreen()) exitFullscreen();
-      }
-    }
-
-    if (screen.orientation && screen.orientation.addEventListener) {
-      screen.orientation.addEventListener('change', handleOrientationChange);
-    }
-    window.addEventListener('orientationchange', function() {
-      setTimeout(handleOrientationChange, 300);
-    });
-
-    var resizeTimer = null;
-    window.addEventListener('resize', function() {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(handleOrientationChange, 200);
-    });
-
-    // First tap on player in landscape = request fullscreen (user gesture required by API)
-    playerMain.addEventListener('click', function() {
-      if (isMobile() && isLandscape() && !isFullscreen()) {
-        requestFullscreen();
-      }
-    });
-
-    setTimeout(handleOrientationChange, 500);
   </script>
 </body>
 </html>

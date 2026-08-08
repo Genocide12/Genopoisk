@@ -42,15 +42,24 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 2. Block ad URLs at network level (fetch + XHR + src) ======
+  // ====== 2. Block ad URLs AND tracking endpoints at network level ======
+  // adUrlPattern blocks VAST/VPAID ad providers (distribrey.com etc.)
+  // trackingPattern blocks embess.ws's stats/telemetry endpoints that slow
+  // down player init by waiting on WebSocket connections to s.myangular.life.
   var adUrlPattern = /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain|distribrey|load-xml|admixer|adservice|popads|propellerads|popcash|adsterra/i;
+  var trackingPattern = /s\.myangular\.life|stats\.myangular\.life|myangular\.life/i;
+
+  function isBlocked(url) {
+    if (typeof url !== 'string') return false;
+    return adUrlPattern.test(url) || trackingPattern.test(url);
+  }
 
   // Override fetch
   try {
     var origFetch = window.fetch;
     window.fetch = function(input, init) {
       var url = typeof input === 'string' ? input : (input && input.url) || '';
-      if (adUrlPattern.test(url)) {
+      if (isBlocked(url)) {
         log('Blocked fetch:', url.slice(0, 100));
         return Promise.resolve(new Response('', { status: 204 }));
       }
@@ -62,9 +71,8 @@
   try {
     var origOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url) {
-      if (typeof url === 'string' && adUrlPattern.test(url)) {
+      if (isBlocked(url)) {
         log('Blocked XHR:', url.slice(0, 100));
-        // Replace with harmless URL
         url = 'about:blank';
       }
       return origOpen.apply(this, arguments);
@@ -78,7 +86,7 @@
       Object.defineProperty(HTMLMediaElement.prototype, 'src', {
         get: function() { return proto.get.call(this); },
         set: function(val) {
-          if (typeof val === 'string' && adUrlPattern.test(val)) {
+          if (isBlocked(val)) {
             log('Blocked video.src:', val.slice(0, 100));
             return;
           }
@@ -88,6 +96,27 @@
       });
     }
   } catch(e) { log('src override failed', e); }
+
+  // Override WebSocket to block stats.myangular.life connections
+  try {
+    var OrigWebSocket = window.WebSocket;
+    window.WebSocket = function(url, protocols) {
+      if (typeof url === 'string' && trackingPattern.test(url)) {
+        log('Blocked WebSocket:', url.slice(0, 100));
+        // Return a fake WebSocket that does nothing
+        return {
+          readyState: 0,
+          send: function() {},
+          close: function() {},
+          addEventListener: function() {},
+          removeEventListener: function() {},
+          onopen: null, onclose: null, onmessage: null, onerror: null
+        };
+      }
+      return protocols !== undefined ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
+    };
+    window.WebSocket.prototype = OrigWebSocket.prototype;
+  } catch(e) {}
 
   // ====== 3. CSS to hide ad elements ======
   function injectAdCSS() {
@@ -160,7 +189,7 @@
     }
   }, 300);
 
-  // ====== 5. MutationObserver: remove ad iframes/elements ======
+  // ====== 5. MutationObserver: remove ad iframes/elements AND tracking pixels ======
   var adObserver = new MutationObserver(function(mutations) {
     for (var i = 0; i < mutations.length; i++) {
       var added = mutations[i].addedNodes;
@@ -169,8 +198,16 @@
         if (node.nodeType !== 1) continue;
         if (node.tagName === 'IFRAME') {
           var src = node.src || '';
-          if (adUrlPattern.test(src) || /distribrey|load-xml/i.test(src)) {
+          if (isBlocked(src) || /distribrey|load-xml/i.test(src)) {
             log('Removed ad iframe:', src.slice(0, 80));
+            node.remove();
+          }
+        }
+        // Remove tracking pixels (1x1 images from s.myangular.life)
+        if (node.tagName === 'IMG') {
+          var imgSrc = node.src || '';
+          if (isBlocked(imgSrc)) {
+            log('Removed tracking pixel:', imgSrc.slice(0, 80));
             node.remove();
           }
         }
@@ -192,9 +229,10 @@
     videoEl = video;
     log('Video element attached');
 
-    // Enable PiP and inline playback
+    // Enable PiP and inline playback (needed for iOS)
     try { video.setAttribute('playsinline', ''); } catch(_) {}
     try { video.setAttribute('webkit-playsinline', ''); } catch(_) {}
+    try { video.setAttribute('x-webkit-airplay', 'allow'); } catch(_) {}
     try { video.disablePictureInPicture = false; } catch(_) {}
 
     post({ type: 'ready', currentTime: video.currentTime || 0, duration: video.duration || 0 });
@@ -217,12 +255,18 @@
     video.addEventListener('loadedmetadata', function() {
       post({ type: 'loaded', currentTime: video.currentTime, duration: video.duration });
     });
-    // Notify parent when PiP starts/stops
     video.addEventListener('enterpictureinpicture', function() {
       post({ type: 'pip_enter' });
     });
     video.addEventListener('leavepictureinpicture', function() {
       post({ type: 'pip_leave' });
+    });
+    // Fullscreen change events — when video enters/exits fullscreen natively
+    video.addEventListener('webkitbeginfullscreen', function() {
+      post({ type: 'requestFullscreen' });
+    });
+    video.addEventListener('webkitendfullscreen', function() {
+      post({ type: 'exitFullscreen' });
     });
 
     window.addEventListener('message', function(e) {
@@ -255,7 +299,7 @@
               post({ type: 'pip_error', message: err.message });
             });
           } else {
-            post({ type: 'pip_error', message: 'PiP not supported' });
+            post({ type: 'pip_error', message: 'PiP not supported on this device' });
           }
         } catch(e) {
           post({ type: 'pip_error', message: e.message });
@@ -267,6 +311,20 @@
       adBlockStarted = true;
     }
   }
+
+  // ====== 7. Fullscreen handling ======
+  // IMPORTANT: We do NOT intercept or override venoplayer's native fullscreen button.
+  // venoplayer manages fullscreen entirely on its own using the Fullscreen API on
+  // its container element. Our previous attempt to intercept clicks and forward
+  // them to the parent caused the "open then immediately close" flicker bug.
+  //
+  // The iframe has allowfullscreen + allow="fullscreen", so venoplayer can
+  // request fullscreen on itself and the browser will expand the iframe to fill
+  // the screen. This is the cleanest approach.
+  //
+  // The "bad :fullscreen styles!" warning from venoplayer was caused by our
+  // CSS rules `:fullscreen .player-header { display:none }` etc. — we removed
+  // those from player.html so venoplayer is happy.
 
   // Poll for video element
   var videoCheckCount = 0;

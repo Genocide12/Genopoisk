@@ -10,6 +10,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <title>Genopoisk</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -59,49 +60,14 @@
     .empty-state{text-align:center;padding:80px 20px;color:var(--text-secondary);}
     .empty-icon{font-size:64px;margin-bottom:16px;opacity:0.4;filter:grayscale(1);}
     .empty-text{font-size:17px;font-weight:500;letter-spacing:-0.01em;}
+    .footer{text-align:center;padding:32px 20px;margin-top:40px;border-top:1px solid var(--separator);}
+    .footer-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px;letter-spacing:-0.01em;}
+    .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
+    .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
+    .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
     @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
     @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
-  
-<!-- Yandex.Metrika counter -->
-<script type="text/javascript">
-   (function(m,e,t,r,i,k,a){
-       m[i]=m[i]||function(){
-           (m[i].a=m[i].a||[]).push(arguments)
-       };
-       m[i].l=1*new Date();
-
-       for (var j = 0; j < document.scripts.length; j++) {
-           if (document.scripts[j].src === r) {
-               return;
-           }
-       }
-
-       k=e.createElement(t),
-       a=e.getElementsByTagName(t)[0],
-       k.async=1,
-       k.src=r,
-       a.parentNode.insertBefore(k,a)
-
-   })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
-
-   ym(109195109, "init", {
-        clickmap:true,
-        trackLinks:true,
-        accurateTrackBounce:true,
-        webvisor:true
-   });
-</script>
-
-<noscript>
-  <div>
-    <img src="https://mc.yandex.ru/watch/109195109"
-         style="position:absolute; left:-9999px;"
-         alt="" />
-  </div>
-</noscript>
-<!-- /Yandex.Metrika counter -->
-
 </head>
 <body>
   <div class="container">
@@ -140,6 +106,11 @@
       </div>
       <div class="film-grid" id="filmGrid"></div>
     </div>
+    <footer class="footer">
+      <div class="footer-title">О проекте</div>
+      <div class="footer-text">Genopoisk — веб-приложение для поиска информации о фильмах<br>Создано в образовательных целях</div>
+      <a href="https://github.com/Genocide12/Genopoisk" target="_blank" class="footer-link">GitHub</a>
+    </footer>
   </div>
   <script>
     // Защита от копирования / инспектора
@@ -161,6 +132,30 @@
 
     const API_KEY = '2162133a-a4d6-4712-84bd-88652fe904ea';
     const API_BASE = 'https://kinopoiskapiunofficial.tech/api';
+
+    // --- Telegram WebApp init ---
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+      tg.setHeaderColor?.('#000000');
+      tg.setBackgroundColor?.('#000000');
+    }
+    const tgInitData = tg?.initData || '';
+
+    // --- Tracking ---
+    async function trackEvent(type, payload = {}) {
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, initData: tgInitData, ...payload })
+        });
+      } catch (e) { console.warn('track error:', e); }
+    }
+
+    // Track initial page view
+    trackEvent('page_views', { path: '/' });
 
     let currentCategory = null;
     let currentPage = 1;
@@ -227,10 +222,8 @@
 
     async function getNew(page = 1) {
       const currentYear = new Date().getFullYear();
-      const url = `${API_BASE}/v2.2/films?order=YEAR&type=FILM&ratingFrom=6&ratingTo=10&yearFrom=${currentYear - 1}&yearTo=${currentYear}&page=${page}`;
-      const films = extractFilms(await apiGet(url));
-      // Отбрасываем совсем пустые карточки без постера
-      return films.filter(f => f.posterUrlPreview || f.posterUrl);
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
+      return extractFilms(await apiGet(url));
     }
 
     async function getRandomFilm() {
@@ -265,14 +258,10 @@
       filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
     }
 
-    function renderFilms(films, options = {}) {
-      const append = !!options.append;
-      const forceCenter = !!options.forceCenter;
-      if (!append) {
-        clearFilms();
-      }
+    function displayFilms(films, forceCenter = false) {
+      clearFilms();
       if (!films || films.length === 0) {
-        if (!append) showEmptyState('Фильмы не найдены');
+        showEmptyState('Фильмы не найдены');
         return;
       }
       const frag = document.createDocumentFragment();
@@ -286,7 +275,7 @@
         card.className = 'film-card';
         card.style.animationDelay = `${index * 0.05}s`;
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.closest('.film-card').remove()">
+          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
           <div class="film-info">
             <div class="film-title">${title}</div>
             <div class="film-meta">
@@ -304,11 +293,8 @@
       }
     }
 
-    function displayFilms(films, forceCenter = false) {
-      renderFilms(films, { append: false, forceCenter });
-    }
-
     function openPlayer(filmId, title) {
+      trackEvent('movies_opened', { filmId, title });
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
 
@@ -319,6 +305,7 @@
       clearFilms();
       showLoader();
       searchInput.value = '';
+      trackEvent('categories_opened', { category });
       try {
         if (category === 'random') {
           const film = await getRandomFilm();
@@ -349,7 +336,7 @@
             break;
         }
         if (films.length > 0) {
-          renderFilms(films, { append: currentPage > 1 });
+          displayFilms(films);
           currentPage++;
         } else {
           hasMore = false;
@@ -381,6 +368,7 @@
         hasMore = false;
         clearFilms();
         showLoader();
+        trackEvent('searches', { query: val });
         try {
           const films = await searchFilms(val);
           displayFilms(films);
@@ -406,19 +394,21 @@
       }, 100);
     });
 
-    // TODO: Telegram WebApp integration
-    // Блок пока отключён, так как Telegram WebApp в проекте сейчас не используется,
-    // а optional chaining может ломать выполнение скрипта на старых Android WebView и проекторах.
-    /*
-    if (window.Telegram && window.Telegram.WebApp) {
-      window.Telegram.WebApp.expand();
+    if (window.Telegram?.WebApp) {
       const themeParams = window.Telegram.WebApp.themeParams;
-      if (themeParams && themeParams.bg_color) {
+      if (themeParams?.bg_color) {
         const metaTheme = document.querySelector('meta[name="theme-color"]');
         if (metaTheme) metaTheme.content = themeParams.bg_color;
       }
+      // Apply Telegram theme to body
+      if (themeParams?.text_color) document.documentElement.style.setProperty('--text-primary', themeParams.text_color);
+      if (themeParams?.bg_color) document.documentElement.style.setProperty('--bg-primary', themeParams.bg_color);
     }
-    */
+
+    // Main button for Mini App back navigation
+    if (tg && tg.BackButton) {
+      tg.BackButton.hide();
+    }
   </script>
 </body>
 </html>

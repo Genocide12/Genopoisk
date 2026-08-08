@@ -42,16 +42,21 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 2. Block ad URLs AND tracking endpoints at network level ======
+  // ====== 2. Block ad URLs AND tracking endpoints AND P2P at network level ======
   // adUrlPattern blocks VAST/VPAID ad providers (distribrey.com etc.)
   // trackingPattern blocks embess.ws's stats/telemetry endpoints that slow
   // down player init by waiting on WebSocket connections to s.myangular.life.
+  // p2pPattern blocks venoplayer's P2P tracker (t6.zcvh.net) and the broken
+  // P2P CDN subdomains (x-bc.interkh.com, ghzbfjzbazc.interkh.com) that
+  // timeout after 30s. Without P2P, venoplayer falls back to direct HTTP
+  // from hye1eaipby4w.interkh.com (the working CDN).
   var adUrlPattern = /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain|distribrey|load-xml|admixer|adservice|popads|propellerads|popcash|adsterra/i;
   var trackingPattern = /s\.myangular\.life|stats\.myangular\.life|myangular\.life/i;
+  var p2pPattern = /t6\.zcvh\.net|x-bc\.interkh\.com|ghzbfjzbazc\.interkh\.com/i;
 
   function isBlocked(url) {
     if (typeof url !== 'string') return false;
-    return adUrlPattern.test(url) || trackingPattern.test(url);
+    return adUrlPattern.test(url) || trackingPattern.test(url) || p2pPattern.test(url);
   }
 
   // Override fetch
@@ -229,6 +234,18 @@
     }
   });
   adObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+  // ====== 5b. Block WebRTC (P2P peer connections) ======
+  // venoplayer uses WebRTC for P2P video segment sharing between users.
+  // P2P peers (x-bc.interkh.com, ghzbfjzbazc.interkh.com) timeout because
+  // they're unreachable from most client IPs. Blocking RTCPeerConnection
+  // forces venoplayer to fetch segments via HTTP from hye1eaipby4w.interkh.com.
+  try {
+    window.RTCPeerConnection = undefined;
+    window.webkitRTCPeerConnection = undefined;
+    window.mozRTCPeerConnection = undefined;
+    log('WebRTC blocked (RTCPeerConnection undefined)');
+  } catch(e) {}
 
   // ====== 6. Setup video element when it appears ======
   function setupVideo(video) {

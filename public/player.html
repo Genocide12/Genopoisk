@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,minimum-scale=1">
+  <meta name="referrer" content="origin">
   <title>Плеер</title>
   <script>
     // ====== Performance & error logging ======
@@ -156,14 +157,10 @@
     }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* IMPORTANT: We do NOT define fullscreen CSS rules here.
-       venoplayer inspects its own fullscreen styles and breaks if it finds
-       external ones. We let venoplayer manage fullscreen entirely on its own. */
-
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
       .btn{padding:6px 10px;font-size:13px;}
-      .player-main { top:44px; }
+      .player-main { top:44px; height:calc(100dvh - 44px); }
     }
   </style>
 </head>
@@ -175,7 +172,7 @@
     </div>
   </div>
   <div class="player-main" id="playerMain">
-    <iframe id="playerIframe" class="player-iframe" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>
+    <iframe id="playerIframe" class="player-iframe" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="origin"></iframe>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
       <span>Загрузка плеера...</span>
@@ -212,7 +209,6 @@
     var loadingOverlay = document.getElementById('loadingOverlay');
 
     var tg = window.Telegram && window.Telegram.WebApp;
-    // Lazy init — telegram-web-app.js loads async
     function tryInitTg() {
       tg = window.Telegram && window.Telegram.WebApp;
       if (!tg) return false;
@@ -307,7 +303,6 @@
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
     var seekAttempted = false;
-    var videoIsPlaying = false;
 
     function sendToPlayer(msg) {
       try {
@@ -355,8 +350,6 @@
         if (typeof data.duration === 'number' && data.duration > 0) lastKnownDuration = data.duration;
         maybeSavePosition(lastKnownTime);
       }
-      if (data.type === 'play') videoIsPlaying = true;
-      if (data.type === 'pause') videoIsPlaying = false;
       if (data.type === 'ended') {
         clearPosition();
         showToast('🎬 Фильм досмотрен — позиция сброшена', 3000);
@@ -370,22 +363,61 @@
     }
     window.addEventListener('pagehide', saveBeforeLeave);
     window.addEventListener('beforeunload', saveBeforeLeave);
-    // Note: auto-PiP on visibilitychange is disabled because we now use
-    // direct iframe.src (cross-origin) — bridge.js can't access <video> to
-    // call requestPictureInPicture(). User can still use venoplayer's native
-    // PiP button if available.
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'hidden') saveBeforeLeave();
+    });
 
-    // ====== Load player via direct iframe.src ======
-    // We use direct iframe.src (not srcdoc) because embess.ws's video CDN
-    // (x-bc.interkh.com, ghzbfjzbazc.interkh.com) blocks requests when
-    // Referer is not api.embess.ws. With srcdoc, Referer becomes our domain
-    // and the video stream returns 410 Gone.
+    // ====== Load player via browser fetch + srcdoc ======
+    // We fetch embess.ws HTML, inject bridge.js as first <head> element + a
+    // <meta name="referrer" content="no-referrer-when-downgrade"> + <base>, then
+    // set as iframe.srcdoc.
     //
-    // Trade-off: cross-origin iframe means bridge.js can't access <video>,
-    // so ad blocking, resume, and PiP don't work. But the video PLAYS.
-    // Earlier mobile worked because we used direct iframe.src.
-    console.log('[player] Setting iframe.src to embess.ws directly');
-    iframe.src = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+    // Bridge.js blocks P2P (wss://t6.zcvh.net) and WebRTC, forcing venoplayer
+    // to use direct HTTP fetches from hye1eaipby4w.interkh.com (the working CDN).
+    //
+    // With no-referrer policy, video CDN receives no Referer → returns 200
+    // (confirmed: hye1eaipby4w.interkh.com works without Referer).
+    var loadStartTime = performance.now();
+    function loadPlayer() {
+      var upstreamUrl = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+      console.log('[player] Fetching', upstreamUrl);
+      fetch(upstreamUrl, {
+        headers: { 'Accept': 'text/html,application/xhtml+xml' }
+      })
+      .then(function(res) {
+        console.log('[player] Fetch response:', res.status, 'in', ((performance.now() - loadStartTime) / 1000).toFixed(2) + 's');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function(html) {
+        console.log('[player] Got HTML, size:', html.length);
+        var bridgeTag = '<script src="https://' + window.location.host + '/bridge.js"><\/script>';
+        var baseTag = '<base href="https://api.embess.ws/">';
+        // no-referrer so video CDN doesn't see our domain as Referer
+        // (CDN returns 410 if Referer is set to anything other than embess.ws)
+        var referrerMeta = '<meta name="referrer" content="no-referrer">';
+
+        if (/<head[^>]*>/i.test(html)) {
+          html = html.replace(/<head[^>]*>/i, function(match) {
+            return match + bridgeTag + referrerMeta + baseTag;
+          });
+        } else if (/<html[^>]*>/i.test(html)) {
+          html = html.replace(/(<html[^>]*>)/i, '$1<head>' + bridgeTag + referrerMeta + baseTag + '</head>');
+        } else {
+          html = '<head>' + bridgeTag + referrerMeta + baseTag + '</head>' + html;
+        }
+
+        iframe.srcdoc = html;
+        console.log('[player] srcdoc set, bridge + no-referrer + base injected');
+      })
+      .catch(function(e) {
+        console.error('[player] Browser fetch failed:', e.message);
+        iframe.src = 'https://api.embess.ws/embed/kp/' + encodeURIComponent(kid);
+        loadingOverlay.classList.add('hidden');
+        showToast('⚠️ Режим без блокировки рекламы', 4000);
+      });
+    }
+    loadPlayer();
 
     // Safety timeout
     setTimeout(function() {

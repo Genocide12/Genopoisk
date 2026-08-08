@@ -39,6 +39,8 @@
       font-size:17px;
       font-weight:600;
       box-sizing:border-box;
+      flex-shrink:0;
+      transition: opacity 0.2s, height 0.2s, padding 0.2s;
     }
     .title {
       font-size:17px;
@@ -48,10 +50,7 @@
       text-overflow:ellipsis;
       white-space:nowrap;
     }
-    .btn-group {
-      display:flex;
-      gap:8px;
-    }
+    .btn-group { display:flex; gap:8px; }
     .btn {
       background:rgba(255,255,255,0.14);
       color:#fff;
@@ -66,21 +65,12 @@
       align-items:center;
       gap:4px;
     }
-    .btn:active {
-      background:rgba(50,150,225,0.23);
-      transform: scale(0.95);
-    }
-    .btn-close {
-      background:#f33;
-      margin-left:4px;
-    }
-    .btn-close:active {
-      background:#a00;
-      transform: scale(0.95);
-    }
+    .btn:active { background:rgba(50,150,225,0.23); transform: scale(0.95); }
+    .btn-close { background:#f33; margin-left:4px; }
+    .btn-close:active { background:#a00; transform: scale(0.95); }
     .player-main {
       width:100vw;
-      height:calc(100vh - 52px);
+      flex:1;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -91,9 +81,9 @@
       position:relative;
     }
     .player-iframe {
-      width:100vw;
+      width:100%;
       height:100%;
-      max-width:100vw;
+      max-width:100%;
       max-height:100%;
       border:none;
       display:block;
@@ -116,20 +106,43 @@
       box-shadow:0 4px 12px rgba(0,0,0,0.5);
       pointer-events:none;
     }
-    /* Hide header in fullscreen — iframe takes the whole screen */
+    /* True fullscreen via Fullscreen API */
     :fullscreen .player-header { display:none; }
     :-webkit-full-screen .player-header { display:none; }
     :fullscreen .player-main { height:100vh; }
     :-webkit-full-screen .player-main { height:100vh; }
+
+    /* CSS-based fullscreen on mobile landscape — fills viewport without API.
+       Hides header, makes iframe cover the whole screen. Works on iOS Safari. */
+    @media (orientation: landscape) and (max-width: 1024px) and (max-height: 600px) {
+      body { position: fixed; top:0; left:0; right:0; bottom:0; }
+      .player-header { display:none !important; }
+      .player-main {
+        position: fixed;
+        top:0;
+        left:0;
+        width:100vw;
+        height:100vh;
+        height:100dvh;
+        z-index: 99999;
+      }
+      .player-iframe {
+        width:100vw;
+        height:100vh;
+        height:100dvh;
+        max-width:100vw;
+        max-height:100vh;
+      }
+    }
+
     @media(max-width:768px){
       .player-header{padding:9px 8px;font-size:14px; height:44px;}
-      .player-main{height:calc(100vh - 44px);}
       .btn{padding:6px 10px;font-size:13px;}
     }
   </style>
 </head>
 <body>
-  <div class="player-header">
+  <div class="player-header" id="playerHeader">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
       <button class="btn btn-close" id="closeBtn" title="Закрыть">✕</button>
@@ -170,6 +183,21 @@
       tg.BackButton?.hide?.();
     }
 
+    // --- User identification: works in Telegram Mini App AND in regular browser ---
+    // Telegram user ID from initData takes precedence; otherwise generate UUID in localStorage.
+    function getBrowserUserId() {
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
+    }
+    const browserUserId = getBrowserUserId();
+    const tgInitData = tg?.initData || '';
+
     // --- Toast helper ---
     let toastTimer = null;
     function showToast(msg, ms = 2500) {
@@ -185,22 +213,26 @@
         await fetch('/api/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, initData: tg?.initData || '', ...payload })
+          body: JSON.stringify({
+            type,
+            initData: tgInitData,
+            userId: browserUserId, // fallback for browser users
+            ...payload
+          })
         });
       } catch (e) { console.warn('track error:', e); }
     }
     trackEvent('page_views', { path: '/player' });
 
-    // --- Resume position storage ---
-    // Key per film: genopoisk_position_<filmId>
-    // Stores: { t: seconds, ts: ISO date, title: string }
+    // --- Resume position storage (localStorage, per filmId) ---
     function positionKey(filmId) { return `genopoisk_position_${filmId}`; }
 
-    function savePosition(seconds) {
+    function savePosition(seconds, duration) {
       if (!seconds || seconds < 5 || !isFinite(seconds)) return;
       try {
         localStorage.setItem(positionKey(kid), JSON.stringify({
           t: seconds,
+          d: duration || 0,
           ts: new Date().toISOString(),
           title: title
         }));
@@ -213,74 +245,16 @@
         if (!raw) return null;
         const data = JSON.parse(raw);
         if (!data || !data.t || data.t < 5) return null;
-        // Expire after 30 days
         const age = Date.now() - new Date(data.ts).getTime();
         if (age > 30 * 24 * 60 * 60 * 1000) return null;
+        // If duration is known and we're within 5 seconds of the end, don't resume
+        if (data.d && data.t > data.d - 5) return null;
         return data;
       } catch (_) { return null; }
     }
 
     function clearPosition() {
       try { localStorage.removeItem(positionKey(kid)); } catch (_) {}
-    }
-
-    // --- Bridge to iframe player (postMessage protocol with embess.ws) ---
-    // We attempt multiple known protocols (videojs, shaka, HTML5 media, custom).
-    // The iframe is cross-origin, so we can only use postMessage — we can't read
-    // the video element directly. Most embed players ignore unknown messages,
-    // but we try anyway. If the player doesn't respond, we still save position
-    // based on elapsed wall-clock time as a rough estimate.
-
-    const savedPos = loadPosition();
-    let playerReady = false;
-    let lastKnownTime = 0;
-    let lastSavedAt = 0;
-    let startedAtWallClock = Date.now();
-
-    function sendToPlayer(msg) {
-      try {
-        iframe.contentWindow?.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), '*');
-      } catch (_) {}
-    }
-
-    // Listen for messages from the iframe player
-    window.addEventListener('message', (e) => {
-      let data = e.data;
-      if (typeof data === 'string') {
-        try { data = JSON.parse(data); } catch (_) { /* not JSON, ignore */ }
-      }
-      if (!data || typeof data !== 'object') return;
-
-      // Common ready signals
-      if (data.event === 'ready' || data.type === 'ready' || data.event === 'playerReady' || data.action === 'ready') {
-        playerReady = true;
-        attemptSeekToSaved();
-      }
-      // Common time updates (videojs, shaka, jwplayer, custom)
-      if (data.event === 'timeupdate' || data.type === 'timeupdate' || data.event === 'timeUpdate') {
-        const t = data.currentTime || data.time || data.position || data.t;
-        if (typeof t === 'number' && t > 0) {
-          lastKnownTime = t;
-          maybeSavePosition(t);
-        }
-      }
-      if (data.event === 'ended' || data.type === 'ended') {
-        clearPosition();
-      }
-    });
-
-    function attemptSeekToSaved() {
-      if (!savedPos || !playerReady) return;
-      const target = savedPos.t;
-      // Try multiple seek protocols
-      sendToPlayer({ event: 'command', func: 'seekTo', args: [target] });
-      sendToPlayer({ event: 'seek', time: target });
-      sendToPlayer({ event: 'command', command: 'seek', value: target });
-      sendToPlayer({ method: 'seek', args: [target] });
-      // YouTube-style
-      sendToPlayer({ event: 'listening' });
-      sendToPlayer(JSON.stringify({ event: 'command', func: 'seekTo', args: [target, true] }));
-      showToast(`▶️ Продолжаем с ${formatTime(target)}`, 3000);
     }
 
     function formatTime(s) {
@@ -292,25 +266,78 @@
       return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
     }
 
+    // --- Resume logic ---
+    const savedPos = loadPosition();
+    let playerReady = false;
+    let lastKnownTime = 0;
+    let lastKnownDuration = 0;
     let lastSaveTime = 0;
-    function maybeSavePosition(t) {
-      const now = Date.now();
-      // Throttle: save at most once every 5 seconds
-      if (now - lastSaveTime < 5000) return;
-      lastSaveTime = now;
-      savePosition(t);
+    let seekAttempted = false;
+
+    function sendToPlayer(msg) {
+      try {
+        iframe.contentWindow?.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), '*');
+      } catch (_) {}
     }
 
-    // If player doesn't send time updates, save elapsed wall-clock time as fallback
-    setInterval(() => {
-      if (lastKnownTime > 0) return; // real time from player — don't override
-      const elapsed = (Date.now() - startedAtWallClock) / 1000;
-      if (elapsed > 5) maybeSavePosition(elapsed);
-    }, 5000);
+    function attemptSeekToSaved() {
+      if (!savedPos || seekAttempted || !playerReady) return;
+      seekAttempted = true;
+      const target = savedPos.t;
+      // Try multiple seek protocols — bridge in /api/embed.js handles all of these
+      sendToPlayer({ type: 'seek', time: target });
+      sendToPlayer({ event: 'command', func: 'seek', args: [target] });
+      sendToPlayer({ type: 'seekTo', time: target });
+      showToast(`▶️ Продолжаем с ${formatTime(target)}`, 3500);
+    }
 
-    // On close, save the last known position one final time
+    function maybeSavePosition(t) {
+      if (!t || t < 5 || !isFinite(t)) return;
+      const now = Date.now();
+      if (now - lastSaveTime < 3000) return; // throttle to once per 3s
+      lastSaveTime = now;
+      savePosition(t, lastKnownDuration);
+    }
+
+    // Listen for messages from the iframe bridge
+    window.addEventListener('message', (e) => {
+      let data = e.data;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (_) { return; }
+      }
+      if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'bridge_ready') {
+        console.log('[player] Bridge ready');
+      }
+      if (data.type === 'ready' || data.type === 'loaded') {
+        playerReady = true;
+        if (typeof data.duration === 'number' && data.duration > 0) {
+          lastKnownDuration = data.duration;
+        }
+        // Wait a bit for the player to settle, then seek
+        setTimeout(attemptSeekToSaved, 500);
+      }
+      if (data.type === 'timeupdate' || data.type === 'currentTime') {
+        if (typeof data.currentTime === 'number') {
+          lastKnownTime = data.currentTime;
+        }
+        if (typeof data.duration === 'number' && data.duration > 0) {
+          lastKnownDuration = data.duration;
+        }
+        maybeSavePosition(lastKnownTime);
+      }
+      if (data.type === 'ended') {
+        clearPosition();
+        showToast('🎬 Фильм досмотрен — позиция сброшена', 3000);
+      }
+    });
+
+    // On close, save the last known position
     function saveBeforeLeave() {
-      if (lastKnownTime > 5) savePosition(lastKnownTime);
+      if (lastKnownTime > 5) {
+        savePosition(lastKnownTime, lastKnownDuration);
+      }
     }
     window.addEventListener('pagehide', saveBeforeLeave);
     window.addEventListener('beforeunload', saveBeforeLeave);
@@ -318,19 +345,8 @@
       if (document.visibilityState === 'hidden') saveBeforeLeave();
     });
 
-    // Загружаем плеер Embess
-    iframe.src = `https://api.embess.ws/embed/kp/${kid}`;
-
-    // After load, send ready listener + try seek after a delay (in case iframe doesn't send ready event)
-    iframe.addEventListener('load', () => {
-      playerReady = true;
-      // Try seek after 2.5s if not already seeked
-      setTimeout(() => {
-        if (savedPos && lastKnownTime < savedPos.t - 5) {
-          attemptSeekToSaved();
-        }
-      }, 2500);
-    });
+    // Load iframe via server-side proxy (handles resume + ad blocking)
+    iframe.src = `/api/embed?id=${encodeURIComponent(kid)}`;
 
     // Notify user we have a saved position
     if (savedPos) {
@@ -338,11 +354,11 @@
       const ageMin = Math.floor(age / 60000);
       const ageStr = ageMin < 60 ? `${ageMin} мин назад` : `${Math.floor(ageMin / 60)} ч назад`;
       setTimeout(() => {
-        showToast(`⏱ Продолжить с ${formatTime(savedPos.t)} (${ageStr})`, 4000);
-      }, 800);
+        showToast(`⏱ Позиция: ${formatTime(savedPos.t)} (${ageStr})`, 4000);
+      }, 1000);
     }
 
-    // --- Close button: returns to main page (does NOT close Mini App) ---
+    // --- Close button ---
     function closePlayer() {
       saveBeforeLeave();
       if (window.history.length > 1 && document.referrer && document.referrer.includes(window.location.origin)) {
@@ -355,30 +371,37 @@
 
     // --- Auto-fullscreen on orientation change (mobile) ---
     function isMobile() {
-      return window.innerWidth <= 768 ||
-        /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
+      return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent) ||
+             (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
     }
 
     function isLandscape() {
-      // Use screen orientation when available, fall back to dimensions
       if (screen.orientation && screen.orientation.type) {
         return screen.orientation.type.startsWith('landscape');
       }
       return window.innerWidth > window.innerHeight;
     }
 
+    function isFullscreen() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+    }
+
     function requestFullscreen() {
+      // Try element-level Fullscreen API first
       const el = playerMain;
-      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
       if (fn) {
         try {
           const p = fn.call(el);
           if (p && p.catch) p.catch(err => console.warn('Fullscreen denied:', err));
+          return true;
         } catch (e) { console.warn('Fullscreen error:', e); }
-      } else if (iframe.webkitEnterFullscreen) {
-        // iOS Safari: enter fullscreen on the iframe element directly
-        try { iframe.webkitEnterFullscreen(); } catch (e) {}
       }
+      // iOS Safari fallback: try iframe's webkitEnterFullscreen
+      if (iframe.webkitEnterFullscreen) {
+        try { iframe.webkitEnterFullscreen(); return true; } catch (e) {}
+      }
+      return false;
     }
 
     function exitFullscreen() {
@@ -386,45 +409,47 @@
       if (fn) {
         try { fn.call(document); } catch (e) {}
       }
-    }
-
-    function isFullscreen() {
-      return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+      // iOS iframe fullscreen auto-exits on orientation change to portrait
     }
 
     function handleOrientationChange() {
       const landscape = isLandscape();
-      if (landscape && isMobile()) {
-        // Entering landscape on mobile — go fullscreen automatically
-        if (!isFullscreen()) requestFullscreen();
+      const mobile = isMobile();
+      if (landscape && mobile) {
+        if (!isFullscreen()) {
+          requestFullscreen();
+        }
       } else {
-        // Back to portrait — exit fullscreen if we entered it
-        if (isFullscreen()) exitFullscreen();
+        if (isFullscreen()) {
+          exitFullscreen();
+        }
       }
     }
 
-    // Listen for orientation changes via multiple APIs (cross-browser)
+    // Listen to multiple orientation events for cross-browser support
     if (screen.orientation && screen.orientation.addEventListener) {
       screen.orientation.addEventListener('change', handleOrientationChange);
-    } else {
-      window.addEventListener('orientationchange', handleOrientationChange);
     }
+    window.addEventListener('orientationchange', handleOrientationChange);
 
-    // Also listen to resize as a fallback (some browsers fire resize first)
     let resizeTimer = null;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(handleOrientationChange, 200);
     });
 
-    // Trigger on initial load if already in landscape
+    // Initial check after load
     setTimeout(handleOrientationChange, 500);
 
-    // Exit fullscreen on ESC (browser handles it automatically, but also restore header)
-    document.addEventListener('fullscreenchange', () => {
-      // No-op — CSS handles header visibility via :fullscreen selector
-    });
-    document.addEventListener('webkitfullscreenchange', () => {});
+    // Tap on player to enter fullscreen manually (user gesture — works everywhere)
+    playerMain.addEventListener('click', (e) => {
+      // Only on mobile and only if not in fullscreen
+      if (!isMobile()) return;
+      if (isFullscreen()) return;
+      // Don't trigger if user clicked on toast or controls inside iframe
+      // (the click event here fires on the iframe element, not inside it)
+      // requestFullscreen();  // disabled — let user rotate for auto, or use iframe's own fullscreen button
+    }, { passive: true });
   </script>
 </body>
 </html>

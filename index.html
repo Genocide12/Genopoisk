@@ -159,13 +159,33 @@
     }
     const tgInitData = tg?.initData || '';
 
+    // --- User identification: works in Telegram Mini App AND in regular browser ---
+    // Telegram user ID from initData takes precedence on the server;
+    // for browser users (no initData) we generate a stable UUID in localStorage.
+    function getBrowserUserId() {
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
+    }
+    const browserUserId = getBrowserUserId();
+
     // --- Tracking ---
     async function trackEvent(type, payload = {}) {
       try {
         await fetch('/api/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, initData: tgInitData, ...payload })
+          body: JSON.stringify({
+            type,
+            initData: tgInitData,
+            userId: browserUserId, // fallback for browser users
+            ...payload
+          })
         });
       } catch (e) { console.warn('track error:', e); }
     }
@@ -187,7 +207,10 @@
         const res = await fetch('/api/last-film', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: tgInitData })
+          body: JSON.stringify({
+            initData: tgInitData,
+            userId: browserUserId // fallback for browser users
+          })
         });
         if (!res.ok) return;
         const data = await res.json();

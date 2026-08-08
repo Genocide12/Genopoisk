@@ -1,5 +1,6 @@
 // Server-side proxy for Kinopoisk API — hides the API key from the browser
-// All requests to /api/kinopoisk/* are forwarded to https://kinopoiskapiunofficial.tech/api/*
+// Routes: rewritten from /api/kinopoisk/<path>?<query> to /api/kinopoisk?q=<path>&<query>
+// Forwards to: https://kinopoiskapiunofficial.tech/api/<path>?<query>
 
 const KINOPOISK_API_KEY = process.env.KINOPOISK_API_KEY;
 const KINOPOISK_BASE = 'https://kinopoiskapiunofficial.tech/api';
@@ -27,12 +28,30 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Server misconfigured: missing API key' });
   }
 
-  // Extract the path after /api/kinopoisk/
-  // req.url looks like: /v2.2/films/top?type=TOP_250_BEST_FILMS&page=1
-  const path = req.url || '';
+  // req.query.q contains the path portion (e.g., "v2.2/films/top" or "v2.1/films/search-by-keyword")
+  // Other query params (type, page, keyword, etc.) come from the original request
+  const query = req.query || {};
+  const path = query.q || '';
 
-  // Build target URL
-  const targetUrl = `${KINOPOISK_BASE}${path}`;
+  if (!path) {
+    return res.status(400).json({
+      error: 'Missing path',
+      usage: '/api/kinopoisk/v2.2/films/top?type=TOP_250_BEST_FILMS&page=1'
+    });
+  }
+
+  // Sanitize path: only allow alphanumeric, slashes, dashes, underscores, dots
+  if (!/^[a-zA-Z0-9._\-\/]+$/.test(path)) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+
+  // Rebuild query string from all params except `q`
+  const otherParams = Object.entries(query)
+    .filter(([k]) => k !== 'q')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+
+  const targetUrl = `${KINOPOISK_BASE}/${path.replace(/^\//, '')}${otherParams ? '?' + otherParams : ''}`;
 
   // Check cache
   const cacheKey = targetUrl;
@@ -64,7 +83,11 @@ module.exports = async (req, res) => {
 
     const data = await upstream.json();
 
-    // Save to cache
+    // Save to cache (limit cache size)
+    if (cache.size > 100) {
+      const oldest = cache.keys().next().value;
+      cache.delete(oldest);
+    }
     cache.set(cacheKey, { data, ts: Date.now() });
 
     res.setHeader('X-Cache', 'MISS');

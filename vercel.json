@@ -2,10 +2,12 @@
   "version": 2,
   "functions": {
     "api/**/*.js": {
-      "memory": 256,
       "maxDuration": 10
     }
   },
+  "rewrites": [
+    { "source": "/api/kinopoisk/(.*)", "destination": "/api/kinopoisk?q=$1" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

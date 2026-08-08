@@ -76,6 +76,8 @@
   function startAdBlocking() {
     log('Ad blocking started');
 
+    // Ad-blocking CSS — hide known ad containers and overlays.
+    // venoplayer (player-venom npm package) uses .vjs-* classes (videojs-like).
     var adCSS = '' +
       '[class*="ad-container"],[class*="ad-overlay"],[class*="ads-"],' +
       '[class*="vast-"],[class*="vpaid"],[id*="ad-"],[id*="ads-"],' +
@@ -85,12 +87,17 @@
       'iframe[src*="google_ads"],iframe[src*="googleads"],' +
       'iframe[src*="ad."],iframe[src*="/ad/"],iframe[src*="/ads/"],' +
       'iframe[src*="taboola"],iframe[src*="outbrain"],' +
+      'iframe[src*="distribrey"],iframe[src*="load-xml"],' +
       '.ytp-ad,.ytp-ad-overlay,[class*="ytp-ad"],' +
       '[class*="AdSlot"],[class*="adSlot"],[class*="ad_"],' +
       '#ad,#ads,#ad-container,#adBanner,' +
       '.adsbygoogle,ins.adsbygoogle,' +
       '[class*="vjs-marker"],[class*="ad-marker"],' +
-      '[data-ad],[data-ad-slot],[data-ad-client]' +
+      '[data-ad],[data-ad-slot],[data-ad-client],' +
+      // venom player ad elements
+      '.vjs-ad-loading,.vjs-ad-playing,.vjs-ad-info,.vjs-ad-progress,' +
+      '.vp-ad,.vp-ad-overlay,.vp-ads,' +
+      '[class*="vjs-ads-show"],[class*="vjs-loading-spinner"]' +
       '{display:none!important;visibility:hidden!important;opacity:0!important;' +
       'pointer-events:none!important;width:0!important;height:0!important;' +
       'position:absolute!important;left:-9999px!important}' +
@@ -109,7 +116,8 @@
       'button[class*="Skip"]', 'a[class*="Skip"]',
       '[class*="skip_button"]', '.skip-btn',
       '[aria-label*="Skip"]', '[aria-label*="skip"]',
-      '[class*="vjs-skip"]'
+      '[class*="vjs-skip"]', '.vjs-ad-skip-button',
+      '[class*="vp-skip"]'
     ];
     setInterval(function() {
       for (var i = 0; i < skipSelectors.length; i++) {
@@ -124,15 +132,16 @@
       }
     }, 300);
 
-    // Block ad URLs in video.src setter
+    // Block ad URLs in video.src setter — including VAST/VPAID ad providers
+    var adUrlPattern = /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain|distribrey|load-xml|admixer|adservice/i;
+
     try {
       var proto = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
       if (proto && proto.set) {
         Object.defineProperty(HTMLMediaElement.prototype, 'src', {
           get: function() { return proto.get.call(this); },
           set: function(val) {
-            if (typeof val === 'string' &&
-                /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain/i.test(val)) {
+            if (typeof val === 'string' && adUrlPattern.test(val)) {
               log('Blocked ad URL in src:', val);
               return;
             }
@@ -148,7 +157,7 @@
       var origFetch = window.fetch;
       window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input : (input && input.url) || '';
-        if (/doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain/i.test(url)) {
+        if (adUrlPattern.test(url)) {
           log('Blocked fetch to ad domain:', url);
           return Promise.resolve(new Response('', { status: 204 }));
         }
@@ -160,8 +169,7 @@
     try {
       var origOpen = XMLHttpRequest.prototype.open;
       XMLHttpRequest.prototype.open = function(method, url) {
-        if (typeof url === 'string' &&
-            /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain/i.test(url)) {
+        if (typeof url === 'string' && adUrlPattern.test(url)) {
           log('Blocked XHR to ad domain:', url);
           throw new Error('blocked');
         }
@@ -178,14 +186,14 @@
           if (node.nodeType !== 1) continue;
           if (node.tagName === 'IFRAME') {
             var src = node.src || '';
-            if (/doubleclick|googlesyndication|google_ads|googleads|adserver|taboola|outbrain/i.test(src)) {
+            if (adUrlPattern.test(src) || /distribrey|load-xml/i.test(src)) {
               log('Removed ad iframe:', src);
               node.remove();
             }
           }
           if (node.tagName === 'DIV' || node.tagName === 'INS') {
             var cls = (node.className || '') + ' ' + (node.id || '');
-            if (/(?:^|[-_])ad(?:[-_]|$)|adsbygoogle|ad-container|ad-slot/i.test(cls)) {
+            if (/(?:^|[-_])ad(?:[-_]|$)|adsbygoogle|ad-container|ad-slot|distribrey/i.test(cls)) {
               node.style.display = 'none';
               node.style.visibility = 'hidden';
             }
@@ -198,11 +206,22 @@
     log('Ad blocking fully initialized');
   }
 
-  // Poll for video element every 250ms
+  // Poll for video element every 200ms (up to 60s).
+  // player-venom creates the <video> element dynamically after JS init,
+  // so we may need to wait a few seconds before it appears.
+  var videoCheckCount = 0;
   var videoCheckInterval = setInterval(function() {
+    videoCheckCount++;
     var v = document.querySelector('video');
-    if (v) setupVideo(v);
-  }, 250);
+    if (v) {
+      setupVideo(v);
+      clearInterval(videoCheckInterval);
+    } else if (videoCheckCount > 300) {
+      // Give up after 60s
+      clearInterval(videoCheckInterval);
+      log('Video element not found after 60s — giving up');
+    }
+  }, 200);
 
   // Also observe DOM mutations to catch the video element as soon as it's added
   var videoObserver = new MutationObserver(function() {
@@ -213,4 +232,5 @@
 
   // Notify parent that the bridge is alive (even before video element exists)
   post({ type: 'bridge_ready' });
+  log('bridge_ready posted to parent');
 })();

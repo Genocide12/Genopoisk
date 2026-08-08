@@ -49,13 +49,26 @@
         log('P2P CDN blocked (network error):', url.slice(0, 100));
         return Promise.reject(new TypeError('Failed to fetch'));
       }
+      // Rewrite segment URLs from broken CDNs to working CDN
+      if (typeof url === 'string') {
+        var newUrl = url.replace(
+          /https:\/\/(ghzbfjzbazc|x-bc)\.interkh\.com/g,
+          'https://hye1eaipby4w.interkh.com'
+        );
+        if (newUrl !== url) {
+          log('fetch URL rewrite:', url.slice(0, 60), '→', newUrl.slice(0, 60));
+          if (typeof input === 'string') {
+            input = newUrl;
+          } else if (input && input.url) {
+            input = new Request(newUrl, input);
+          }
+        }
+      }
       // Intercept MPD manifest responses and rewrite BaseURL from broken
       // P2P CDNs (ghzbfjzbazc, x-bc) to the working CDN (hye1eaipby4w).
-      // This is the KEY fix for video playback on desktop.
       return origFetch.apply(this, arguments).then(function(res) {
         var ct = res.headers.get('content-type') || '';
         if (ct.indexOf('dash+xml') !== -1 || ct.indexOf('xml') !== -1) {
-          // Clone and rewrite
           return res.text().then(function(text) {
             if (text.indexOf('<MPD') === -1) return res;
             var rewritten = text.replace(
@@ -63,7 +76,7 @@
               'https://hye1eaipby4w.interkh.com'
             );
             if (rewritten !== text) {
-              log('Rewrote MPD BaseURL: ghzbfjzbazc/x-bc → hye1eaipby4w');
+              log('Rewrote MPD BaseURL (fetch body): ghzbfjzbazc/x-bc → hye1eaipby4w');
             }
             return new Response(rewritten, {
               status: res.status,
@@ -84,6 +97,21 @@
     XMLHttpRequest.prototype.open = function(method, url) {
       this._genopoiskBlocked = isBlocked(url);
       this._genopoiskP2p = isP2pCdn(url);
+      // Rewrite segment URLs from broken CDNs to working CDN.
+      // dash.js constructs segment URLs as BaseURL + SegmentTemplate.
+      // We rewrite them here in open() so the actual request goes to the
+      // working CDN.
+      if (typeof url === 'string') {
+        var newUrl = url.replace(
+          /https:\/\/(ghzbfjzbazc|x-bc)\.interkh\.com/g,
+          'https://hye1eaipby4w.interkh.com'
+        );
+        if (newUrl !== url) {
+          log('XHR URL rewrite:', url.slice(0, 60), '→', newUrl.slice(0, 60));
+          url = newUrl;
+          arguments[1] = newUrl;
+        }
+      }
       this._genopoiskUrl = url;
       return origOpen.apply(this, arguments);
     };
@@ -117,9 +145,7 @@
         }, 0);
         return;
       }
-      // Intercept MPD manifest responses and rewrite BaseURL
-      var origOnReadyStateChange = this.onreadystatechange;
-      var origOnLoad = this.onload;
+      // Also intercept MPD manifest responses and rewrite BaseURL in body
       this.addEventListener('readystatechange', function() {
         if (self.readyState === 4 && self.status === 200) {
           var ct = self.getResponseHeader('content-type') || '';
@@ -130,7 +156,7 @@
               'https://hye1eaipby4w.interkh.com'
             );
             if (rewritten !== self.responseText) {
-              log('Rewrote MPD BaseURL (XHR): ghzbfjzbazc/x-bc → hye1eaipby4w');
+              log('Rewrote MPD BaseURL (XHR body): ghzbfjzbazc/x-bc → hye1eaipby4w');
               try {
                 Object.defineProperty(self, 'responseText', { value: rewritten, configurable: true });
                 Object.defineProperty(self, 'response', { value: rewritten, configurable: true });

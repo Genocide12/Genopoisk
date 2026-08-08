@@ -46,16 +46,24 @@
   // adUrlPattern blocks VAST/VPAID ad providers (distribrey.com etc.)
   // trackingPattern blocks embess.ws's stats/telemetry endpoints that slow
   // down player init by waiting on WebSocket connections to s.myangular.life.
-  // p2pPattern blocks venoplayer's P2P tracker WebSocket only (t6.zcvh.net).
-  // We do NOT block x-bc/ghzbfjzbazc.interkh.com — those are video segment CDNs
-  // that venoplayer tries via P2P; blocking them entirely prevents fallback.
+  // p2pCdnPattern blocks venoplayer's broken P2P CDN nodes (x-bc, ghzbfjzbazc).
+  // These timeout after ~30s each. By returning a NETWORK ERROR (not 204),
+  // venoplayer's P2P loader fails instantly and falls back to direct HTTP
+  // from hye1eaipby4w.interkh.com (the working CDN).
   var adUrlPattern = /doubleclick|googlesyndication|google_ads|googleads|adserver|vast|vpaid|taboola|outbrain|distribrey|load-xml|admixer|adservice|popads|propellerads|popcash|adsterra/i;
   var trackingPattern = /s\.myangular\.life|stats\.myangular\.life|myangular\.life/i;
   var p2pTrackerPattern = /t6\.zcvh\.net/i;
+  // P2P CDN nodes that timeout — block with instant network error
+  var p2pCdnPattern = /x-bc\.interkh\.com|ghzbfjzbazc\.interkh\.com/i;
 
   function isBlocked(url) {
     if (typeof url !== 'string') return false;
     return adUrlPattern.test(url) || trackingPattern.test(url) || p2pTrackerPattern.test(url);
+  }
+
+  function isP2pCdn(url) {
+    if (typeof url !== 'string') return false;
+    return p2pCdnPattern.test(url);
   }
 
   // Override fetch
@@ -64,31 +72,36 @@
     window.fetch = function(input, init) {
       var url = typeof input === 'string' ? input : (input && input.url) || '';
       if (isBlocked(url)) {
-        log('Blocked fetch:', url.slice(0, 100));
+        log('Blocked fetch (204):', url.slice(0, 100));
         return Promise.resolve(new Response('', { status: 204 }));
+      }
+      // P2P CDN: return instant network error so venoplayer falls back fast
+      if (isP2pCdn(url)) {
+        log('P2P CDN blocked (network error):', url.slice(0, 100));
+        return Promise.reject(new TypeError('Failed to fetch'));
       }
       return origFetch.apply(this, arguments);
     };
   } catch(e) {}
 
   // Override XMLHttpRequest
-  // IMPORTANT: Don't replace URL with 'about:blank' — that causes CORS errors
-  // when venoplayer tries to actually send the request. Instead, we let the
-  // open() call proceed but immediately abort the send() and fake a 204 response.
   try {
     var origOpen = XMLHttpRequest.prototype.open;
     var origSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open = function(method, url) {
       this._genopoiskBlocked = isBlocked(url);
+      this._genopoiskP2p = isP2pCdn(url);
       if (this._genopoiskBlocked) {
-        log('Blocked XHR (will fake response):', url.slice(0, 100));
+        log('Blocked XHR (will fake 204):', url.slice(0, 100));
+      } else if (this._genopoiskP2p) {
+        log('P2P CDN XHR (will fake error):', url.slice(0, 100));
       }
       return origOpen.apply(this, arguments);
     };
     XMLHttpRequest.prototype.send = function(body) {
+      var self = this;
       if (this._genopoiskBlocked) {
-        // Fake a successful empty response
-        var self = this;
+        // Fake a successful empty 204 response
         setTimeout(function() {
           try {
             Object.defineProperty(self, 'readyState', { value: 4, configurable: true });
@@ -98,6 +111,20 @@
             if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
             if (typeof self.onload === 'function') self.onload();
             self.dispatchEvent(new Event('load'));
+            self.dispatchEvent(new Event('loadend'));
+          } catch(e) {}
+        }, 0);
+        return;
+      }
+      if (this._genopoiskP2p) {
+        // Fake a network error — venoplayer treats this as "P2P failed, try HTTP"
+        setTimeout(function() {
+          try {
+            Object.defineProperty(self, 'readyState', { value: 4, configurable: true });
+            Object.defineProperty(self, 'status', { value: 0, configurable: true });
+            if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
+            if (typeof self.onerror === 'function') self.onerror();
+            self.dispatchEvent(new Event('error'));
             self.dispatchEvent(new Event('loadend'));
           } catch(e) {}
         }, 0);

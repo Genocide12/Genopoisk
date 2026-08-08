@@ -107,72 +107,90 @@ async function writeStats(stats) {
 }
 
 async function recordEvent(eventType, payload = {}) {
-  const stats = await readStats();
+  // Retry the entire read-modify-write cycle on conflict (409/422).
+  // This handles concurrent writes from multiple /api/track requests.
+  const MAX_RETRIES = 3;
+  let lastError = null;
 
-  if (!stats.totals) stats.totals = defaultStats().totals;
-  const totalKey = eventType in stats.totals ? eventType : null;
-  if (totalKey) stats.totals[totalKey] = (stats.totals[totalKey] || 0) + 1;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const stats = await readStats();
 
-  // Track unique users with extended info
-  if (payload.userId) {
-    if (!stats.users) stats.users = {};
-    if (!stats.users[payload.userId]) {
-      stats.users[payload.userId] = defaultUser();
-    }
-    const u = stats.users[payload.userId];
-    u.events = (u.events || 0) + 1;
-    u.last_seen = new Date().toISOString();
-    if (payload.username) u.username = payload.username;
-    if (!u.events_by_type) u.events_by_type = { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0 };
-    if (totalKey) u.events_by_type[totalKey] = (u.events_by_type[totalKey] || 0) + 1;
+      if (!stats.totals) stats.totals = defaultStats().totals;
+      const totalKey = eventType in stats.totals ? eventType : null;
+      if (totalKey) stats.totals[totalKey] = (stats.totals[totalKey] || 0) + 1;
 
-    // Track IP — keep last known + history of unique IPs (max 10)
-    if (payload.ip) {
-      u.ip = payload.ip;
-      if (!u.ip_history) u.ip_history = [];
-      if (!u.ip_history.includes(payload.ip)) {
-        u.ip_history.unshift(payload.ip);
-        if (u.ip_history.length > 10) u.ip_history = u.ip_history.slice(0, 10);
+      // Track unique users with extended info
+      if (payload.userId) {
+        if (!stats.users) stats.users = {};
+        if (!stats.users[payload.userId]) {
+          stats.users[payload.userId] = defaultUser();
+        }
+        const u = stats.users[payload.userId];
+        u.events = (u.events || 0) + 1;
+        u.last_seen = new Date().toISOString();
+        if (payload.username) u.username = payload.username;
+        if (!u.events_by_type) u.events_by_type = { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0 };
+        if (totalKey) u.events_by_type[totalKey] = (u.events_by_type[totalKey] || 0) + 1;
+
+        // Track IP — keep last known + history of unique IPs (max 10)
+        if (payload.ip) {
+          u.ip = payload.ip;
+          if (!u.ip_history) u.ip_history = [];
+          if (!u.ip_history.includes(payload.ip)) {
+            u.ip_history.unshift(payload.ip);
+            if (u.ip_history.length > 10) u.ip_history = u.ip_history.slice(0, 10);
+          }
+        }
+
+        // Track last film opened (for "continue watching" feature)
+        if (eventType === 'movies_opened' && payload.filmId) {
+          u.last_film = {
+            filmId: String(payload.filmId).slice(0, 20),
+            title: (payload.title || 'Фильм').slice(0, 100),
+            ts: new Date().toISOString()
+          };
+        }
       }
+
+      // Daily stats
+      const today = new Date().toISOString().slice(0, 10);
+      if (!stats.daily) stats.daily = {};
+      if (!stats.daily[today]) {
+        stats.daily[today] = { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0, unique_users: 0 };
+      }
+      if (totalKey) stats.daily[today][totalKey] = (stats.daily[today][totalKey] || 0) + 1;
+
+      // Recent events (keep last 100) — also include IP for audit
+      if (!stats.recent_events) stats.recent_events = [];
+      stats.recent_events.unshift({
+        type: eventType,
+        ts: new Date().toISOString(),
+        ...payload
+      });
+      if (stats.recent_events.length > 100) {
+        stats.recent_events = stats.recent_events.slice(0, 100);
+      }
+
+      // Count unique users today
+      const todayUsers = Object.entries(stats.users || {})
+        .filter(([_, v]) => v.last_seen && v.last_seen.startsWith(today))
+        .length;
+      stats.daily[today].unique_users = todayUsers;
+
+      await writeStats(stats);
+      return stats;
+    } catch (e) {
+      lastError = e;
+      // If it's a conflict error, wait a bit and retry
+      if (e.message && (e.message.includes('409') || e.message.includes('422'))) {
+        await new Promise(r => setTimeout(r, 200 * (attempt + 1))); // 200ms, 400ms, 600ms
+        continue;
+      }
+      throw e; // non-conflict error, don't retry
     }
-
-    // Track last film opened (for "continue watching" feature)
-    if (eventType === 'movies_opened' && payload.filmId) {
-      u.last_film = {
-        filmId: String(payload.filmId).slice(0, 20),
-        title: (payload.title || 'Фильм').slice(0, 100),
-        ts: new Date().toISOString()
-      };
-    }
   }
-
-  // Daily stats
-  const today = new Date().toISOString().slice(0, 10);
-  if (!stats.daily) stats.daily = {};
-  if (!stats.daily[today]) {
-    stats.daily[today] = { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0, unique_users: 0 };
-  }
-  if (totalKey) stats.daily[today][totalKey] = (stats.daily[today][totalKey] || 0) + 1;
-
-  // Recent events (keep last 100) — also include IP for audit
-  if (!stats.recent_events) stats.recent_events = [];
-  stats.recent_events.unshift({
-    type: eventType,
-    ts: new Date().toISOString(),
-    ...payload
-  });
-  if (stats.recent_events.length > 100) {
-    stats.recent_events = stats.recent_events.slice(0, 100);
-  }
-
-  // Count unique users today
-  const todayUsers = Object.entries(stats.users || {})
-    .filter(([_, v]) => v.last_seen && v.last_seen.startsWith(today))
-    .length;
-  stats.daily[today].unique_users = todayUsers;
-
-  await writeStats(stats);
-  return stats;
+  throw lastError;
 }
 
 // Read stats for a single user (sanitized for the response)

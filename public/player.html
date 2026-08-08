@@ -100,18 +100,32 @@
       width:100vw;
       height:calc(100vh - 52px);
       height:calc(100dvh - 52px);
+      /* Ensure iframe fills this container completely */
+      display:block;
     }
     .player-iframe {
       position:absolute;
-      top:0;
-      left:0;
+      top:0 !important;
+      left:0 !important;
+      right:0 !important;
+      bottom:0 !important;
       width:100% !important;
       height:100% !important;
       max-width:100% !important;
       max-height:100% !important;
+      min-width:100% !important;
+      min-height:100% !important;
       border:none;
       background:#111;
       display:block;
+      box-sizing:border-box;
+    }
+    /* Force venoplayer's internal container to fill iframe */
+    .player-iframe html, .player-iframe body, .player-iframe #player {
+      width:100% !important;
+      height:100% !important;
+      margin:0 !important;
+      padding:0 !important;
     }
     .toast {
       position:absolute;

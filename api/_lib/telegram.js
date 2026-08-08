@@ -36,8 +36,22 @@ async function sendMessage(chatId, text, extra = {}) {
   });
 }
 
+// Edit an existing message (identified by chatId + messageId) instead of sending a new one.
+// Used for inline button navigation: when user taps a button, we update the
+// same message text + buttons rather than posting a new message.
+async function editMessage(chatId, messageId, text, extra = {}) {
+  return tg('editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    ...extra
+  });
+}
+
 async function answerCallback(callbackId, text) {
   return tg('answerCallbackQuery', { callback_query_id: callbackId, text });
 }
 
-module.exports = { tg, isAdmin, sendMessage, answerCallback };
+module.exports = { tg, isAdmin, sendMessage, editMessage, answerCallback };

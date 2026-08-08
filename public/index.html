@@ -270,6 +270,17 @@
 
     // Fire async — don't block page load
     loadResumeCard();
+    // Retry after window load — telegram-web-app.js loads async, so tgInitData
+    // may not be available on first call. Without initData, browser userId is
+    // used as fallback, but in Telegram Mini App we want the real Telegram ID.
+    window.addEventListener('load', function() {
+      // Re-init Telegram WebApp (script may have loaded by now)
+      if (!tg) tg = initTelegramWebApp();
+      // Only retry if card is not visible yet
+      if (!resumeCard.classList.contains('visible')) {
+        loadResumeCard();
+      }
+    });
 
     let currentCategory = null;
     let currentPage = 1;

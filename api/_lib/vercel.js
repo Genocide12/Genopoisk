@@ -54,13 +54,23 @@ async function getRecentCommits() {
   return null;
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function formatDeployment(d) {
   const state = d.readyState || d.state || '?';
   const emoji = state === 'READY' ? '✅' : state === 'ERROR' ? '❌' : state === 'BUILDING' ? '🔨' : '⏳';
   const meta = d.meta || {};
-  const commitMsg = meta.githubCommitMessage || '(no commit)';
+  // Escape HTML in commit message — it may contain <meta>, <script>, etc.
+  // Telegram HTML parser will fail with "Unsupported start tag" if not escaped.
+  const commitMsg = escapeHtml(meta.githubCommitMessage || '(no commit)').slice(0, 200);
   const commitSha = (meta.githubCommitSha || '').slice(0, 7);
-  const branch = meta.githubCommitRef || 'main';
+  const branch = escapeHtml(meta.githubCommitRef || 'main');
   const created = new Date(d.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
   const url = d.url ? `https://${d.url}` : '';
   return `${emoji} <b>${state}</b> • ${created}\n   📝 ${commitMsg}\n   🔀 #${branch} @${commitSha}\n   🔗 ${url}`;

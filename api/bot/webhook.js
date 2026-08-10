@@ -100,9 +100,6 @@ function usersListKeyboard(users, page) {
 
 function userProfileKeyboard(targetId, hasLastFilm) {
   const buttons = [];
-  if (hasLastFilm) {
-    buttons.push([{ text: '🎬 Открыть последний фильм', web_app: { url: SITE_URL } }]);
-  }
   buttons.push([
     { text: '🗑 Удалить профиль', callback_data: 'delprompt_' + targetId },
     { text: '⬅️ К списку', callback_data: 'menu_users' }
@@ -693,17 +690,19 @@ async function handleCallback(update) {
         var star = s <= currentRating ? '⭐' : '☆';
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
-      var downloadUrl1 = 'https://hdgo.cc/video/' + film.filmId;
-      var downloadUrl2 = 'https://voidboost.cc/embed/' + film.filmId;
+      var dlKinobase = 'https://kinobase.org/film/' + film.filmId;
+      var dlHdgo = 'https://hdgo.cc/video/' + film.filmId;
+      var dlFilmix = 'https://filmix.fm/film/' + film.filmId;
       await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
             starButtons,
             [
-              { text: '📥 Скачать (HDGO)', url: downloadUrl1 },
-              { text: '📥 Скачать (Void)', url: downloadUrl2 }
+              { text: '📥 Kinobase', url: dlKinobase },
+              { text: '📥 HDGO', url: dlHdgo }
             ],
+            [{ text: '📥 Filmix', url: dlFilmix }],
             [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
           ]
         }

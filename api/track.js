@@ -89,12 +89,12 @@ module.exports = async (req, res) => {
     // Fallback for browser users: use the stable localStorage ID sent by client.
     // This ID persists across VPN changes (stored in browser localStorage),
     // so user history is preserved regardless of network/IP changes.
-    // We also capture device name from User-Agent for display purposes.
     if (userId === 'anon') {
       if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
-        // Browser user — use the stable localStorage ID as-is
+        // Browser user — check if we can merge with a TG user that has the same IP.
+        // This handles the case where user first opened in browser (got web_ ID),
+        // then opened in Telegram (got TG ID). We link them by IP.
         userId = String(body.userId);
-        // Set username to device name for display in bot
         const ua = req.headers['user-agent'] || 'unknown';
         const deviceName = getDeviceName(ua);
         username = deviceName + ' (браузер)';

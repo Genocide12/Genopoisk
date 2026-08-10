@@ -65,8 +65,9 @@
     });
     cObs.observe(document.documentElement, { childList: true, subtree: true });
   }
-  // Periodically force-show controls (every 1.5s)
+  // Periodically force-show controls (every 1s) — iOS Safari needs this
   setInterval(function() {
+    // Force venoplayer controls visible
     var controls = document.querySelector('.vp-controls, .vjs-control-bar, .player-controls');
     if (controls) {
       if (controls.style.opacity === '0' || controls.style.visibility === 'hidden' || controls.style.display === 'none') {
@@ -75,13 +76,20 @@
         controls.style.display = 'flex';
       }
     }
-    // Also remove ad overlay messages if they appear
+    // Remove ad overlay messages
     var adMsgs = document.querySelectorAll('.vp-ad-message, .ad-message, [class*="fullscreen-disabled"]');
     for (var i = 0; i < adMsgs.length; i++) {
       adMsgs[i].style.display = 'none';
       adMsgs[i].remove();
     }
-  }, 1500);
+    // Force video element controls attribute (iOS native controls fallback)
+    var vids = document.querySelectorAll('video');
+    for (var j = 0; j < vids.length; j++) {
+      if (!vids[j].controls) {
+        vids[j].controls = true;
+      }
+    }
+  }, 1000);
   // venoplayer sets #player height:180px inline. We need:
   // 1. html, body { height:100% } so #player can be height:100%
   // 2. #player { height:100% !important } to override inline 180px

@@ -165,33 +165,13 @@
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
 
-    // --- User identification: works in Telegram Mini App AND in regular browser ---
-    // Priority: 1) Stored TG user ID (from previous Telegram visit)
-    //           2) Stable localStorage web_ ID (persists across VPN changes)
-    function getBrowserUserId() {
-      // Check if we have a stored TG user ID (from previous Telegram visit)
-      const tgId = localStorage.getItem('genopoisk_tg_user_id');
-      if (tgId) {
-        console.log('[user] Using stored TG ID:', tgId);
-        return tgId;
-      }
-      // Fallback: stable localStorage ID
-      let id = localStorage.getItem('genopoisk_user_id');
-      if (!id) {
-        const rand = Math.random().toString(36).slice(2, 11);
-        const time = Date.now().toString(36);
-        id = `web_${time}_${rand}`;
-        localStorage.setItem('genopoisk_user_id', id);
-      }
-      return id;
-    }
-    const browserUserId = getBrowserUserId();
-
-    // --- Telegram WebApp init (lazy — telegram-web-app.js loads async) ---
-    // We don't block on this. tgInitData is read on demand.
+    // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
+    // We need to extract TG user ID from initData and store it in localStorage
+    // BEFORE getBrowserUserId() reads it, so profiles are linked.
     let tgInitData = '';
+    let tg = null;
     function initTelegramWebApp() {
-      const tg = window.Telegram && window.Telegram.WebApp;
+      tg = window.Telegram && window.Telegram.WebApp;
       if (!tg) return null;
       try {
         tg.ready();
@@ -200,10 +180,6 @@
         if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
       } catch (_) {}
       tgInitData = tg.initData || '';
-      // If we have initData, extract TG user ID and store it in localStorage.
-      // This links the browser session to the Telegram account — even if the
-      // user later opens the site from a regular browser (without Telegram),
-      // we'll use the stored TG ID so their history is preserved.
       if (tgInitData) {
         try {
           const params = new URLSearchParams(tgInitData);
@@ -218,11 +194,36 @@
       console.log('[tg] Telegram WebApp initialized, has initData:', !!tgInitData);
       return tg;
     }
-    // Try immediately (script may already be loaded in Mini App)
-    let tg = initTelegramWebApp();
-    // Also retry after window load (async script)
+    // Try immediately — in Telegram Mini App, telegram-web-app.js is already loaded
+    tg = initTelegramWebApp();
+
+    // --- User identification ---
+    // Priority: 1) Stored TG user ID (from previous Telegram visit, in localStorage)
+    //           2) Stable localStorage web_ ID (persists across VPN changes)
+    function getBrowserUserId() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) {
+        console.log('[user] Using stored TG ID:', tgId);
+        return tgId;
+      }
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
+    }
+    const browserUserId = getBrowserUserId();
+
+    // Retry TG init after window load (async script may load late)
     window.addEventListener('load', function() {
-      if (!tg) tg = initTelegramWebApp();
+      if (!tg) {
+        tg = initTelegramWebApp();
+        // If TG ID was just stored, update browserUserId for future requests
+        // (already-set browserUserId won't change, but trackEvent uses it)
+      }
     });
 
     // --- Tracking ---

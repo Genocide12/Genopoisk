@@ -112,7 +112,7 @@ function userProfileKeyboard(targetId, hasLastFilm) {
 
 async function cmdStart(chatId, user, text) {
   // Check for /start login — user wants to link their browser session
-  const startParam = text.split(/\s+/).slice(1).join(' ').trim();
+  const startParam = (text || '').split(/\s+/).slice(1).join(' ').trim();
   if (startParam === 'login') {
     const name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : ('@' + (user.username || 'Telegram'));
     const loginUrl = SITE_URL.replace(/\/$/, '') + '/?tg_id=' + user.id + '&tg_name=' + encodeURIComponent(name);
@@ -481,7 +481,7 @@ async function handleMessage(update) {
     return;
   }
 
-  if (text.startsWith('/start')) return cmdStart(chatId, user);
+  if (text.startsWith('/start')) return cmdStart(chatId, user, text);
   if (text.startsWith('/help')) return cmdHelp(chatId, user);
 
   // Admin-only commands (no menu for regular users)

@@ -37,25 +37,33 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 0. Use native video controls only (hide ALL venoplayer custom controls) ======
+  // ====== 0. Show only native center play/pause button ======
+  // Hide ALL venoplayer custom UI except the center play/pause button.
+  // Hide native video.controls (bottom bar) — only keep the big center button.
   function injectControlsFix() {
     if (document.querySelector('style[data-genopoisk-controls]')) return;
     var css =
-      // Hide ALL venoplayer custom UI — controls, buttons, overlays, spinner
+      // Hide venoplayer bottom bar, side panels, etc — keep only center play button
       '.vp-controls, .vp-control-bar, .vjs-control-bar, .player-controls, ' +
-      '.vp-bottom-bar, .vp-top-bar, .vp-center-controls, .vp-overlay, ' +
-      '.vp-big-play-button, .vp-loading-spinner, .vp-progress-bar, ' +
+      '.vp-bottom-bar, .vp-top-bar, ' +
       '.vp-settings-panel, .vp-volume-panel, .vp-time-display, ' +
-      '.vp-play-button, .vp-fullscreen-button, .vp-mute-button { display:none !important; }' +
-      // Show native video controls
-      'video { pointer-events:auto !important; }' +
+      '.vp-progress-bar, ' +
+      '.vp-fullscreen-button, .vp-mute-button { display:none !important; }' +
+      // Keep the center big play button visible
+      '.vp-big-play-button, .vp-center-controls, .vp-overlay { display:flex !important; opacity:1 !important; visibility:visible !important; }' +
+      // Hide loading spinner (we have our own)
+      '.vp-loading-spinner { display:none !important; }' +
+      // No native bottom controls
+      'video { pointer-events:none !important; }' +
+      // But allow clicks on the center play button
+      '.vp-big-play-button, .vp-center-controls { pointer-events:auto !important; }' +
       // Hide ad-related overlays
       '.vp-ad-overlay, .vp-ad-message, .ad-message, [class*="ad-disabled"], [class*="fullscreen-disabled"] { display:none !important; }';
     var style = document.createElement('style');
     style.setAttribute('data-genopoisk-controls', 'true');
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
-    log('Controls fix CSS injected (native controls only, all venoplayer UI hidden)');
+    log('Controls fix CSS injected (center play/pause only)');
   }
   if (document.head) { injectControlsFix(); }
   else {
@@ -64,14 +72,8 @@
     });
     cObs.observe(document.documentElement, { childList: true, subtree: true });
   }
-  // Force video.controls = true every second (venoplayer may remove it)
+  // Periodic check: remove ad messages and ensure center button visible
   setInterval(function() {
-    var vids = document.querySelectorAll('video');
-    for (var j = 0; j < vids.length; j++) {
-      if (!vids[j].controls) {
-        vids[j].controls = true;
-      }
-    }
     // Remove ad overlay messages
     var adMsgs = document.querySelectorAll('.vp-ad-message, .ad-message, [class*="fullscreen-disabled"]');
     for (var i = 0; i < adMsgs.length; i++) {

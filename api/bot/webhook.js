@@ -110,7 +110,22 @@ function userProfileKeyboard(targetId, hasLastFilm) {
 
 // ---- Command handlers (each returns {text, keyboard} or sends a message) ----
 
-async function cmdStart(chatId, user) {
+async function cmdStart(chatId, user, text) {
+  // Check for /start login — user wants to link their browser session
+  const startParam = text.split(/\s+/).slice(1).join(' ').trim();
+  if (startParam === 'login') {
+    const name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : ('@' + (user.username || 'Telegram'));
+    const loginUrl = SITE_URL.replace(/\/$/, '') + '/?tg_id=' + user.id + '&tg_name=' + encodeURIComponent(name);
+    await sendMessage(chatId, '🔐 <b>Привязка устройства</b>\n\nВаш Telegram ID: <code>' + user.id + '</code>\n\nНажмите кнопку ниже, чтобы открыть сайт с привязкой вашего аккаунта:', {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🌐 Открыть сайт с привязкой', web_app: { url: loginUrl } }
+        ]]
+      }
+    });
+    return;
+  }
+
   await recordEvent('bot_starts', {
     userId: String(user.id),
     username: user.username

@@ -71,11 +71,7 @@ module.exports = async (req, res) => {
         if (u) userId = u.id;
       }
       if (!userId && body.userId) {
-        if (typeof body.userId === 'string' && body.userId.startsWith('web_')) {
-          userId = (ip || 'unknown') + '_' + deviceName;
-        } else {
-          userId = String(body.userId);
-        }
+        userId = String(body.userId);
       }
     } else if (req.method === 'GET') {
       const q = req.query || {};
@@ -84,11 +80,7 @@ module.exports = async (req, res) => {
         if (u) userId = u.id;
       }
       if (!userId && q.userId) {
-        if (typeof q.userId === 'string' && q.userId.startsWith('web_')) {
-          userId = (ip || 'unknown') + '_' + deviceName;
-        } else {
-          userId = String(q.userId);
-        }
+        userId = String(q.userId);
       }
     }
 

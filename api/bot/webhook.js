@@ -1,6 +1,6 @@
 // Telegram bot webhook handler
 const { isAdmin, sendMessage, editMessage, answerCallback, tg } = require('../_lib/telegram');
-const { readStats, recordEvent, readUser } = require('../_lib/stats');
+const { readStats, writeStats, recordEvent, readUser } = require('../_lib/stats');
 const {
   getProjectInfo,
   getLatestDeployments,
@@ -166,6 +166,7 @@ async function buildStatsText() {
    👁 Просмотры: <b>${totals.page_views || 0}</b>
    🔍 Поиски: <b>${totals.searches || 0}</b>
    🎬 Фильмов открыто: <b>${totals.movies_opened || 0}</b>
+   ⭐ Оценено фильмов: <b>${totals.ratings || 0}</b>
    🤖 Запусков бота: <b>${totals.bot_starts || 0}</b>
 
 <b>Сегодня (${today}):</b>
@@ -240,6 +241,7 @@ async function buildUserProfileText(targetId) {
    👁 Просмотры: ${ebt.page_views || 0}
    🔍 Поиски: ${ebt.searches || 0}
    🎬 Фильмов открыто: ${ebt.movies_opened || 0}
+   ⭐ Оценено фильмов: ${(u.rated_films || []).length}
    🤖 Запусков бота: ${ebt.bot_starts || 0}
 
 <b>Просмотренные фильмы (${watchedFilms.length}):</b>
@@ -288,8 +290,8 @@ async function buildMyFilmsText(targetUserId) {
     return { text: `🎬 <b>Мои фильмы</b>\n\nВы ещё не смотрели фильмы.`, films: [] };
   }
   var lines = films.slice(0, 20).map(function(f, i) {
-    var time = new Date(f.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return (i + 1) + '. «' + escapeHtml(f.title) + '» — ' + time;
+    var rating = f.rating ? ' ⭐' + f.rating : '';
+    return (i + 1) + '. «' + escapeHtml(f.title) + '»' + rating;
   }).join('\n');
   return {
     text: '🎬 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
@@ -589,14 +591,107 @@ async function handleCallback(update) {
         return;
       }
       const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
-      await answerCallback(cq.id, 'Открываю плеер...');
-      await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите кнопку, чтобы открыть плеер:', {
+      await answerCallback(cq.id, 'Открываю...');
+      // Build star rating buttons (1-5)
+      var currentRating = film.rating || 0;
+      var starButtons = [];
+      for (var s = 1; s <= 5; s++) {
+        var star = s <= currentRating ? '⭐' : '☆';
+        starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
+      }
+      await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         reply_markup: {
-          inline_keyboard: [[
-            { text: '▶ Смотреть', web_app: { url: playerUrl } }
-          ]]
+          inline_keyboard: [
+            [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
+            starButtons,
+            [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
+          ]
         }
       });
+      return;
+    }
+
+    // ---- Rate film ----
+    const rateMatch = data.match(/^rate_(\d+)_(\d+)$/);
+    if (rateMatch) {
+      const idx = parseInt(rateMatch[1], 10);
+      const rating = parseInt(rateMatch[2], 10);
+      const films = getCachedMyFilms(fromId);
+      const film = films[idx];
+      if (!film) {
+        await answerCallback(cq.id, 'Фильм не найден');
+        return;
+      }
+      // Save rating to stats
+      try {
+        const stats = await readStats();
+        const userId = String(fromId);
+        if (stats.users && stats.users[userId]) {
+          if (!stats.users[userId].watched_films) stats.users[userId].watched_films = [];
+          var wf = stats.users[userId].watched_films;
+          for (var i = 0; i < wf.length; i++) {
+            if (wf[i].filmId === film.filmId) {
+              wf[i].rating = rating;
+              break;
+            }
+          }
+          if (!stats.users[userId].rated_films) stats.users[userId].rated_films = [];
+          // Remove old rating for this film if exists
+          stats.users[userId].rated_films = stats.users[userId].rated_films.filter(function(r) { return r.filmId !== film.filmId; });
+          stats.users[userId].rated_films.unshift({ filmId: film.filmId, title: film.title, rating: rating, ts: new Date().toISOString() });
+          // Update cache
+          film.rating = rating;
+          cacheMyFilms(fromId, films);
+          // Update totals
+          if (!stats.totals) stats.totals = {};
+          if (!stats.totals.ratings) stats.totals.ratings = 0;
+          // Count unique rated films
+          var ratedCount = 0;
+          for (var uid in stats.users) {
+            if (stats.users[uid] && stats.users[uid].rated_films) {
+              ratedCount += stats.users[uid].rated_films.length;
+            }
+          }
+          stats.totals.ratings = ratedCount;
+          await writeStats(stats);
+        }
+      } catch (e) { console.error('Rate error:', e); }
+      // Update the message with new rating
+      var stars = '';
+      for (var ss = 1; ss <= 5; ss++) { stars += ss <= rating ? '⭐' : '☆'; }
+      await answerCallback(cq.id, 'Оценка: ' + rating + ' ⭐');
+      // Re-show film card with updated rating
+      var playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
+      var starButtons2 = [];
+      for (var s2 = 1; s2 <= 5; s2++) {
+        var star2 = s2 <= rating ? '⭐' : '☆';
+        starButtons2.push({ text: star2 + s2, callback_data: 'rate_' + idx + '_' + s2 });
+      }
+      // Edit the last message (the one with film card)
+      if (messageId) {
+        try {
+          await editMessage(chatId, messageId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars + '\n\nНажмите "Смотреть", чтобы открыть плеер, или измените оценку:', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
+                starButtons2,
+                [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
+              ]
+            }
+          });
+        } catch (_) {
+          // If edit fails (message not found), send new
+          await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars, {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
+                starButtons2,
+                [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
+              ]
+            }
+          });
+        }
+      }
       return;
     }
 

@@ -86,17 +86,18 @@ module.exports = async (req, res) => {
     // Capture client IP for per-user stats
     const ip = getClientIp(req);
 
-    // Fallback for browser users: identify by IP + device (User-Agent).
-    // This gives a stable ID per device+network, so the same user sees their
-    // own history across browser sessions (not random web_<random> each time).
+    // Fallback for browser users: use the stable localStorage ID sent by client.
+    // This ID persists across VPN changes (stored in browser localStorage),
+    // so user history is preserved regardless of network/IP changes.
+    // We also capture device name from User-Agent for display purposes.
     if (userId === 'anon') {
       if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
-        // Browser user — use IP + device hash instead of random web_<random>
+        // Browser user — use the stable localStorage ID as-is
+        userId = String(body.userId);
+        // Set username to device name for display in bot
         const ua = req.headers['user-agent'] || 'unknown';
         const deviceName = getDeviceName(ua);
-        // Create stable ID: ip_<device> (e.g. "193.233.129.161_iPhone")
-        userId = (ip || 'unknown') + '_' + deviceName;
-        username = deviceName + ' @ ' + (ip || 'unknown');
+        username = deviceName + ' (браузер)';
       } else if (body.userId) {
         userId = String(body.userId);
       }

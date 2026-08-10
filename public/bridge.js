@@ -17,7 +17,51 @@
     try { parent.postMessage(msg, '*'); } catch(_) {}
   }
 
-  // ====== 0. Force #player to fill iframe height ======
+  // ====== 0. Fix player controls disappearing on mobile ======
+  // venoplayer hides controls after fullscreen exit and has a timer that
+  // hides them after a few seconds. We periodically force-show controls
+  // and inject CSS to keep them visible.
+  // Also hide "fullscreen disabled during ad" message — venoplayer shows this
+  // during pre-roll ad, but since we block ads, it's a false message.
+  function injectControlsFix() {
+    if (document.querySelector('style[data-genopoisk-controls]')) return;
+    var css =
+      '.vp-controls, .vjs-control-bar, .player-controls { opacity:1 !important; visibility:visible !important; display:flex !important; }' +
+      '.vp-player:hover .vp-controls, .vp-player.vp-player-paused .vp-controls { opacity:1 !important; }' +
+      // Hide "fullscreen disabled during ad" and similar ad-related overlays
+      '.vp-ad-overlay, .vp-ad-message, .ad-message, [class*="ad-disabled"], [class*="fullscreen-disabled"] { display:none !important; }' +
+      // Force controls always visible (override venoplayer's auto-hide)
+      '.vp-player .vp-controls { transition:none !important; }';
+    var style = document.createElement('style');
+    style.setAttribute('data-genopoisk-controls', 'true');
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+    log('Controls fix CSS injected');
+  }
+  if (document.head) { injectControlsFix(); }
+  else {
+    var cObs = new MutationObserver(function() {
+      if (document.head) { injectControlsFix(); cObs.disconnect(); }
+    });
+    cObs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  // Periodically force-show controls (every 1.5s)
+  setInterval(function() {
+    var controls = document.querySelector('.vp-controls, .vjs-control-bar, .player-controls');
+    if (controls) {
+      if (controls.style.opacity === '0' || controls.style.visibility === 'hidden' || controls.style.display === 'none') {
+        controls.style.opacity = '1';
+        controls.style.visibility = 'visible';
+        controls.style.display = 'flex';
+      }
+    }
+    // Also remove ad overlay messages if they appear
+    var adMsgs = document.querySelectorAll('.vp-ad-message, .ad-message, [class*="fullscreen-disabled"]');
+    for (var i = 0; i < adMsgs.length; i++) {
+      adMsgs[i].style.display = 'none';
+      adMsgs[i].remove();
+    }
+  }, 1500);
   // venoplayer sets #player height:180px inline. We need:
   // 1. html, body { height:100% } so #player can be height:100%
   // 2. #player { height:100% !important } to override inline 180px

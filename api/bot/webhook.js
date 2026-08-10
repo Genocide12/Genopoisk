@@ -32,6 +32,9 @@ function cacheMyFilms(userId, films) {
 function getCachedMyFilms(userId) {
   return myFilmsCache.get(String(userId)) || [];
 }
+
+// Broadcast mode: when admin clicks "Уведомление", next text message is broadcast
+const broadcastPending = new Map(); // userId -> true
 function mainMenuKeyboard() {
   return {
     inline_keyboard: [
@@ -44,9 +47,10 @@ function mainMenuKeyboard() {
         { text: '🚀 Деплой', callback_data: 'menu_deploy' }
       ],
       [
-        { text: '🎬 Открыть сайт', web_app: { url: SITE_URL } },
-        { text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }
-      ]
+        { text: '📢 Уведомление', callback_data: 'menu_broadcast' },
+        { text: '🧹 Очистить статистику', callback_data: 'menu_clear' }
+      ],
+      [{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]
     ]
   };
 }
@@ -441,39 +445,57 @@ async function handleMessage(update) {
 
   console.log(`Message from ${user.id} (@${user.username}): ${text}`);
 
+  // Broadcast mode: if admin has pending broadcast, send this message to all users
+  if (broadcastPending.get(String(user.id)) && isAdmin(user.id)) {
+    broadcastPending.delete(String(user.id));
+    const message = text;
+    const stats = await readStats();
+    const userIds = Object.keys(stats.users || {});
+    if (userIds.length === 0) {
+      await sendMessage(chatId, 'Нет пользователей для рассылки.', { reply_markup: mainMenuKeyboard() });
+      return;
+    }
+    let sent = 0, failed = 0;
+    await sendMessage(chatId, `📢 Рассылка ${userIds.length} пользователям...`);
+    for (const uid of userIds) {
+      try {
+        await sendMessage(Number(uid), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
+        sent++;
+      } catch (e) { failed++; }
+      await new Promise(r => setTimeout(r, 50));
+    }
+    await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard() });
+    return;
+  }
+
   if (text.startsWith('/start')) return cmdStart(chatId, user);
   if (text.startsWith('/help')) return cmdHelp(chatId, user);
-  if (text.startsWith('/stats')) {
-    if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
-    return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard() });
+
+  // Admin-only commands (no menu for regular users)
+  if (isAdmin(user.id)) {
+    if (text.startsWith('/stats')) return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard() });
+    if (text.startsWith('/users')) {
+      const stats = await readStats();
+      return sendMessage(chatId, await buildUsersListText(), { reply_markup: usersListKeyboard(stats.users || {}, 0) });
+    }
+    if (text.startsWith('/user')) return cmdUser(chatId, user, text);
+    if (text.startsWith('/status')) return sendMessage(chatId, await buildStatusText(), { reply_markup: deployMenuKeyboard() });
+    if (text.startsWith('/logs')) return sendMessage(chatId, await buildLogsText(), { reply_markup: deployMenuKeyboard() });
+    if (text.startsWith('/redeploy')) return cmdRedeploy(chatId, user);
+    if (text.startsWith('/clear')) return cmdClear(chatId, user);
   }
-  if (text.startsWith('/users')) {
-    if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
-    const stats = await readStats();
-    return sendMessage(chatId, await buildUsersListText(), { reply_markup: usersListKeyboard(stats.users || {}, 0) });
-  }
-  if (text.startsWith('/user')) return cmdUser(chatId, user, text);
-  if (text.startsWith('/status')) {
-    if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
-    return sendMessage(chatId, await buildStatusText(), { reply_markup: deployMenuKeyboard() });
-  }
-  if (text.startsWith('/logs')) {
-    if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
-    return sendMessage(chatId, await buildLogsText(), { reply_markup: deployMenuKeyboard() });
-  }
-  if (text.startsWith('/redeploy')) return cmdRedeploy(chatId, user);
-  if (text.startsWith('/broadcast')) return cmdBroadcast(chatId, user, text);
-  if (text.startsWith('/clear')) return cmdClear(chatId, user);
 
   if (text.startsWith('/')) {
-    await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard() });
+    if (isAdmin(user.id)) {
+      await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard() });
+    } else {
+      await sendMessage(chatId, 'Используйте кнопку меню, чтобы открыть приложение 🎬', {
+        reply_markup: { inline_keyboard: [[{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }]] }
+      });
+    }
   } else {
-    await sendMessage(chatId, 'Нажмите кнопку меню (слева от поля ввода), чтобы открыть приложение 🎬', {
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }
-        ]]
-      }
+    await sendMessage(chatId, 'Используйте кнопку меню, чтобы открыть приложение 🎬', {
+      reply_markup: { inline_keyboard: [[{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }]] }
     });
   }
 }
@@ -541,6 +563,38 @@ async function handleCallback(update) {
       await edit(text, deployMenuKeyboard());
       return;
     }
+    if (data === 'menu_clear') {
+      const text = `🧹 <b>Очистить статистику?</b>\n\n⚠️ Это удалит ВСЕ данные:\n— Все пользователи\n— Все события\n— Все фильмы\n— Все оценки\n\nЭто действие необратимо!`;
+      await edit(text, {
+        inline_keyboard: [
+          [
+            { text: '✅ Да, очистить', callback_data: 'clear_confirm' },
+            { text: '❌ Отмена', callback_data: 'menu_main' }
+          ]
+        ]
+      });
+      return;
+    }
+    if (data === 'clear_confirm') {
+      const { writeStats } = require('../_lib/stats');
+      await writeStats({
+        version: 1,
+        totals: { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0, ratings: 0 },
+        users: {},
+        daily: {},
+        recent_events: [],
+        last_updated: new Date().toISOString()
+      });
+      await edit('✅ <b>Статистика очищена.</b>\n\nВсе данные удалены.', mainMenuKeyboard());
+      return;
+    }
+    if (data === 'menu_broadcast') {
+      broadcastPending.set(String(fromId), true);
+      await edit('📢 <b>Уведомление всем пользователям</b>\n\nВведите текст сообщения для отправки. Следующее сообщение, которое вы отправите боту, будет разослано всем пользователям.', {
+        inline_keyboard: [[{ text: '❌ Отмена', callback_data: 'menu_main' }]]
+      });
+      return;
+    }
 
     // ---- Deploy sub-menu ----
     if (data === 'deploy_status') {
@@ -599,11 +653,13 @@ async function handleCallback(update) {
         var star = s <= currentRating ? '⭐' : '☆';
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
+      var downloadUrl = 'https://tdy.cx/kp/' + film.filmId;
       await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
             starButtons,
+            [{ text: '📥 Скачать', url: downloadUrl }],
             [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
           ]
         }
@@ -670,22 +726,26 @@ async function handleCallback(update) {
       // Edit the last message (the one with film card)
       if (messageId) {
         try {
+          var dlUrl = 'https://tdy.cx/kp/' + film.filmId;
           await editMessage(chatId, messageId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars + '\n\nНажмите "Смотреть", чтобы открыть плеер, или измените оценку:', {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
                 starButtons2,
+                [{ text: '📥 Скачать', url: dlUrl }],
                 [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
               ]
             }
           });
         } catch (_) {
           // If edit fails (message not found), send new
+          var dlUrl2 = 'https://tdy.cx/kp/' + film.filmId;
           await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars, {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
                 starButtons2,
+                [{ text: '📥 Скачать', url: dlUrl2 }],
                 [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
               ]
             }

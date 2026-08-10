@@ -345,6 +345,29 @@
             aggressiveSeek();
           }
         }
+      } else if (d.type === 'showControls') {
+        // Force venoplayer controls visible (after fullscreen exit)
+        log('showControls requested');
+        try {
+          // Try to find and show venoplayer control bar
+          var controls = document.querySelector('.vp-controls, .vjs-control-bar, .player-controls');
+          if (controls) {
+            controls.style.opacity = '1';
+            controls.style.visibility = 'visible';
+            controls.style.display = 'flex';
+            log('Controls shown:', controls.className);
+          }
+          // Also try calling venoplayer API if available
+          if (window.app && window.app.player) {
+            try { window.app.player.controls(true); } catch(_) {}
+          }
+          // Click on player to trigger controls show
+          var playerDiv = document.querySelector('#player');
+          if (playerDiv) {
+            var ev = new MouseEvent('mousemove', { bubbles: true });
+            playerDiv.dispatchEvent(ev);
+          }
+        } catch(e) { log('showControls failed', e); }
       } else if (d.type === 'getTime') {
         post({ type: 'currentTime', currentTime: video.currentTime, duration: video.duration });
       } else if (d.type === 'play') {

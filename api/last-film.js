@@ -98,7 +98,24 @@ module.exports = async (req, res) => {
     }
 
     const stats = await readStats();
-    const user = (stats.users || {})[userId];
+    const reqBody = (req.method === 'POST' ? (req.body || {}) : (req.query || {}));
+
+    // Try the resolved userId first. If not found, also try the original
+    // body.userId (in case it was recorded under a different ID previously).
+    let user = (stats.users || {})[userId];
+    if (!user && reqBody.userId && reqBody.userId !== userId) {
+      user = (stats.users || {})[reqBody.userId];
+    }
+    // Also try Telegram ID from initData (in case user was recorded under TG ID
+    // but now browsing without Telegram)
+    if (!user && reqBody.initData) {
+      const u = extractUser(reqBody.initData);
+      if (u) {
+        user = (stats.users || {})[u.id];
+        if (user) userId = u.id;
+      }
+    }
+
     if (!user || !user.last_film) {
       return res.status(200).json({ film: null });
     }

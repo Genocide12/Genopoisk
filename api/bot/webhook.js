@@ -131,7 +131,7 @@ async function cmdHelp(chatId, user) {
   const text = `<b>🛠 Админ-панель Genopoisk</b>
 
 Используйте кнопки под сообщениями для навигации. Команды:
-/stats, /users, /visits, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear`;
+/stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear`;
   await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard() });
 }
 
@@ -166,7 +166,6 @@ async function buildStatsText() {
    👁 Просмотры: <b>${totals.page_views || 0}</b>
    🔍 Поиски: <b>${totals.searches || 0}</b>
    🎬 Фильмов открыто: <b>${totals.movies_opened || 0}</b>
-   🔥 Категорий: <b>${totals.categories_opened || 0}</b>
    🤖 Запусков бота: <b>${totals.bot_starts || 0}</b>
 
 <b>Сегодня (${today}):</b>
@@ -217,25 +216,6 @@ async function buildUserProfileText(targetId) {
     if (watchedFilms.length > 15) filmsText += '\n   ... и ещё ' + (watchedFilms.length - 15);
   }
 
-  // Recent events for this user (filter from stats.recent_events)
-  let recentText = '—';
-  try {
-    const stats = await readStats();
-    const userEvents = (stats.recent_events || []).filter(e => e.userId === targetId).slice(0, 10);
-    if (userEvents.length > 0) {
-      recentText = userEvents.map(e => {
-        const emoji = { page_views: '👁', searches: '🔍', movies_opened: '🎬', categories_opened: '🔥', bot_starts: '🤖' }[e.type] || '•';
-        const time = new Date(e.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
-        let extra = '';
-        if (e.query) extra = ' "' + escapeHtml(String(e.query).slice(0, 30)) + '"';
-        else if (e.title) extra = ' "' + escapeHtml(String(e.title).slice(0, 30)) + '"';
-        else if (e.category) extra = ' [' + e.category + ']';
-        else if (e.path) extra = ' ' + e.path;
-        return emoji + ' ' + time + extra;
-      }).join('\n   ');
-    }
-  } catch (_) {}
-
   // Determine platform from user ID
   let platform = 'Telegram';
   if (targetId.includes('_')) {
@@ -260,14 +240,10 @@ async function buildUserProfileText(targetId) {
    👁 Просмотры: ${ebt.page_views || 0}
    🔍 Поиски: ${ebt.searches || 0}
    🎬 Фильмов открыто: ${ebt.movies_opened || 0}
-   🔥 Категорий: ${ebt.categories_opened || 0}
    🤖 Запусков бота: ${ebt.bot_starts || 0}
 
 <b>Просмотренные фильмы (${watchedFilms.length}):</b>
    ${filmsText}
-
-<b>Последние события:</b>
-   ${recentText}
 
 <b>Первый визит:</b> ${first}
 <b>Последний визит:</b> ${last}`;
@@ -469,10 +445,6 @@ async function handleMessage(update) {
     if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
     return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard() });
   }
-  if (text.startsWith('/visits')) {
-    if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
-    return sendMessage(chatId, await buildVisitsText(), { reply_markup: mainMenuKeyboard() });
-  }
   if (text.startsWith('/users')) {
     if (!isAdmin(user.id)) return sendMessage(chatId, '⚠️ Доступ только для администратора.');
     const stats = await readStats();
@@ -548,11 +520,6 @@ async function handleCallback(update) {
     }
     if (data === 'menu_stats') {
       await edit(await buildStatsText(), mainMenuKeyboard());
-      return;
-    }
-    if (data === 'menu_visits') {
-      // Removed — visits view disabled
-      await answerCallback(cq.id, 'Раздел удалён');
       return;
     }
     if (data === 'menu_myfilms') {

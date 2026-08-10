@@ -472,6 +472,23 @@
     }
     loadPlayer();
 
+    // Fix: after exiting fullscreen on mobile, venoplayer sometimes hides
+    // its controls. We listen for fullscreenchange and send a 'showControls'
+    // message to bridge, which will force the controls visible.
+    function handleFullscreenChange() {
+      var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      console.log('[player] Fullscreen change:', isFs ? 'entered' : 'exited');
+      if (!isFs) {
+        // Exited fullscreen — wait a bit then tell bridge to show controls
+        setTimeout(function() {
+          sendToPlayer({ type: 'showControls' });
+        }, 300);
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+
     // Safety timeout
     setTimeout(function() {
       if (!loadingOverlay.classList.contains('hidden')) {

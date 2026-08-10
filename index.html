@@ -230,8 +230,8 @@
     let resumeFilm = null;
 
     async function loadResumeCard() {
-      // Skip if user dismissed recently (sessionStorage)
-      if (sessionStorage.getItem('genopoisk_resume_dismissed') === '1') return;
+      // Note: removed sessionStorage dismissal check — card should always show
+      // if user has a recently watched film.
       try {
         const res = await fetch('/api/last-film', {
           method: 'POST',
@@ -285,26 +285,29 @@
           title: resumeFilm.title
         });
         try {
-          if (navigator.sendBeacon) {
-            const blob = new Blob([payload], { type: 'application/json' });
-            navigator.sendBeacon('/api/track', blob);
-          } else {
-            await fetch('/api/track', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: payload
-            });
-          }
-        } catch (err) { console.warn('track error:', err); }
+          await fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          });
+        } catch (err) {
+          console.warn('track error:', err);
+          try {
+            if (navigator.sendBeacon) {
+              const blob = new Blob([payload], { type: 'application/json' });
+              navigator.sendBeacon('/api/track', blob);
+            }
+          } catch (_) {}
+        }
         setTimeout(function() {
           window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
-        }, 50);
+        }, 100);
       }
     });
     resumeClose.addEventListener('click', (e) => {
       e.stopPropagation();
       resumeCard.classList.remove('visible');
-      sessionStorage.setItem('genopoisk_resume_dismissed', '1');
     });
 
     // Fire async — don't block page load
@@ -462,7 +465,8 @@
 
     async function openPlayer(filmId, title) {
       // Send track event reliably before navigating.
-      // Use sendBeacon (fire-and-forget, survives navigation) + fetch fallback.
+      // fetch with keepalive:true survives navigation (modern alternative to sendBeacon)
+      // and is parsed correctly by Vercel body parser (unlike Blob in sendBeacon).
       const payload = JSON.stringify({
         type: 'movies_opened',
         initData: tgInitData,
@@ -471,31 +475,26 @@
         title: title
       });
       try {
-        if (navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: 'application/json' });
-          navigator.sendBeacon('/api/track', blob);
-        } else {
-          await fetch('/api/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: payload
-          });
-        }
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        });
       } catch (e) {
         console.warn('track error:', e);
-        // Try fetch as last resort
+        // Fallback: sendBeacon (may not parse as JSON on server, but better than nothing)
         try {
-          await fetch('/api/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: payload
-          });
+          if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon('/api/track', blob);
+          }
         } catch (_) {}
       }
-      // Small delay to ensure sendBeacon is queued before navigation
+      // Small delay to ensure request is sent before navigation
       setTimeout(function() {
         window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
-      }, 50);
+      }, 100);
     }
 
     async function loadCategory(category) {

@@ -107,10 +107,7 @@
   <div class="container">
     <div class="tg-login-bar" id="tgLoginBar">
       <span class="tg-login-text">Войдите через Telegram, чтобы синхронизировать историю</span>
-      <a class="tg-login-btn" id="tgLoginBtn" href="https://t.me/Genopoiskbot?start=login" target="_blank">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
-        Войти
-      </a>
+      <div id="tgWidgetContainer"></div>
     </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
@@ -229,26 +226,49 @@
     }
     const browserUserId = getBrowserUserId();
 
-    // --- Telegram Login (for browser users only, not in Mini App) ---
-    // Uses /start=login deep link — user opens bot in Telegram, sends /start login,
-    // bot replies with a link back to the site with their TG ID encoded in URL.
-    // This avoids the Telegram Login Widget domain requirement.
+    // --- Telegram Login Widget (for browser users only) ---
+    // Uses official Telegram Login Widget (telegram-widget.js)
+    // Requires domain to be set in BotFather: /setdomain → genopoisk.vercel.app
     const tgLoginBar = document.getElementById('tgLoginBar');
+    const tgWidgetContainer = document.getElementById('tgWidgetContainer');
 
     function checkTgLoginBar() {
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
       if (!isInTelegram && !storedTgId) {
-        // Browser user without TG link — show login bar
+        // Browser user without TG link — show login bar + load widget
         tgLoginBar.classList.add('visible');
+        // Load Telegram Login Widget if not already loaded
+        if (!tgWidgetContainer.querySelector('script')) {
+          const widget = document.createElement('script');
+          widget.async = true;
+          widget.src = 'https://telegram.org/js/telegram-widget.js?22';
+          widget.setAttribute('data-telegram-login', 'Genopoiskbot');
+          widget.setAttribute('data-size', 'large');
+          widget.setAttribute('data-onauth', 'onTelegramAuth(user)');
+          widget.setAttribute('data-request-access', 'write');
+          tgWidgetContainer.appendChild(widget);
+          console.log('[tg] Telegram Login Widget loaded');
+        }
       } else {
         // In Telegram Mini App OR already linked — hide login bar
         tgLoginBar.classList.remove('visible');
       }
     }
-    checkTgLoginBar();
 
-    // Check URL for ?tg_id= parameter (set by bot after /start login)
+    // Telegram Login Widget callback
+    window.onTelegramAuth = function(user) {
+      if (user && user.id) {
+        localStorage.setItem('genopoisk_tg_user_id', String(user.id));
+        const name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : ('@' + (user.username || 'Telegram'));
+        localStorage.setItem('genopoisk_tg_user_name', name);
+        console.log('[tg] Login successful via widget, user ID:', user.id);
+        checkTgLoginBar();
+        setTimeout(function() { window.location.reload(); }, 500);
+      }
+    };
+
+    // Check URL for ?tg_id= parameter (fallback from bot deep link)
     const urlParams = new URLSearchParams(window.location.search);
     const tgIdFromUrl = urlParams.get('tg_id');
     if (tgIdFromUrl) {
@@ -257,11 +277,12 @@
       if (tgNameFromUrl) {
         localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
       }
-      console.log('[tg] Linked via bot login, TG ID:', tgIdFromUrl);
-      // Remove query params from URL
+      console.log('[tg] Linked via URL param, TG ID:', tgIdFromUrl);
       history.replaceState(null, '', window.location.pathname);
       window.location.reload();
     }
+
+    checkTgLoginBar();
 
     // Retry TG init after window load (async script may load late)
     window.addEventListener('load', function() {

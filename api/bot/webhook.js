@@ -35,6 +35,9 @@ function getCachedMyFilms(userId) {
 
 // Broadcast mode: when admin clicks "Уведомление", next text message is broadcast
 const broadcastPending = new Map(); // userId -> true
+
+// Track last admin message IDs for editMessage (prevents duplicate messages)
+const lastAdminMsg = new Map(); // chatId -> { messageId, type }
 function mainMenuKeyboard() {
   return {
     inline_keyboard: [
@@ -98,9 +101,12 @@ function usersListKeyboard(users, page) {
 function userProfileKeyboard(targetId, hasLastFilm) {
   const buttons = [];
   if (hasLastFilm) {
-    buttons.push([{ text: '🎬 Открыть сайт', web_app: { url: SITE_URL } }]);
+    buttons.push([{ text: '🎬 Открыть последний фильм', web_app: { url: SITE_URL } }]);
   }
-  buttons.push([{ text: '⬅️ К списку', callback_data: 'menu_users' }]);
+  buttons.push([
+    { text: '🗑 Удалить профиль', callback_data: 'delprompt_' + targetId },
+    { text: '⬅️ К списку', callback_data: 'menu_users' }
+  ]);
   buttons.push([{ text: '🏠 Главная', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
 }
@@ -210,24 +216,21 @@ async function buildUserProfileText(targetId) {
 
   const ipHistory = (u.ip_history || []).slice(0, 10).join('\n   • ') || '—';
 
-  // All watched films (not just last)
+  // All watched films (not just last) — no dates, just title + rating
   const watchedFilms = u.watched_films || (u.last_film ? [u.last_film] : []);
   let filmsText = '—';
   if (watchedFilms.length > 0) {
     filmsText = watchedFilms.slice(0, 15).map(function(f, i) {
-      var time = new Date(f.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-      return (i + 1) + '. «' + escapeHtml(f.title) + '» (ID: <code>' + f.filmId + '</code>) — ' + time;
+      var rating = f.rating ? ' ⭐' + f.rating : '';
+      return (i + 1) + '. «' + escapeHtml(f.title) + '»' + rating;
     }).join('\n   ');
     if (watchedFilms.length > 15) filmsText += '\n   ... и ещё ' + (watchedFilms.length - 15);
   }
 
-  // Determine platform from user ID
+  // Determine platform from user ID — show just "браузер" or "Telegram"
   let platform = 'Telegram';
-  if (targetId.includes('_')) {
-    const parts = targetId.split('_');
-    if (parts.length >= 2) {
-      platform = parts.slice(1).join('_') + ' (браузер)';
-    }
+  if (targetId.startsWith('web_')) {
+    platform = 'браузер';
   }
 
   const text = `👤 <b>Профиль пользователя</b>
@@ -241,8 +244,6 @@ async function buildUserProfileText(targetId) {
    • ${ipHistory}
 
 <b>Активность:</b>
-   Всего событий: <b>${u.events || 0}</b>
-   👁 Просмотры: ${ebt.page_views || 0}
    🔍 Поиски: ${ebt.searches || 0}
    🎬 Фильмов открыто: ${ebt.movies_opened || 0}
    ⭐ Оценено фильмов: ${(u.rated_films || []).length}
@@ -524,6 +525,11 @@ async function handleCallback(update) {
           await answerCallback(cq.id, '');
           return;
         } catch (e) {
+          // If message is not modified (same content), just answer callback — don't send new
+          if (e.message && e.message.includes('not modified')) {
+            await answerCallback(cq.id, '');
+            return;
+          }
           console.warn('editMessage failed, sending new:', e.message);
         }
       }
@@ -625,6 +631,40 @@ async function handleCallback(update) {
       return;
     }
 
+    // ---- Delete profile prompt ----
+    const delPromptMatch = data.match(/^delprompt_(.+)$/);
+    if (delPromptMatch) {
+      const targetId = delPromptMatch[1];
+      await edit('🗑 <b>Удалить профиль?</b>\n\nID: <code>' + escapeHtml(targetId) + '</code>\n\nВсе данные пользователя будут удалены безвозвратно.', {
+        inline_keyboard: [
+          [
+            { text: '✅ Да, удалить', callback_data: 'delconfirm_' + targetId },
+            { text: '❌ Отмена', callback_data: 'user_' + targetId }
+          ]
+        ]
+      });
+      return;
+    }
+
+    // ---- Delete profile confirm ----
+    const delConfirmMatch = data.match(/^delconfirm_(.+)$/);
+    if (delConfirmMatch) {
+      const targetId = delConfirmMatch[1];
+      try {
+        const stats = await readStats();
+        if (stats.users && stats.users[targetId]) {
+          delete stats.users[targetId];
+          await writeStats(stats);
+          await edit('✅ Профиль <code>' + escapeHtml(targetId) + '</code> удалён.', usersListKeyboard(stats.users || {}, 0));
+        } else {
+          await edit('❌ Профиль не найден.', usersListKeyboard(stats.users || {}, 0));
+        }
+      } catch (e) {
+        await edit('❌ Ошибка: ' + escapeHtml(e.message), mainMenuKeyboard());
+      }
+      return;
+    }
+
     // ---- Users pagination ----
     const pageMatch = data.match(/^users_(\d+)$/);
     if (pageMatch) {
@@ -653,13 +693,17 @@ async function handleCallback(update) {
         var star = s <= currentRating ? '⭐' : '☆';
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
-      var downloadUrl = 'https://tdy.cx/kp/' + film.filmId;
+      var downloadUrl1 = 'https://hdgo.cc/video/' + film.filmId;
+      var downloadUrl2 = 'https://voidboost.cc/embed/' + film.filmId;
       await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
             starButtons,
-            [{ text: '📥 Скачать', url: downloadUrl }],
+            [
+              { text: '📥 Скачать (HDGO)', url: downloadUrl1 },
+              { text: '📥 Скачать (Void)', url: downloadUrl2 }
+            ],
             [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
           ]
         }

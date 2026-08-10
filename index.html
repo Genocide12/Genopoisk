@@ -166,9 +166,16 @@
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
 
     // --- User identification: works in Telegram Mini App AND in regular browser ---
-    // Telegram user ID from initData takes precedence on the server;
-    // for browser users (no initData) we generate a stable UUID in localStorage.
+    // Priority: 1) Stored TG user ID (from previous Telegram visit)
+    //           2) Stable localStorage web_ ID (persists across VPN changes)
     function getBrowserUserId() {
+      // Check if we have a stored TG user ID (from previous Telegram visit)
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) {
+        console.log('[user] Using stored TG ID:', tgId);
+        return tgId;
+      }
+      // Fallback: stable localStorage ID
       let id = localStorage.getItem('genopoisk_user_id');
       if (!id) {
         const rand = Math.random().toString(36).slice(2, 11);
@@ -193,6 +200,21 @@
         if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
       } catch (_) {}
       tgInitData = tg.initData || '';
+      // If we have initData, extract TG user ID and store it in localStorage.
+      // This links the browser session to the Telegram account — even if the
+      // user later opens the site from a regular browser (without Telegram),
+      // we'll use the stored TG ID so their history is preserved.
+      if (tgInitData) {
+        try {
+          const params = new URLSearchParams(tgInitData);
+          const userJson = params.get('user');
+          if (userJson) {
+            const u = JSON.parse(userJson);
+            localStorage.setItem('genopoisk_tg_user_id', String(u.id));
+            console.log('[tg] Linked TG user ID:', u.id);
+          }
+        } catch (_) {}
+      }
       console.log('[tg] Telegram WebApp initialized, has initData:', !!tgInitData);
       return tg;
     }

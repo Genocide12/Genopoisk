@@ -1,6 +1,6 @@
 // Bridge script — injected as the FIRST element in <head> of the iframe.
-// Lightweight: only blocks tracking endpoints and broken P2P CDN nodes.
-// NO ad blocking (it was breaking video playback).
+// Blocks ad config (prevents "fullscreen disabled during ad" message),
+// blocks tracking endpoints, fixes player controls visibility.
 
 (function() {
   if (window.__genopoiskBridge) return;
@@ -9,13 +9,33 @@
   function log() {
     try { console.log('[Genopoisk]', Array.from(arguments).join(' ')); } catch(_) {}
   }
-  log('Bridge loaded (no ad blocking)');
+  log('Bridge loaded');
 
   var videoEl = null;
 
   function post(msg) {
     try { parent.postMessage(msg, '*'); } catch(_) {}
   }
+
+  // ====== 0a. Pre-emptively neutralize adsConfig ======
+  // venoplayer reads window.adsConfig to decide if ads should play.
+  // If adsConfig has pre/middle/post roll URLs, venoplayer enters "ad mode"
+  // and disables fullscreen + shows "fullscreen disabled during ad".
+  // We define adsConfig as a getter that always returns empty config,
+  // so venoplayer never enters ad mode → fullscreen works immediately.
+  var EMPTY_ADS_CONFIG = {
+    nonLinear: { fallbackOnly: true, url: '', total: 0, offset: 0 },
+    pre: { vast: { timeouts: { loading: 1, starting: 1, global: 1 } }, maxImpressions: 0, urls: [] },
+    middle: { offset: 999999, vast: { timeouts: { loading: 1, starting: 1, global: 1 } }, nonLinearFallback: false, pop: false, total: 0, maxImpressions: 0, urls: [] },
+    post: { vast: { timeouts: { loading: 1, starting: 1, global: 1 } }, maxImpressions: 0, urls: [] }
+  };
+  try {
+    Object.defineProperty(window, 'adsConfig', {
+      get: function() { return EMPTY_ADS_CONFIG; },
+      set: function(val) { log('adsConfig assignment blocked'); },
+      configurable: true
+    });
+  } catch(e) { log('adsConfig override failed', e); }
 
   // ====== 0. Fix player controls disappearing on mobile ======
   // venoplayer hides controls after fullscreen exit and has a timer that

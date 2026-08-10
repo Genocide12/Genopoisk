@@ -37,26 +37,24 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 0. Fix player controls disappearing on mobile ======
-  // venoplayer hides controls after fullscreen exit and has a timer that
-  // hides them after a few seconds. We periodically force-show controls
-  // and inject CSS to keep them visible.
-  // Also hide "fullscreen disabled during ad" message — venoplayer shows this
-  // during pre-roll ad, but since we block ads, it's a false message.
+  // ====== 0. Use native video controls only (remove venoplayer custom controls) ======
+  // venoplayer's custom controls disappear on iOS after fullscreen exit.
+  // Solution: force video.controls = true (native iOS controls) and hide
+  // venoplayer's custom control bar.
   function injectControlsFix() {
     if (document.querySelector('style[data-genopoisk-controls]')) return;
     var css =
-      '.vp-controls, .vjs-control-bar, .player-controls { opacity:1 !important; visibility:visible !important; display:flex !important; }' +
-      '.vp-player:hover .vp-controls, .vp-player.vp-player-paused .vp-controls { opacity:1 !important; }' +
-      // Hide "fullscreen disabled during ad" and similar ad-related overlays
-      '.vp-ad-overlay, .vp-ad-message, .ad-message, [class*="ad-disabled"], [class*="fullscreen-disabled"] { display:none !important; }' +
-      // Force controls always visible (override venoplayer's auto-hide)
-      '.vp-player .vp-controls { transition:none !important; }';
+      // Hide venoplayer custom controls
+      '.vp-controls, .vjs-control-bar, .player-controls { display:none !important; }' +
+      // Show native video controls
+      'video { pointer-events:auto !important; }' +
+      // Hide ad-related overlays and messages
+      '.vp-ad-overlay, .vp-ad-message, .ad-message, [class*="ad-disabled"], [class*="fullscreen-disabled"] { display:none !important; }';
     var style = document.createElement('style');
     style.setAttribute('data-genopoisk-controls', 'true');
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
-    log('Controls fix CSS injected');
+    log('Controls fix CSS injected (native controls only)');
   }
   if (document.head) { injectControlsFix(); }
   else {
@@ -65,15 +63,12 @@
     });
     cObs.observe(document.documentElement, { childList: true, subtree: true });
   }
-  // Periodically force-show controls (every 1s) — iOS Safari needs this
+  // Force video.controls = true every second (venoplayer may remove it)
   setInterval(function() {
-    // Force venoplayer controls visible
-    var controls = document.querySelector('.vp-controls, .vjs-control-bar, .player-controls');
-    if (controls) {
-      if (controls.style.opacity === '0' || controls.style.visibility === 'hidden' || controls.style.display === 'none') {
-        controls.style.opacity = '1';
-        controls.style.visibility = 'visible';
-        controls.style.display = 'flex';
+    var vids = document.querySelectorAll('video');
+    for (var j = 0; j < vids.length; j++) {
+      if (!vids[j].controls) {
+        vids[j].controls = true;
       }
     }
     // Remove ad overlay messages
@@ -81,13 +76,6 @@
     for (var i = 0; i < adMsgs.length; i++) {
       adMsgs[i].style.display = 'none';
       adMsgs[i].remove();
-    }
-    // Force video element controls attribute (iOS native controls fallback)
-    var vids = document.querySelectorAll('video');
-    for (var j = 0; j < vids.length; j++) {
-      if (!vids[j].controls) {
-        vids[j].controls = true;
-      }
     }
   }, 1000);
   // venoplayer sets #player height:180px inline. We need:

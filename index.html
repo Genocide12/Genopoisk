@@ -94,12 +94,31 @@
     .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
     .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
     .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
+    .tg-login-bar{display:none;align-items:center;justify-content:space-between;background:var(--fill);border:1px solid var(--separator);border-radius:16px;padding:10px 16px;margin-bottom:16px;}
+    .tg-login-bar.visible{display:flex;}
+    .tg-login-text{font-size:14px;color:var(--text-secondary);font-weight:500;}
+    .tg-login-btn{background:#229ED9;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;text-decoration:none;}
+    .tg-login-btn:active{transform:scale(0.97);}
+    .tg-user-info{font-size:14px;color:var(--text-primary);font-weight:600;display:none;align-items:center;gap:8px;}
+    .tg-user-info.visible{display:flex;}
+    .tg-logout-btn{background:rgba(255,45,85,0.2);color:var(--ios-pink);border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:8px;}
     @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
     @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="tg-login-bar" id="tgLoginBar">
+      <span class="tg-login-text">Войдите через Telegram, чтобы синхронизировать историю</span>
+      <a class="tg-login-btn" id="tgLoginBtn" href="#">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+        Войти
+      </a>
+    </div>
+    <div class="tg-user-info" id="tgUserInfo">
+      <span>✅ <span id="tgUserName">Telegram</span></span>
+      <button class="tg-logout-btn" id="tgLogoutBtn">Выйти</button>
+    </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
       <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
@@ -216,6 +235,96 @@
       return id;
     }
     const browserUserId = getBrowserUserId();
+
+    // --- Telegram Login (for browser users only, not in Mini App) ---
+    const tgLoginBar = document.getElementById('tgLoginBar');
+    const tgUserInfo = document.getElementById('tgUserInfo');
+    const tgUserNameEl = document.getElementById('tgUserName');
+    const tgLoginBtn = document.getElementById('tgLoginBtn');
+    const tgLogoutBtn = document.getElementById('tgLogoutBtn');
+
+    // Show login bar only if:
+    // 1. Not in Telegram Mini App (no initData)
+    // 2. No stored TG user ID (not linked yet)
+    function checkTgLoginBar() {
+      const isInTelegram = !!(tg && tg.initData);
+      const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (!isInTelegram && !storedTgId) {
+        // Browser user without TG link — show login bar
+        tgLoginBar.classList.add('visible');
+        tgUserInfo.classList.remove('visible');
+      } else if (storedTgId) {
+        // Already linked — show user info
+        tgLoginBar.classList.remove('visible');
+        const storedName = localStorage.getItem('genopoisk_tg_user_name') || 'Telegram';
+        tgUserNameEl.textContent = storedName;
+        tgUserInfo.classList.add('visible');
+      } else {
+        // In Telegram Mini App — hide both
+        tgLoginBar.classList.remove('visible');
+        tgUserInfo.classList.remove('visible');
+      }
+    }
+    checkTgLoginBar();
+
+    // Telegram Login Widget — opens popup
+    // Bot name: Genopoiskbot, redirect to current page
+    if (tgLoginBtn) {
+      tgLoginBtn.href = 'https://oauth.telegram.org/auth?bot_id=8707273337&origin=' + encodeURIComponent(window.location.origin) + '&request_access=write&return_to=' + encodeURIComponent(window.location.href);
+      tgLoginBtn.target = '_blank';
+    }
+
+    // Listen for Telegram login callback (via postMessage from popup)
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.event === 'auth_result' && event.data.result) {
+        const user = event.data.result;
+        if (user && user.id) {
+          localStorage.setItem('genopoisk_tg_user_id', String(user.id));
+          if (user.first_name) {
+            localStorage.setItem('genopoisk_tg_user_name', user.first_name + (user.last_name ? ' ' + user.last_name : ''));
+          } else if (user.username) {
+            localStorage.setItem('genopoisk_tg_user_name', '@' + user.username);
+          }
+          console.log('[tg] Login successful, user ID:', user.id);
+          checkTgLoginBar();
+          // Reload to apply new user ID
+          setTimeout(function() { window.location.reload(); }, 500);
+        }
+      }
+    });
+
+    // Also check URL hash for Telegram login data (redirect method)
+    if (window.location.hash && window.location.hash.includes('tgAuthResult')) {
+      try {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const authData = hashParams.get('tgAuthResult');
+        if (authData) {
+          // Decode base64 → JSON
+          const decoded = atob(authData);
+          const user = JSON.parse(decoded);
+          if (user && user.id) {
+            localStorage.setItem('genopoisk_tg_user_id', String(user.id));
+            if (user.first_name) {
+              localStorage.setItem('genopoisk_tg_user_name', user.first_name);
+            }
+            console.log('[tg] Login via redirect, user ID:', user.id);
+            // Clear hash and reload
+            history.replaceState(null, '', window.location.pathname);
+            window.location.reload();
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Logout
+    if (tgLogoutBtn) {
+      tgLogoutBtn.addEventListener('click', function() {
+        localStorage.removeItem('genopoisk_tg_user_id');
+        localStorage.removeItem('genopoisk_tg_user_name');
+        console.log('[tg] Logged out');
+        window.location.reload();
+      });
+    }
 
     // Retry TG init after window load (async script may load late)
     window.addEventListener('load', function() {

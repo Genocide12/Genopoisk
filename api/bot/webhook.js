@@ -111,15 +111,15 @@ async function cmdStart(chatId, user) {
 
   const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Нажмите кнопку меню (слева от поля ввода), чтобы открыть приложение.\nИли используйте кнопку ниже:`;
 
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
-      [
-        { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
-        { text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }
-      ]
-    ]
-  };
+  // Debug button only for admin
+  const rows = [
+    [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
+    [{ text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' }]
+  ];
+  if (isAdmin(user.id)) {
+    rows.push([{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]);
+  }
+  const keyboard = { inline_keyboard: rows };
   await sendMessage(chatId, welcome, { reply_markup: keyboard });
 }
 
@@ -197,40 +197,82 @@ async function buildUsersListText() {
 async function buildUserProfileText(targetId) {
   const u = await readUser(targetId);
   if (!u) {
-    return { text: `❌ Пользователь <code>${targetId}</code> не найден.`, hasLastFilm: false };
+    return { text: `❌ Пользователь <code>${escapeHtml(targetId)}</code> не найден.`, hasLastFilm: false };
   }
 
   const ebt = u.events_by_type || {};
   const first = u.first_seen ? new Date(u.first_seen).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '?';
   const last = u.last_seen ? new Date(u.last_seen).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '?';
 
-  const ipHistory = (u.ip_history || []).slice(0, 5).join(', ') || '—';
+  const ipHistory = (u.ip_history || []).slice(0, 10).join('\n   • ') || '—';
 
-  let filmLine = '—';
-  if (u.last_film) {
-    const filmTs = new Date(u.last_film.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-    filmLine = `🎬 "${u.last_film.title}" (ID: <code>${u.last_film.filmId}</code>)\n   открыт: ${filmTs}`;
+  // All watched films (not just last)
+  const watchedFilms = u.watched_films || (u.last_film ? [u.last_film] : []);
+  let filmsText = '—';
+  if (watchedFilms.length > 0) {
+    filmsText = watchedFilms.slice(0, 15).map(function(f, i) {
+      var time = new Date(f.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return (i + 1) + '. «' + escapeHtml(f.title) + '» (ID: <code>' + f.filmId + '</code>) — ' + time;
+    }).join('\n   ');
+    if (watchedFilms.length > 15) filmsText += '\n   ... и ещё ' + (watchedFilms.length - 15);
+  }
+
+  // Recent events for this user (filter from stats.recent_events)
+  let recentText = '—';
+  try {
+    const stats = await readStats();
+    const userEvents = (stats.recent_events || []).filter(e => e.userId === targetId).slice(0, 10);
+    if (userEvents.length > 0) {
+      recentText = userEvents.map(e => {
+        const emoji = { page_views: '👁', searches: '🔍', movies_opened: '🎬', categories_opened: '🔥', bot_starts: '🤖' }[e.type] || '•';
+        const time = new Date(e.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+        let extra = '';
+        if (e.query) extra = ' "' + escapeHtml(String(e.query).slice(0, 30)) + '"';
+        else if (e.title) extra = ' "' + escapeHtml(String(e.title).slice(0, 30)) + '"';
+        else if (e.category) extra = ' [' + e.category + ']';
+        else if (e.path) extra = ' ' + e.path;
+        return emoji + ' ' + time + extra;
+      }).join('\n   ');
+    }
+  } catch (_) {}
+
+  // Determine platform from user ID
+  let platform = 'Telegram';
+  if (targetId.includes('_')) {
+    const parts = targetId.split('_');
+    if (parts.length >= 2) {
+      platform = parts.slice(1).join('_') + ' (браузер)';
+    }
   }
 
   const text = `👤 <b>Профиль пользователя</b>
 
-<b>ID:</b> <code>${u.id}</code>
-<b>Username:</b> ${u.username ? '@' + u.username : '—'}
+<b>ID:</b> <code>${escapeHtml(u.id)}</code>
+<b>Username:</b> ${u.username ? escapeHtml(u.username) : '—'}
+<b>Платформа:</b> ${platform}
 <b>Текущий IP:</b> <code>${u.ip || '—'}</code>
-<b>История IP:</b> <code>${ipHistory}</code>
+
+<b>История IP:</b>
+   • ${ipHistory}
 
 <b>Активность:</b>
    Всего событий: <b>${u.events || 0}</b>
-   👁 ${ebt.page_views || 0} • 🔍 ${ebt.searches || 0} • 🎬 ${ebt.movies_opened || 0}
-   🔥 ${ebt.categories_opened || 0} • 🤖 ${ebt.bot_starts || 0}
+   👁 Просмотры: ${ebt.page_views || 0}
+   🔍 Поиски: ${ebt.searches || 0}
+   🎬 Фильмов открыто: ${ebt.movies_opened || 0}
+   🔥 Категорий: ${ebt.categories_opened || 0}
+   🤖 Запусков бота: ${ebt.bot_starts || 0}
 
-<b>Последний фильм:</b>
-${filmLine}
+<b>Просмотренные фильмы (${watchedFilms.length}):</b>
+   ${filmsText}
+
+<b>Последние события:</b>
+   ${recentText}
 
 <b>Первый визит:</b> ${first}
 <b>Последний визит:</b> ${last}`;
 
-  return { text, hasLastFilm: !!u.last_film };
+  return { text, hasLastFilm: !!u.last_film, watchedFilmsCount: watchedFilms.length };
 }
 
 // ---- Visits view ----

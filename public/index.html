@@ -421,10 +421,16 @@
 
     function displayFilms(films, forceCenter = false) {
       clearFilms();
+      appendFilms(films, forceCenter);
+    }
+
+    // Append films to grid without clearing (for infinite scroll)
+    function appendFilms(films, forceCenter = false) {
       if (!films || films.length === 0) {
-        showEmptyState('Фильмы не найдены');
+        if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
         return;
       }
+      filmGrid.classList.remove('centered');
       const frag = document.createDocumentFragment();
       films.forEach((film, index) => {
         const filmId = film.filmId || film.kinopoiskId;
@@ -530,7 +536,7 @@
             break;
         }
         if (films.length > 0) {
-          displayFilms(films);
+          appendFilms(films);
           currentPage++;
         } else {
           hasMore = false;

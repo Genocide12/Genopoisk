@@ -37,24 +37,25 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 0. Use native video controls only (remove venoplayer custom controls) ======
-  // venoplayer's custom controls disappear on iOS after fullscreen exit.
-  // Solution: force video.controls = true (native iOS controls) and hide
-  // venoplayer's custom control bar.
+  // ====== 0. Use native video controls only (hide ALL venoplayer custom controls) ======
   function injectControlsFix() {
     if (document.querySelector('style[data-genopoisk-controls]')) return;
     var css =
-      // Hide venoplayer custom controls
-      '.vp-controls, .vjs-control-bar, .player-controls { display:none !important; }' +
+      // Hide ALL venoplayer custom UI — controls, buttons, overlays, spinner
+      '.vp-controls, .vp-control-bar, .vjs-control-bar, .player-controls, ' +
+      '.vp-bottom-bar, .vp-top-bar, .vp-center-controls, .vp-overlay, ' +
+      '.vp-big-play-button, .vp-loading-spinner, .vp-progress-bar, ' +
+      '.vp-settings-panel, .vp-volume-panel, .vp-time-display, ' +
+      '.vp-play-button, .vp-fullscreen-button, .vp-mute-button { display:none !important; }' +
       // Show native video controls
       'video { pointer-events:auto !important; }' +
-      // Hide ad-related overlays and messages
+      // Hide ad-related overlays
       '.vp-ad-overlay, .vp-ad-message, .ad-message, [class*="ad-disabled"], [class*="fullscreen-disabled"] { display:none !important; }';
     var style = document.createElement('style');
     style.setAttribute('data-genopoisk-controls', 'true');
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
-    log('Controls fix CSS injected (native controls only)');
+    log('Controls fix CSS injected (native controls only, all venoplayer UI hidden)');
   }
   if (document.head) { injectControlsFix(); }
   else {

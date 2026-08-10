@@ -690,19 +690,11 @@ async function handleCallback(update) {
         var star = s <= currentRating ? '⭐' : '☆';
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
-      var dlKinobase = 'https://kinobase.org/film/' + film.filmId;
-      var dlHdgo = 'https://hdgo.cc/video/' + film.filmId;
-      var dlFilmix = 'https://filmix.fm/film/' + film.filmId;
       await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
             starButtons,
-            [
-              { text: '📥 Kinobase', url: dlKinobase },
-              { text: '📥 HDGO', url: dlHdgo }
-            ],
-            [{ text: '📥 Filmix', url: dlFilmix }],
             [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
           ]
         }
@@ -769,34 +761,22 @@ async function handleCallback(update) {
       // Edit the last message (the one with film card)
       if (messageId) {
         try {
-          var dlKb = 'https://kinobase.org/film/' + film.filmId;
-          var dlHd = 'https://hdgo.cc/video/' + film.filmId;
           await editMessage(chatId, messageId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars + '\n\nНажмите "Смотреть", чтобы открыть плеер, или измените оценку:', {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
                 starButtons2,
-                [
-                  { text: '📥 Kinobase', url: dlKb },
-                  { text: '📥 HDGO', url: dlHd }
-                ],
                 [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
               ]
             }
           });
         } catch (_) {
           // If edit fails (message not found), send new
-          var dlKb2 = 'https://kinobase.org/film/' + film.filmId;
-          var dlHd2 = 'https://hdgo.cc/video/' + film.filmId;
           await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars, {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
                 starButtons2,
-                [
-                  { text: '📥 Kinobase', url: dlKb2 },
-                  { text: '📥 HDGO', url: dlHd2 }
-                ],
                 [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
               ]
             }

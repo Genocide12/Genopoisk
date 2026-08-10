@@ -101,7 +101,6 @@
     .tg-login-btn:active{transform:scale(0.97);}
     .tg-user-info{font-size:14px;color:var(--text-primary);font-weight:600;display:none;align-items:center;gap:8px;}
     .tg-user-info.visible{display:flex;}
-    .tg-logout-btn{background:rgba(255,45,85,0.2);color:var(--ios-pink);border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:8px;}
     @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
     @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
@@ -117,7 +116,6 @@
     </div>
     <div class="tg-user-info" id="tgUserInfo">
       <span>✅ <span id="tgUserName">Telegram</span></span>
-      <button class="tg-logout-btn" id="tgLogoutBtn">Выйти</button>
     </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
@@ -240,66 +238,43 @@
     const tgLoginBar = document.getElementById('tgLoginBar');
     const tgUserInfo = document.getElementById('tgUserInfo');
     const tgUserNameEl = document.getElementById('tgUserName');
-    const tgLoginBtn = document.getElementById('tgLoginBtn');
-    const tgLogoutBtn = document.getElementById('tgLogoutBtn');
 
-    // Show login bar only if:
-    // 1. Not in Telegram Mini App (no initData)
-    // 2. No stored TG user ID (not linked yet)
     function checkTgLoginBar() {
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
       if (!isInTelegram && !storedTgId) {
-        // Browser user without TG link — show login bar
         tgLoginBar.classList.add('visible');
         tgUserInfo.classList.remove('visible');
       } else if (storedTgId) {
-        // Already linked — show user info
         tgLoginBar.classList.remove('visible');
         const storedName = localStorage.getItem('genopoisk_tg_user_name') || 'Telegram';
         tgUserNameEl.textContent = storedName;
         tgUserInfo.classList.add('visible');
       } else {
-        // In Telegram Mini App — hide both
         tgLoginBar.classList.remove('visible');
         tgUserInfo.classList.remove('visible');
       }
     }
     checkTgLoginBar();
 
-    // Telegram Login Widget — opens popup
-    // Bot name: Genopoiskbot, redirect to current page
-    if (tgLoginBtn) {
-      tgLoginBtn.href = 'https://oauth.telegram.org/auth?bot_id=8707273337&origin=' + encodeURIComponent(window.location.origin) + '&request_access=write&return_to=' + encodeURIComponent(window.location.href);
-      tgLoginBtn.target = '_blank';
-    }
-
-    // Listen for Telegram login callback (via postMessage from popup)
-    window.addEventListener('message', function(event) {
-      if (event.data && event.data.event === 'auth_result' && event.data.result) {
-        const user = event.data.result;
-        if (user && user.id) {
-          localStorage.setItem('genopoisk_tg_user_id', String(user.id));
-          if (user.first_name) {
-            localStorage.setItem('genopoisk_tg_user_name', user.first_name + (user.last_name ? ' ' + user.last_name : ''));
-          } else if (user.username) {
-            localStorage.setItem('genopoisk_tg_user_name', '@' + user.username);
-          }
-          console.log('[tg] Login successful, user ID:', user.id);
-          checkTgLoginBar();
-          // Reload to apply new user ID
-          setTimeout(function() { window.location.reload(); }, 500);
-        }
+    // Telegram Login Widget callback (called by telegram-widget script)
+    window.onTelegramAuth = function(user) {
+      if (user && user.id) {
+        localStorage.setItem('genopoisk_tg_user_id', String(user.id));
+        const name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : ('@' + (user.username || 'Telegram'));
+        localStorage.setItem('genopoisk_tg_user_name', name);
+        console.log('[tg] Login successful, user ID:', user.id);
+        checkTgLoginBar();
+        setTimeout(function() { window.location.reload(); }, 500);
       }
-    });
+    };
 
-    // Also check URL hash for Telegram login data (redirect method)
+    // Check URL hash for Telegram login redirect data
     if (window.location.hash && window.location.hash.includes('tgAuthResult')) {
       try {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const authData = hashParams.get('tgAuthResult');
         if (authData) {
-          // Decode base64 → JSON
           const decoded = atob(authData);
           const user = JSON.parse(decoded);
           if (user && user.id) {
@@ -307,8 +282,6 @@
             if (user.first_name) {
               localStorage.setItem('genopoisk_tg_user_name', user.first_name);
             }
-            console.log('[tg] Login via redirect, user ID:', user.id);
-            // Clear hash and reload
             history.replaceState(null, '', window.location.pathname);
             window.location.reload();
           }
@@ -316,15 +289,24 @@
       } catch (_) {}
     }
 
-    // Logout
-    if (tgLogoutBtn) {
-      tgLogoutBtn.addEventListener('click', function() {
-        localStorage.removeItem('genopoisk_tg_user_id');
-        localStorage.removeItem('genopoisk_tg_user_name');
-        console.log('[tg] Logged out');
-        window.location.reload();
-      });
-    }
+    // Load Telegram Login Widget if login bar is visible
+    window.addEventListener('load', function() {
+      if (tgLoginBar.classList.contains('visible')) {
+        const widget = document.createElement('script');
+        widget.async = true;
+        widget.src = 'https://telegram.org/js/telegram-widget.js?22';
+        widget.setAttribute('data-telegram-login', 'Genopoiskbot');
+        widget.setAttribute('data-size', 'medium');
+        widget.setAttribute('data-onauth', 'onTelegramAuth(user)');
+        widget.setAttribute('data-request-access', 'write');
+        // Replace the login button with the widget
+        const oldBtn = document.getElementById('tgLoginBtn');
+        if (oldBtn && oldBtn.parentElement) {
+          oldBtn.parentElement.appendChild(widget);
+          oldBtn.style.display = 'none';
+        }
+      }
+    });
 
     // Retry TG init after window load (async script may load late)
     window.addEventListener('load', function() {

@@ -1,4 +1,5 @@
-// Tracking endpoint — uses Supabase, telegram_id as primary key
+// Tracking endpoint — Supabase, telegram_id as primary key
+// ONLY tracks authenticated users. No guest profiles.
 const { getUser, recordEvent, getUserByUsername } = require('./_lib/supabase');
 const crypto = require('crypto');
 
@@ -47,7 +48,7 @@ module.exports = async (req, res) => {
     let telegramId = null;
     let username = null;
 
-    // 1. Mini App: validate initData → get Bot API user.id
+    // 1. Mini App: validate initData → Bot API user.id (TRUSTED)
     if (body.initData) {
       const validatedUser = validateInitData(body.initData, process.env.TG_BOT_TOKEN);
       if (validatedUser) {
@@ -56,23 +57,23 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 2. Browser OIDC: userId is OIDC sub, but we have username
-    //    → find Bot API user by username → use that telegramId
-    if (!telegramId && body.userId && body.username) {
+    // 2. Browser user: try to find existing user by username
+    if (!telegramId && body.username) {
       const existingUser = await getUserByUsername(body.username);
       if (existingUser) {
         telegramId = existingUser.telegram_id;
         console.log('[track] Linked by username:', body.username, '→', telegramId);
       }
+      // If not found → SKIP. Don't create a profile with OIDC sub or web_ ID.
+      // The user will be created when they open Mini App (with initData).
     }
 
-    // 3. If still no telegramId, use body.userId as-is (web_ or OIDC sub)
-    if (!telegramId && body.userId) {
-      telegramId = String(body.userId);
-      if (body.username) username = body.username;
+    // 3. If still no telegramId → SKIP event entirely.
+    // No guest profiles, no web_ profiles, no OIDC sub profiles.
+    if (!telegramId) {
+      console.log('[track] Skipping event — no authenticated user. userId:', body.userId, 'username:', body.username);
+      return res.status(200).json({ ok: true, skipped: true });
     }
-
-    if (!telegramId) return res.status(200).json({ ok: true }); // skip if no ID
 
     // Record event in Supabase
     await recordEvent(telegramId, type, {

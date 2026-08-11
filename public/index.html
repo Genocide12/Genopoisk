@@ -197,7 +197,8 @@
           if (userJson) {
             const u = JSON.parse(userJson);
             localStorage.setItem('genopoisk_tg_user_id', String(u.id));
-            console.log('[tg] Linked TG user ID:', u.id);
+            if (u.username) localStorage.setItem('genopoisk_tg_username', u.username);
+            console.log('[tg] Linked TG user ID:', u.id, 'username:', u.username);
           }
         } catch (_) {}
       }

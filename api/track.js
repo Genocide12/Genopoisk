@@ -1,7 +1,30 @@
 // Tracking endpoint — receives events from the site
 const { recordEvent, readStats } = require('./_lib/stats');
+const crypto = require('crypto');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
+
+// Validate Telegram Mini App initData server-side
+// Returns the REAL Bot API user ID (trusted)
+function validateAndExtractUser(initData, botToken) {
+  if (!initData || !botToken) return null;
+  try {
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+    if (!hash) return null;
+    params.delete('hash');
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    if (calculatedHash !== hash) return null;
+    const userJson = params.get('user');
+    if (!userJson) return null;
+    return JSON.parse(userJson);
+  } catch (e) { return null; }
+}
 
 function getClientIp(req) {
   // Vercel sets these headers — x-forwarded-for contains client IP first
@@ -68,19 +91,19 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Invalid event type', allowed: ALLOWED_TYPES });
     }
 
-    // Get user identifier (Telegram WebApp initData or fallback)
+    // Get user identifier — server-side validation
     let userId = 'anon';
     let username = null;
+    
+    // 1. Mini App: validate initData server-side (trusted)
     if (body.initData) {
-      try {
-        const params = new URLSearchParams(body.initData);
-        const userJson = params.get('user');
-        if (userJson) {
-          const u = JSON.parse(userJson);
-          userId = String(u.id);
-          username = u.username;
-        }
-      } catch (_) {}
+      const botToken = process.env.TG_BOT_TOKEN;
+      const validatedUser = validateAndExtractUser(body.initData, botToken);
+      if (validatedUser) {
+        userId = String(validatedUser.id);  // Bot API user ID (trusted)
+        username = validatedUser.username || '';
+        console.log('[track] Mini App validated user:', userId, username);
+      }
     }
 
     // Capture client IP for per-user stats
@@ -104,24 +127,31 @@ module.exports = async (req, res) => {
       }
     }
 
-    // If this is an OIDC sub (long number, not Bot API ID), try to find
-    // matching Bot API user by username and use that ID instead.
+    // 2. OIDC browser users: userId is OIDC sub (long number).
+    // Try to find matching Bot API user by username → use Bot API ID instead.
     // This links browser (OIDC) and Mini App (Bot API) profiles.
-    // Check both username from initData AND from body.username (localStorage)
     const linkUsername = username || body.username || '';
-    if (userId && userId.length > 12 && linkUsername) {
+    if (userId !== 'anon' && userId.length > 12 && linkUsername) {
       try {
         const stats = await readStats();
         for (const [uid, u] of Object.entries(stats.users || {})) {
-          if (u && (u.username === linkUsername || u.username === '@' + linkUsername) && uid.length <= 12) {
-            // Found Bot API user with same username → use Bot API ID
-            console.log('[track] Linked OIDC sub to Bot API ID:', userId, '→', uid, 'via username:', linkUsername);
-            userId = uid;
-            if (!username) username = u.username;
-            break;
+          if (u && uid.length <= 12) {
+            // Match by username (with or without @)
+            if (u.username === linkUsername || u.username === '@' + linkUsername ||
+                '@' + u.username === linkUsername) {
+              console.log('[track] Linked OIDC sub to Bot API ID:', userId, '→', uid, 'via username:', linkUsername);
+              userId = uid;
+              if (!username) username = u.username;
+              break;
+            }
           }
         }
       } catch (_) {}
+    }
+
+    // If still OIDC sub and no match found, use body.username for display
+    if (userId !== 'anon' && userId.length > 12 && !username && body.username) {
+      username = body.username;
     }
 
     const payload = {

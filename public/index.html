@@ -367,17 +367,19 @@
       });
     }
 
-    // --- PWA install prompt (universal) ---
-    // Shows an "Установить приложение" button on every browser EXCEPT
-    // Telegram Mini App and already-installed (standalone) sessions.
+    // --- PWA install info (mobile-only) ---
+    // Shows a floating "📲 Как установить приложение" button ONLY when:
+    //   - NOT in Telegram Mini App
+    //   - NOT already running as installed PWA (display-mode: standalone)
+    //   - On a mobile device (phone or tablet)
+    // Desktop browsers have their own native install prompts (Chrome ⊕ in
+    // address bar) so we don't show this button there.
     //
-    // Behavior by platform:
-    //   - Telegram Mini App: button never shown (Mini App is its own context)
-    //   - Already installed (display-mode: standalone or navigator.standalone): hidden
-    //   - iOS Safari (no beforeinstallprompt support): shows an instruction
-    //     modal explaining "Поделиться → На экран Домой"
-    //   - Chrome/Edge Android & Desktop: uses beforeinstallprompt (native prompt)
-    //   - Firefox / other: shows instruction modal with platform-appropriate steps
+    // Click opens a modal with platform-specific instructions:
+    //   - iOS Safari: Share → На экран Домой
+    //   - Chrome/Edge Android: uses beforeinstallprompt (native install dialog)
+    //     if available, otherwise instructions for menu ⋮
+    //   - Firefox / other Android browsers: menu ⋮ → Добавить на главный экран
 
     function pwaIsStandalone() {
       try {
@@ -389,8 +391,6 @@
 
     function pwaIsTelegramMiniApp() {
       try {
-        // Telegram WebApp sets platform to 'tdesktop','ios','android','web','unknown'
-        // Mini App also has initData. We treat any non-'unknown' platform as Mini App.
         var t = window.Telegram && window.Telegram.WebApp;
         if (!t) return false;
         if (t.initData && t.initData.length > 0) return true;
@@ -403,29 +403,43 @@
       try {
         var ua = navigator.userAgent || '';
         var platform = navigator.platform || '';
-        // iPadOS 13+ reports as MacIntel with touch — detect that too
         if (/iPhone|iPad|iPod/i.test(ua)) return true;
+        // iPadOS 13+ reports as MacIntel with touch
         if (platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
         return false;
       } catch (_) { return false; }
     }
 
-    function pwaShowInstallButton() {
-      // Don't show inside Telegram Mini App
-      if (pwaIsTelegramMiniApp()) return;
-      // Don't show if already running as installed PWA
-      if (pwaIsStandalone()) return;
+    function pwaIsMobile() {
+      try {
+        var ua = navigator.userAgent || '';
+        // Android phone, iPhone, iPad, small Windows/Mac touch devices
+        if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return true;
+        // iPadOS 13+
+        if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+        return false;
+      } catch (_) { return false; }
+    }
 
+    function pwaShowInstallInfoButton() {
+      // Skip: Mini App, already-installed PWA, desktop browsers
+      if (pwaIsTelegramMiniApp()) return;
+      if (pwaIsStandalone()) return;
+      if (!pwaIsMobile()) return;
+
+      // Floating button at bottom-right corner (less intrusive than centered bar)
       var btn = document.createElement('button');
-      btn.id = 'pwaInstallBtn';
-      btn.textContent = '📲 Установить приложение';
-      btn.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#007AFF;color:#fff;border:none;padding:12px 20px;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.4);font-family:inherit;-webkit-tap-highlight-color:transparent;';
+      btn.id = 'pwaInstallInfoBtn';
+      btn.textContent = '📲';
+      btn.title = 'Как установить приложение';
+      btn.setAttribute('aria-label', 'Как установить приложение');
+      btn.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#007AFF;color:#fff;border:none;width:52px;height:52px;border-radius:50%;font-size:24px;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.5);font-family:inherit;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;line-height:1;';
       document.body.appendChild(btn);
 
       var deferredPrompt = null;
       var isIOS = pwaIsIOS();
 
-      // Chrome/Edge fire beforeinstallprompt — capture and use native prompt
+      // Chrome/Edge fire beforeinstallprompt — capture for native flow
       window.addEventListener('beforeinstallprompt', function(e) {
         console.log('[pwa] beforeinstallprompt fired');
         e.preventDefault();
@@ -440,26 +454,21 @@
 
       btn.addEventListener('click', function() {
         if (deferredPrompt) {
-          // Native Chrome/Edge flow
+          // Native Chrome/Edge flow — show install prompt directly
           deferredPrompt.prompt();
           deferredPrompt.userChoice.then(function() {
             deferredPrompt = null;
           }).catch(function() {});
         } else if (isIOS) {
-          // iOS Safari: no API, show instructions modal
           pwaShowIosInstructions();
         } else {
-          // Other browsers (Firefox etc.) — show generic instructions
-          pwaShowGenericInstructions();
+          // Android non-Chrome (Firefox, Samsung Internet, etc.)
+          pwaShowAndroidInstructions();
         }
       });
-
-      // If beforeinstallprompt already fired before our listener was attached,
-      // we won't have it. The button still works — click will show instructions.
     }
 
     function pwaShowIosInstructions() {
-      // Modal with step-by-step for iOS Safari: Share → На экран Домой
       var overlay = document.createElement('div');
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
       var modal = document.createElement('div');
@@ -480,37 +489,38 @@
       });
     }
 
-    function pwaShowGenericInstructions() {
+    function pwaShowAndroidInstructions() {
       var overlay = document.createElement('div');
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
       var modal = document.createElement('div');
       modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
       var ua = navigator.userAgent || '';
-      var browserName = 'вашем браузере';
+      var browserName = 'браузере';
       if (ua.indexOf('Firefox') !== -1) browserName = 'Firefox';
+      else if (ua.indexOf('SamsungBrowser') !== -1) browserName = 'Samsung Internet';
       else if (ua.indexOf('Edg/') !== -1) browserName = 'Edge';
       else if (ua.indexOf('Chrome') !== -1) browserName = 'Chrome';
       modal.innerHTML =
-        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка приложения</div>' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка на Android</div>' +
         '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
-        '<p style="margin:0 0 10px;">В ' + browserName + ' установку можно выполнить через меню браузера:</p>' +
-        '<p style="margin:0 0 10px;">📱 <b>Android</b>: меню ⋮ → «Установить приложение» / «Добавить на главный экран».</p>' +
-        '<p style="margin:0 0 10px;">💻 <b>Компьютер</b>: адресная строка → значок установки ⊕ справа (или меню → «Установить Genopoisk»).</p>' +
-        '<p style="margin:0;">После установки приложение открывается в отдельном окне без адресной строки.</p>' +
+        '<p style="margin:0 0 10px;">В ' + browserName + ':</p>' +
+        '<p style="margin:0 0 10px;">1. Нажмите меню браузера (значок <b>⋮</b> в правом верхнем углу).</p>' +
+        '<p style="margin:0 0 10px;">2. Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</p>' +
+        '<p style="margin:0 0 10px;">3. Подтвердите установку.</p>' +
+        '<p style="margin:0;">Приложение появится на рабочем столе и в списке приложений.</p>' +
         '</div>' +
-        '<button id="pwaGenericClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+        '<button id="pwaAndroidClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
       overlay.addEventListener('click', function(e) {
-        if (e.target === overlay || e.target.id === 'pwaGenericClose') overlay.remove();
+        if (e.target === overlay || e.target.id === 'pwaAndroidClose') overlay.remove();
       });
     }
 
     // Wait for window load so telegram-web-app.js has a chance to initialize
     // (we need its platform field to detect Mini App).
     window.addEventListener('load', function() {
-      // Small delay to let tg.platform settle
-      setTimeout(pwaShowInstallButton, 300);
+      setTimeout(pwaShowInstallInfoButton, 300);
     });
 
     // --- Tracking ---

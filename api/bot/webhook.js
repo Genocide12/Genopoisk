@@ -114,6 +114,20 @@ function userProfileKeyboard(targetId, hasLastFilm) {
 
 // ---- Command handlers (each returns {text, keyboard} or sends a message) ----
 
+// Keyboard for regular (non-admin) users — limited to user-facing features only.
+function userMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
+      [
+        { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
+        { text: '❤️ Избранное', callback_data: 'menu_favorites' }
+      ],
+      [{ text: '❓ Помощь', callback_data: 'menu_help' }]
+    ]
+  };
+}
+
 async function cmdStart(chatId, user, text) {
   // Check for /start login — user wants to link their browser session
   const startParam = (text || '').split(/\s+/).slice(1).join(' ').trim();
@@ -132,32 +146,68 @@ async function cmdStart(chatId, user, text) {
     return;
   }
 
-  // Don't record bot_starts (removed from tracking)
-
-  const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Нажмите кнопку меню (слева от поля ввода), чтобы открыть приложение.\nИли используйте кнопку ниже:`;
-
-  // Debug button only for admin
-  const rows = [
-    [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
-    [{ text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' }]
-  ];
   if (isAdmin(user.id)) {
-    rows.push([{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]);
+    // ADMIN: welcome + full admin control panel
+    const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.`;
+    await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard() });
+    return;
   }
-  const keyboard = { inline_keyboard: rows };
-  await sendMessage(chatId, welcome, { reply_markup: keyboard });
+
+  // REGULAR USER: minimal welcome + user-facing buttons only
+  const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Используйте кнопки ниже:`;
+  await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard() });
+}
+
+// Detailed help text for regular users. Describes all features available
+// in the bot, on the website, and in the PWA app.
+function buildUserHelpText() {
+  return `<b>❓ Помощь по Genopoisk</b>
+
+<b>🎬 Как смотреть фильмы</b>
+1. Нажмите «🎬 Открыть Genopoisk» — откроется приложение прямо в Telegram.
+2. На главной введите название фильма в поиске или выберите категорию (Популярные, Топ 250, Новинки, Случайный).
+3. Нажмите на постер фильма — откроется плеер.
+4. В плеере используйте кнопки управления: пауза, перемотка, полноэкранный режим.
+
+<b>📱 Как установить как приложение</b>
+• <b>Android</b>: откройте genopoisk.vercel.app в Chrome → меню ⋮ → «Установить приложение».
+• <b>iPhone/iPad</b>: откройте сайт в Safari → кнопка «Поделиться» → «На экран Домой».
+• <b>Компьютер</b>: откройте сайт в Chrome/Edge → значок ⊕ в адресной строке → «Установить».
+После установки приложение открывается в отдельном окне — как настоящее.
+
+<b>⏯ Продолжение просмотра</b>
+Если вы не досмотрели фильм, на главной появится карточка «Продолжить просмотр» с позицией, на которой вы остановились. Позиция синхронизируется между всеми устройствами — начните на телефоне, продолжите на компьютере.
+
+<b>❤️ Избранное</b>
+В плеере нажмите ❤️ (или ☆ в шапке) — фильм добавится в избранное. Список избранных фильмов доступен в боте (кнопка «❤️ Избранное») и на сайте (карточка «❤️ Избранное» на главной).
+
+<b>🎬 Мои фильмы</b>
+История всех просмотренных фильмов. Откройте бота → «🎬 Мои фильмы». Можно оценить фильм звёздами ⭐ (от 1 до 5) и снова открыть плеер.
+
+<b>🔐 Аккаунт</b>
+Вы входите автоматически через Telegram — никаких отдельных логинов и паролей. Ваш профиль единый для всех устройств: Mini App в Telegram, браузер, установленное приложение.
+
+<b>🌐 Сайт</b>
+Адрес: <code>genopoisk.vercel.app</code>
+Открывается в любом браузере. Для входа используйте кнопку «Войти через Telegram» — авторизация пройдёт через официальный Telegram OAuth.
+
+<b>🤖 Бот</b>
+Команды: /start — главное меню, /help — эта справка.
+
+Если что-то не работает — напишите разработчику.`;
 }
 
 async function cmdHelp(chatId, user) {
-  if (!isAdmin(user.id)) {
-    await sendMessage(chatId, '⚠️ Команда доступна только администратору.');
-    return;
-  }
-  const text = `<b>🛠 Админ-панель Genopoisk</b>
+  if (isAdmin(user.id)) {
+    const text = `<b>🛠 Админ-панель Genopoisk</b>
 
 Используйте кнопки под сообщениями для навигации. Команды:
 /stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear`;
-  await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard() });
+    await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard() });
+    return;
+  }
+  // Regular user — show full feature guide
+  await sendMessage(chatId, buildUserHelpText(), { reply_markup: userMenuKeyboard() });
 }
 
 // ---- Stats view ----
@@ -562,19 +612,38 @@ async function handleMessage(update) {
     if (isAdmin(user.id)) {
       await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard() });
     } else {
-      await sendMessage(chatId, 'Используйте кнопку меню, чтобы открыть приложение 🎬', {
-        reply_markup: { inline_keyboard: [[{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }]] }
-      });
+      // Regular user — show their menu
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard() });
     }
   } else {
-    await sendMessage(chatId, 'Используйте кнопку меню, чтобы открыть приложение 🎬', {
-      reply_markup: { inline_keyboard: [[{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }]] }
-    });
+    if (isAdmin(user.id)) {
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: mainMenuKeyboard() });
+    } else {
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard() });
+    }
   }
 }
 
 // ---- Callback router (inline button presses) ----
 // Each callback either edits the existing message (preferred) or sends a new one.
+
+// Callbacks that regular (non-admin) users are allowed to press.
+// Everything else requires admin.
+const USER_ALLOWED_CALLBACKS = new Set([
+  'menu_myfilms',
+  'menu_favorites',
+  'menu_help',
+  'noop'
+]);
+// Pagination/film navigation callbacks (regex prefixes) allowed for users.
+const USER_ALLOWED_REGEX = [
+  /^myfilms_\d+$/,
+  /^myfilm_\d+$/,
+  /^rate_\d+_\d+$/,
+  /^favs_\d+$/,
+  /^favfilm_\d+$/
+];
+
 async function handleCallback(update) {
   if (!update.callback_query) return;
   const cq = update.callback_query;
@@ -583,9 +652,14 @@ async function handleCallback(update) {
   const messageId = cq.message?.message_id;
   const fromId = cq.from.id;
 
+  // Authorization check: regular users can only press whitelisted callbacks
   if (!isAdmin(fromId)) {
-    await answerCallback(cq.id, 'Доступ только для администратора');
-    return;
+    const allowed = USER_ALLOWED_CALLBACKS.has(data) ||
+                    USER_ALLOWED_REGEX.some(function(re) { return re.test(data); });
+    if (!allowed) {
+      await answerCallback(cq.id, 'Доступ только для администратора');
+      return;
+    }
   }
 
   try {
@@ -616,8 +690,29 @@ async function handleCallback(update) {
 
     // ---- Main menu navigation ----
     if (data === 'menu_main') {
-      const text = `<b>🛠 Админ-панель Genopoisk</b>\n\nВыберите раздел:`;
-      await edit(text, mainMenuKeyboard());
+      if (isAdmin(fromId)) {
+        const text = `<b>🛠 Админ-панель Genopoisk</b>\n\nВыберите раздел:`;
+        await edit(text, mainMenuKeyboard());
+      } else {
+        // Regular user — show their menu
+        const text = `🎬 <b>Genopoisk</b>\n\nВыберите раздел:`;
+        await edit(text, userMenuKeyboard());
+      }
+      return;
+    }
+    // Help section — available to regular users
+    if (data === 'menu_help') {
+      if (isAdmin(fromId)) {
+        // Admin help: short technical reference
+        const text = `<b>🛠 Админ-панель Genopoisk</b>
+
+Используйте кнопки под сообщениями для навигации. Команды:
+/stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear`;
+        await edit(text, mainMenuKeyboard());
+      } else {
+        // Regular user — full feature guide
+        await edit(buildUserHelpText(), userMenuKeyboard());
+      }
       return;
     }
     if (data === 'menu_stats') {

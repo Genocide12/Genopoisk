@@ -1,10 +1,31 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+<!-- ====== DEBUG BUILD: vConsole injected (auto-generated, do not edit) ====== -->
+<script>
+  // Load vConsole from CDN. If CDN is blocked, we still run the page —
+  // the worst case is just "no debug panel", not "page broken".
+  (function() {
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js';
+    s.onload = function() {
+      try {
+        window.__vConsole = new window.VConsole({ defaultPlugins: ['system','network','element','storage'] });
+        console.log('[debug] vConsole ready');
+      } catch (e) { console.warn('[debug] vConsole init failed', e); }
+    };
+    s.onerror = function() { console.warn('[debug] vConsole CDN load failed'); };
+    // Insert synchronously into <head> BEFORE other scripts run, so we
+    // capture early console.log output.
+    (document.head || document.documentElement).appendChild(s);
+  })();
+</script>
+<!-- ====== END vConsole injection ====== -->
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,minimum-scale=1">
   <meta name="referrer" content="origin">
-  <title>Плеер</title>
+  <title>[DEBUG] Плеер</title>
   <script>
     // ====== Performance & error logging ======
     console.log('[perf] player.html started at', (performance.now() / 1000).toFixed(2) + 's');
@@ -22,57 +43,8 @@
     });
   </script>
   <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('[tg] telegram-web-app.js failed to load (blocked?). Running without Telegram WebApp.')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vconsole@3.15.1/dist/vconsole.min.js"></script>
-  <script>if (window.VConsole) { window.__vconsole = new VConsole(); console.log("[debug] vConsole initialized"); }</script>
-  <script>
-    // Add "Copy all logs" button to vConsole toolbar
-    (function() {
-      function addCopyButton() {
-        var vc = document.querySelector('.vc-toolbar');
-        if (!vc) { setTimeout(addCopyButton, 500); return; }
-        if (document.getElementById('vc-copy-all-btn')) return;
-        var btn = document.createElement('div');
-        btn.id = 'vc-copy-all-btn';
-        btn.className = 'vc-toolbar-item';
-        btn.innerHTML = '<a class="vc-toolbar-btn"><div class="vc-btn-content"><div class="vc-btn-name" style="padding:8px 4px">📋 Copy</div></div></a>';
-        btn.addEventListener('click', function() {
-          var logs = [];
-          try {
-            var rows = document.querySelectorAll('.vc-log-row');
-            for (var i = 0; i < rows.length; i++) {
-              var typeMatch = rows[i].className.match(/vc-log-(\w+)/);
-              var typeStr = typeMatch ? '[' + typeMatch[1] + '] ' : '';
-              logs.push(typeStr + rows[i].textContent);
-            }
-          } catch (e) { logs.push('Error: ' + e.message); }
-          var text = logs.join('\n');
-          var label = btn.querySelector('.vc-btn-name');
-          function done(msg) { label.textContent = msg; setTimeout(function() { label.textContent = '📋 Copy'; }, 2000); }
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function() { done('✅ ' + text.length); }).catch(function() { fallback(text); });
-          } else { fallback(text); }
-          function fallback(text) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed'; ta.style.top = '-9999px';
-            document.body.appendChild(ta); ta.select();
-            try { document.execCommand('copy'); done('✅ ' + text.length); } catch (e) { done('❌ Error'); }
-            document.body.removeChild(ta);
-          }
-        });
-        vc.appendChild(btn);
-      }
-      window.addEventListener('load', function() { setTimeout(addCopyButton, 1000); setTimeout(addCopyButton, 3000); });
-    })();
-  </script>
   <style>
     html, body {
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
       margin:0;
       padding:0;
       background:#000;
@@ -83,11 +55,10 @@
       min-width:100vw;
       font-family:system-ui,sans-serif;
       overflow:hidden;
-    }
-    *, *:after, *:before {
-      -webkit-user-select: none!important;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none!important;
+      position:fixed;
+      top:0;
+      left:0;
+      overscroll-behavior:none;
     }
     .player-header {
       position:absolute;
@@ -132,6 +103,28 @@
     .btn:active { background:rgba(50,150,225,0.23); transform: scale(0.95); }
     .btn-close { background:#f33; margin-left:4px; }
     .btn-close:active { background:#a00; transform: scale(0.95); }
+    .btn-fav { background:rgba(255,200,0,0.18); color:#ffd54a; font-size:18px; }
+    .btn-fav.active { background:rgba(255,200,0,0.45); color:#fff; }
+    .btn-fav:active { transform: scale(0.95); }
+    .loading-text {
+      margin-left: 4px;
+      display: flex;
+      flex-direction: column;
+      max-width: 70vw;
+    }
+    .loading-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .loading-subtitle {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 4px;
+    }
     .player-main {
       position:absolute;
       top:52px;
@@ -225,6 +218,7 @@
   <div class="player-header" id="playerHeader">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
+      <button class="btn btn-fav" id="favBtn" title="В избранное">☆</button>
       <button class="btn btn-close" id="closeBtn" title="Закрыть">✕</button>
     </div>
   </div>
@@ -232,7 +226,10 @@
     <iframe id="playerIframe" class="player-iframe" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="origin"></iframe>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
-      <span>Загрузка плеера...</span>
+      <div class="loading-text">
+        <div class="loading-title" id="loadingTitle">Загрузка плеера...</div>
+        <div class="loading-subtitle" id="loadingSubtitle"></div>
+      </div>
     </div>
     <div class="toast" id="toast"></div>
   </div>
@@ -251,10 +248,9 @@
     })();
 
     // ====== Phase 2: Player logic ======
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    document.addEventListener('copy', e => e.preventDefault());
-    document.addEventListener('cut', e => e.preventDefault());
-    document.addEventListener('selectstart', e => e.preventDefault());
+    // Note: removed contextmenu/copy/cut/selectstart blockers — they were
+    // blocking venoplayer's touch handlers and preventing controls from
+    // appearing on tap.
 
     var params = new URLSearchParams(window.location.search);
     var kid = params.get('id') || '4910542';
@@ -269,24 +265,50 @@
     var playerMain = document.getElementById('playerMain');
     var toastEl = document.getElementById('toast');
     var loadingOverlay = document.getElementById('loadingOverlay');
+    var loadingTitle = document.getElementById('loadingTitle');
+    var loadingSubtitle = document.getElementById('loadingSubtitle');
+
+    // Show film title + resume position in the loading overlay (preloader)
+    if (loadingTitle) loadingTitle.textContent = decodeURIComponent(title);
+    if (loadingSubtitle) {
+      var startSec = parseInt(startTime, 10) || 0;
+      if (startSec > 5) {
+        loadingSubtitle.textContent = '▶ Продолжить с ' + formatTime(startSec);
+      } else {
+        loadingSubtitle.textContent = 'Загрузка видео...';
+      }
+    }
 
     var tg = window.Telegram && window.Telegram.WebApp;
     function tryInitTg() {
       tg = window.Telegram && window.Telegram.WebApp;
       if (!tg) return false;
       try {
-        tg.ready();
-        tg.expand();
+        // Call ready() FIRST so Telegram knows we're ready to receive events,
+        // then expand() to take full viewport. Without ready(), expand() may
+        // be ignored on some clients.
+        if (tg.ready) tg.ready();
+        if (tg.expand) tg.expand();
         if (tg.setHeaderColor) tg.setHeaderColor('#000000');
         if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
         if (tg.BackButton && tg.BackButton.hide) tg.BackButton.hide();
+        // Enable vertical swipes for fullscreen control in Mini App
+        if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
       } catch(_) {}
       return true;
     }
     tryInitTg();
     window.addEventListener('load', function() { if (!tg) tryInitTg(); });
+    // Retry once more after a short delay (covers slow TG script load)
+    setTimeout(function() { if (!tg) tryInitTg(); }, 1500);
 
-    function getBrowserUserId() {
+    // getUserId — prefers Telegram ID (set after OIDC login or in Mini App),
+    // falls back to a temp web_* ID for unauthorised browser sessions.
+    // This MUST match the logic in index.html so player and site use the
+    // same identifier — otherwise cross-device resume breaks.
+    function getUserId() {
+      var tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) return tgId;
       var id = localStorage.getItem('genopoisk_user_id');
       if (!id) {
         var rand = Math.random().toString(36).slice(2, 11);
@@ -296,7 +318,7 @@
       }
       return id;
     }
-    var browserUserId = getBrowserUserId();
+    var browserUserId = getUserId();
     var tgInitData = (tg && tg.initData) || '';
 
     var toastTimer = null;
@@ -310,7 +332,8 @@
 
     function trackEvent(type, payload) {
       payload = payload || {};
-      var body = { type: type, initData: tgInitData, userId: browserUserId };
+      // Re-read userId (in case login completed after page load)
+      var body = { type: type, initData: tgInitData, userId: getUserId() };
       Object.keys(payload).forEach(function(k) { body[k] = payload[k]; });
       try {
         fetch('/api/track', {
@@ -321,6 +344,34 @@
       } catch (e) {}
     }
     trackEvent('page_views', { path: '/player' });
+
+    // Send position to backend for cross-device resume. Uses keepalive so it
+    // works even when called from pagehide / beforeunload.
+    function sendPositionToBackend(seconds, duration) {
+      if (!seconds || seconds < 5 || !isFinite(seconds)) return;
+      // Re-read userId (in case login completed after page load)
+      var uid = getUserId();
+      // Don't send if userId is a guest web_* ID — server would skip it anyway
+      if (String(uid).indexOf('web_') === 0) return;
+      var payload = JSON.stringify({
+        type: 'position_update',
+        initData: tgInitData,
+        userId: uid,
+        username: localStorage.getItem('genopoisk_tg_username') || '',
+        filmId: kid,
+        title: title,
+        position: Math.floor(seconds),
+        duration: Math.floor(duration || 0)
+      });
+      try {
+        fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        }).catch(function() {});
+      } catch (e) {}
+    }
 
     function positionKey(filmId) { return 'genopoisk_position_' + filmId; }
 
@@ -359,13 +410,28 @@
       return h > 0 ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
     }
 
-    var savedPos = loadPosition();
+    // Choose the best resume position:
+    //   1. ?t= URL param (set by index.html resume card from server data)
+    //   2. localStorage position (from previous session on THIS device)
+    // Server-provided ?t= wins because it may be more recent (saved from
+    // another device a few seconds ago).
+    var urlStartSec = parseInt(startTime, 10) || 0;
+    var savedPos = null;
+    if (urlStartSec > 5) {
+      savedPos = { t: urlStartSec, d: 0, ts: new Date().toISOString(), title: title, fromUrl: true };
+      console.log('[player] Using ?t=' + urlStartSec + ' from URL (cross-device resume)');
+    } else {
+      savedPos = loadPosition();
+      if (savedPos) console.log('[player] Using localStorage position:', savedPos.t);
+    }
     var playerReady = false;
     var lastKnownTime = 0;
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
+    var lastBackendSaveTime = 0;
     var seekRetries = 0;
     var isResuming = false; // true while we're seeking to saved position
+    var isFavorite = false; // current favorite state, loaded from backend
 
     function sendToPlayer(msg) {
       try {
@@ -373,9 +439,71 @@
       } catch (_) {}
     }
 
-    // Seek to saved position with retries. venoplayer may not be ready on
-    // first attempt, so we retry up to 8 times with 2s interval.
-    // Bridge now does play() → wait canplay → seek, so each attempt takes time.
+    // ====== Favorite button ======
+    var favBtn = document.getElementById('favBtn');
+    function updateFavBtn() {
+      if (!favBtn) return;
+      favBtn.textContent = isFavorite ? '★' : '☆';
+      favBtn.classList.toggle('active', isFavorite);
+      favBtn.title = isFavorite ? 'Убрать из избранного' : 'В избранное';
+    }
+
+    // Load initial favorite state from backend
+    async function loadFavoriteState() {
+      var uid = getUserId();
+      if (!uid || String(uid).indexOf('web_') === 0) return;
+      try {
+        var res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: tgInitData })
+        });
+        if (!res.ok) return;
+        var data = await res.json();
+        var favs = data.favorites || [];
+        isFavorite = favs.some(function(f) { return String(f.filmId) === String(kid); });
+        updateFavBtn();
+      } catch (e) { console.warn('[fav] load state failed', e); }
+    }
+
+    async function toggleFavorite() {
+      var uid = getUserId();
+      if (!uid || String(uid).indexOf('web_') === 0) {
+        showToast('Войдите через Telegram, чтобы сохранять избранное', 3000);
+        return;
+      }
+      var newType = isFavorite ? 'favorite_removed' : 'favorite_added';
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: newType,
+            initData: tgInitData,
+            userId: uid,
+            username: localStorage.getItem('genopoisk_tg_username') || '',
+            filmId: kid,
+            title: title
+          }),
+          keepalive: true
+        });
+        isFavorite = !isFavorite;
+        updateFavBtn();
+        showToast(isFavorite ? '⭐ Добавлено в избранное' : 'Убрано из избранного', 1800);
+      } catch (e) {
+        console.warn('[fav] toggle failed', e);
+        showToast('Ошибка', 1500);
+      }
+    }
+
+    if (favBtn) {
+      favBtn.addEventListener('click', toggleFavorite);
+    }
+    loadFavoriteState();
+
+    // Seek to saved position with retries. venoplayer may reset currentTime
+    // to 0 after our seek (it calls play() which restarts from beginning).
+    // We monitor currentTime after each seek and re-seek if it drops.
     function attemptSeekToSaved() {
       if (!savedPos || !playerReady) return;
       var target = savedPos.t;
@@ -385,9 +513,9 @@
         isResuming = false;
         return;
       }
-      // If we've tried 8 times, give up
-      if (seekRetries >= 8) {
-        console.warn('[player] Seek failed after 8 retries, lastKnownTime:', lastKnownTime);
+      // If we've tried 15 times, give up
+      if (seekRetries >= 15) {
+        console.warn('[player] Seek failed after 15 retries, lastKnownTime:', lastKnownTime);
         isResuming = false;
         return;
       }
@@ -395,17 +523,22 @@
       isResuming = true;
       console.log('[player] Seek attempt ' + seekRetries + ' to', target, '(currentTime:', lastKnownTime + ')');
       sendToPlayer({ type: 'seek', time: target });
-      // No toast — resume happens silently
-      // Retry after 2s (bridge needs time for play → canplay → seek)
-      setTimeout(attemptSeekToSaved, 2000);
+      // Retry after 1.5s — monitor if venoplayer reset currentTime to 0
+      setTimeout(attemptSeekToSaved, 1500);
     }
 
     function maybeSavePosition(t) {
       if (!t || t < 5 || !isFinite(t)) return;
       var now = Date.now();
+      // Save to localStorage every 3s
       if (now - lastSaveTime < 3000) return;
       lastSaveTime = now;
       savePosition(t, lastKnownDuration);
+      // Send to backend every 10s (for cross-device resume)
+      if (now - lastBackendSaveTime >= 10000) {
+        lastBackendSaveTime = now;
+        sendPositionToBackend(t, lastKnownDuration);
+      }
     }
 
     window.addEventListener('message', function(e) {
@@ -444,10 +577,12 @@
           console.log('[player] Ignored ended event during resume');
           return;
         }
-        // Only clear position if video actually reached the end (within last 30s).
-        if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30) {
+        // Only clear position if video ACTUALLY reached the end.
+        // Require: duration known AND currentTime > duration - 30 AND
+        // currentTime > duration / 2 (to avoid false positives from reset-to-0).
+        if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30 && lastKnownTime > lastKnownDuration / 2) {
           clearPosition();
-          console.log('[player] Position cleared (video reached end)');
+          console.log('[player] Position cleared (video reached end at', lastKnownTime + ')');
         } else {
           console.log('[player] Ignored ended event (currentTime:', lastKnownTime, 'duration:', lastKnownDuration + ')');
         }
@@ -459,6 +594,7 @@
     function saveBeforeLeave() {
       if (lastKnownTime > 5) {
         savePosition(lastKnownTime, lastKnownDuration);
+        sendPositionToBackend(lastKnownTime, lastKnownDuration);
       }
     }
     window.addEventListener('pagehide', saveBeforeLeave);
@@ -513,6 +649,23 @@
       });
     }
     loadPlayer();
+
+    // Fix: after exiting fullscreen on mobile, venoplayer sometimes hides
+    // its controls. We listen for fullscreenchange and send a 'showControls'
+    // message to bridge, which will force the controls visible.
+    function handleFullscreenChange() {
+      var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      console.log('[player] Fullscreen change:', isFs ? 'entered' : 'exited');
+      if (!isFs) {
+        // Exited fullscreen — wait a bit then tell bridge to show controls
+        setTimeout(function() {
+          sendToPlayer({ type: 'showControls' });
+        }, 300);
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
 
     // Safety timeout
     setTimeout(function() {

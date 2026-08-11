@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+<!-- ====== DEBUG BUILD: vConsole injected (auto-generated, do not edit) ====== -->
+<script>
+  // Load vConsole from CDN. If CDN is blocked, we still run the page —
+  // the worst case is just "no debug panel", not "page broken".
+  (function() {
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js';
+    s.onload = function() {
+      try {
+        window.__vConsole = new window.VConsole({ defaultPlugins: ['system','network','element','storage'] });
+        console.log('[debug] vConsole ready');
+      } catch (e) { console.warn('[debug] vConsole init failed', e); }
+    };
+    s.onerror = function() { console.warn('[debug] vConsole CDN load failed'); };
+    // Insert synchronously into <head> BEFORE other scripts run, so we
+    // capture early console.log output.
+    (document.head || document.documentElement).appendChild(s);
+  })();
+</script>
+<!-- ====== END vConsole injection ====== -->
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
   <meta name="theme-color" content="#000000">
@@ -10,7 +31,7 @@
   <meta name="apple-mobile-web-app-title" content="Genopoisk">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
-  <title>Genopoisk</title>
+  <title>[DEBUG] Genopoisk</title>
   <script>
     // ====== Performance & error logging ======
     window.addEventListener('DOMContentLoaded', function() {
@@ -27,49 +48,6 @@
     });
   </script>
   <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('[tg] telegram-web-app.js failed to load (blocked?). Running without Telegram WebApp.')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vconsole@3.15.1/dist/vconsole.min.js"></script>
-  <script>if (window.VConsole) { window.__vconsole = new VConsole(); console.log("[debug] vConsole initialized"); }</script>
-  <script>
-    // Add "Copy all logs" button to vConsole toolbar
-    (function() {
-      function addCopyButton() {
-        var vc = document.querySelector('.vc-toolbar');
-        if (!vc) { setTimeout(addCopyButton, 500); return; }
-        if (document.getElementById('vc-copy-all-btn')) return;
-        var btn = document.createElement('div');
-        btn.id = 'vc-copy-all-btn';
-        btn.className = 'vc-toolbar-item';
-        btn.innerHTML = '<a class="vc-toolbar-btn"><div class="vc-btn-content"><div class="vc-btn-name" style="padding:8px 4px">📋 Copy</div></div></a>';
-        btn.addEventListener('click', function() {
-          var logs = [];
-          try {
-            var rows = document.querySelectorAll('.vc-log-row');
-            for (var i = 0; i < rows.length; i++) {
-              var typeMatch = rows[i].className.match(/vc-log-(\w+)/);
-              var typeStr = typeMatch ? '[' + typeMatch[1] + '] ' : '';
-              logs.push(typeStr + rows[i].textContent);
-            }
-          } catch (e) { logs.push('Error: ' + e.message); }
-          var text = logs.join('\n');
-          var label = btn.querySelector('.vc-btn-name');
-          function done(msg) { label.textContent = msg; setTimeout(function() { label.textContent = '📋 Copy'; }, 2000); }
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function() { done('✅ ' + text.length); }).catch(function() { fallback(text); });
-          } else { fallback(text); }
-          function fallback(text) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed'; ta.style.top = '-9999px';
-            document.body.appendChild(ta); ta.select();
-            try { document.execCommand('copy'); done('✅ ' + text.length); } catch (e) { done('❌ Error'); }
-            document.body.removeChild(ta);
-          }
-        });
-        vc.appendChild(btn);
-      }
-      window.addEventListener('load', function() { setTimeout(addCopyButton, 1000); setTimeout(addCopyButton, 3000); });
-    })();
-  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -88,6 +66,12 @@
     .search-input::placeholder{color:var(--text-secondary);}
     .search-input:focus{background:var(--bg-tertiary);border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);transform:translateY(-2px);}
     .search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;opacity:0.6;}
+    .search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.18);border:none;color:var(--text-primary);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;line-height:1;-webkit-tap-highlight-color:transparent;}
+    .search-clear.visible{display:flex;}
+    .search-clear:active{background:rgba(255,255,255,0.32);transform:translateY(-50%) scale(0.92);}
+    /* Make room for the clear button when visible */
+    .search-input{padding-right:44px;}
+    .search-input:not(:placeholder-shown) ~ .search-clear{display:flex;}
     .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
     .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
     .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
@@ -137,12 +121,22 @@
     .footer-text{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;}
     .footer-link{display:inline-block;padding:8px 16px;background:var(--fill);border:1px solid var(--separator);border-radius:12px;color:var(--ios-blue);text-decoration:none;font-size:14px;font-weight:600;transition:all 0.3s;}
     .footer-link:hover{background:var(--ios-blue);color:white;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,0.4);}
+    .tg-login-bar{display:none;justify-content:center;align-items:center;background:var(--fill);border:1px solid var(--separator);border-radius:16px;padding:14px 16px;margin-bottom:16px;}
+    .tg-login-bar.visible{display:flex;}
+    #tgWidgetContainer{display:flex;justify-content:center;overflow:hidden;}
+    #tgWidgetContainer iframe{max-width:100%;border:none;overflow:hidden;}
     @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
     @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="tg-login-bar" id="tgLoginBar">
+      <a href="/api/auth/telegram/login" id="tgLoginBtn" style="background:#229ED9;color:#fff;padding:12px 28px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+        Войти через Telegram
+      </a>
+    </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
       <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
@@ -159,7 +153,8 @@
     <div class="search-wrapper">
       <div class="search-container">
         <span class="search-icon">🔍</span>
-        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" />
+        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" enterkeyhint="done" inputmode="search" />
+        <button class="search-clear" id="searchClear" type="button" title="Очистить">✕</button>
       </div>
     </div>
     <div class="actions">
@@ -178,6 +173,10 @@
       <div class="action-card" onclick="loadCategory('random')">
         <span class="action-icon">🎯</span>
         <div class="action-title">Случайный</div>
+      </div>
+      <div class="action-card" onclick="loadFavorites()">
+        <span class="action-icon">❤️</span>
+        <div class="action-title">Избранное</div>
       </div>
     </div>
     <div class="content hidden" id="content">
@@ -208,10 +207,48 @@
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
 
-    // --- User identification: works in Telegram Mini App AND in regular browser ---
-    // Telegram user ID from initData takes precedence on the server;
-    // for browser users (no initData) we generate a stable UUID in localStorage.
+    // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
+    // We need to extract TG user ID from initData and store it in localStorage
+    // BEFORE getBrowserUserId() reads it, so profiles are linked.
+    let tgInitData = '';
+    let tg = null;
+    function initTelegramWebApp() {
+      tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg) return null;
+      try {
+        tg.ready();
+        tg.expand();
+        if (tg.setHeaderColor) tg.setHeaderColor('#000000');
+        if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
+      } catch (_) {}
+      tgInitData = tg.initData || '';
+      if (tgInitData) {
+        try {
+          const params = new URLSearchParams(tgInitData);
+          const userJson = params.get('user');
+          if (userJson) {
+            const u = JSON.parse(userJson);
+            localStorage.setItem('genopoisk_tg_user_id', String(u.id));
+            if (u.username) localStorage.setItem('genopoisk_tg_username', u.username);
+            console.log('[tg] Linked TG user ID:', u.id, 'username:', u.username);
+          }
+        } catch (_) {}
+      }
+      console.log('[tg] Telegram WebApp initialized, has initData:', !!tgInitData);
+      return tg;
+    }
+    // Try immediately — in Telegram Mini App, telegram-web-app.js is already loaded
+    tg = initTelegramWebApp();
+
+    // --- User identification ---
+    // Priority: 1) Stored TG user ID (from previous Telegram visit, in localStorage)
+    //           2) Stable localStorage web_ ID (persists across VPN changes)
     function getBrowserUserId() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) {
+        console.log('[user] Using stored TG ID:', tgId);
+        return tgId;
+      }
       let id = localStorage.getItem('genopoisk_user_id');
       if (!id) {
         const rand = Math.random().toString(36).slice(2, 11);
@@ -221,41 +258,310 @@
       }
       return id;
     }
-    const browserUserId = getBrowserUserId();
-
-    // --- Telegram WebApp init (lazy — telegram-web-app.js loads async) ---
-    // We don't block on this. tgInitData is read on demand.
-    let tgInitData = '';
-    function initTelegramWebApp() {
-      const tg = window.Telegram && window.Telegram.WebApp;
-      if (!tg) return null;
-      try {
-        tg.ready();
-        tg.expand();
-        if (tg.setHeaderColor) tg.setHeaderColor('#000000');
-        if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
-      } catch (_) {}
-      tgInitData = tg.initData || '';
-      console.log('[tg] Telegram WebApp initialized, has initData:', !!tgInitData);
-      return tg;
+    // DYNAMIC userId — re-reads localStorage EVERY TIME (not a const!)
+    // This fixes the core bug: telegram-web-app.js loads async and stores
+    // TG user ID in localStorage AFTER getBrowserUserId() was first called.
+    // With a const, all subsequent trackEvent calls used the old web_ ID.
+    function getUserId() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) return tgId;
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
     }
-    // Try immediately (script may already be loaded in Mini App)
-    let tg = initTelegramWebApp();
-    // Also retry after window load (async script)
+
+    // --- Telegram OIDC Login ---
+    const tgLoginBar = document.getElementById('tgLoginBar');
+
+    function checkTgLoginBar() {
+      const isInTelegram = !!(tg && tg.initData);
+      const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
+      const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
+      // Hide bar if: in Mini App, OR has stored TG ID, OR has stored username (OIDC logged in)
+      if (isInTelegram || storedTgId || storedTgUsername) {
+        tgLoginBar.classList.remove('visible');
+      } else {
+        tgLoginBar.classList.add('visible');
+      }
+    }
+    // DON'T call checkTgLoginBar yet — wait for telegram-web-app.js to load
+    // (it's async, so tg might be null on first run even in Mini App)
+
+    // Check for ?telegram_login=success&tg_id=... (from OAuth callback redirect)
+    const urlParams = new URLSearchParams(window.location.search);
+    const telegramLogin = urlParams.get('telegram_login');
+    const tgIdFromUrl = urlParams.get('tg_id');
+    const tgNameFromUrl = urlParams.get('tg_name');
+    const tgUsernameFromUrl = urlParams.get('tg_username');
+
+    if (telegramLogin === 'success' && tgIdFromUrl) {
+      // OAuth success — store user data
+      localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
+      if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
+      if (tgUsernameFromUrl) localStorage.setItem('genopoisk_tg_username', tgUsernameFromUrl);
+      console.log('[tg] OIDC login successful, TG ID:', tgIdFromUrl, 'username:', tgUsernameFromUrl);
+      // Clean URL
+      history.replaceState(null, '', window.location.pathname);
+      window.location.reload();
+    } else if (telegramLogin === 'error') {
+      const msg = urlParams.get('message') || 'unknown';
+      console.error('[tg] OIDC login error:', msg);
+      history.replaceState(null, '', window.location.pathname);
+    }
+
+    // Also handle ?tg_id= (fallback from bot deep link)
+    if (tgIdFromUrl && !telegramLogin) {
+      localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
+      if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
+      console.log('[tg] Linked via bot, TG ID:', tgIdFromUrl);
+      history.replaceState(null, '', window.location.pathname);
+      window.location.reload();
+    }
+
+    // --- Check if user still exists in stats (after "logout all devices") ---
+    async function checkAuth() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      const tgUsername = localStorage.getItem('genopoisk_tg_username');
+      if (!tgId && !tgUsername) return; // not logged in at all
+      if (tg && tg.initData) return; // Mini App — always authenticated
+      try {
+        const res = await fetch('/api/user-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: tgId, username: tgUsername, initData: getTgInitData() })
+        });
+        const data = await res.json();
+        if (data.reauth) {
+          console.log('[auth] User not found, clearing localStorage');
+          localStorage.removeItem('genopoisk_tg_user_id');
+          localStorage.removeItem('genopoisk_tg_user_name');
+          localStorage.removeItem('genopoisk_tg_username');
+          window.location.reload();
+        }
+      } catch (e) { console.warn('[auth] check failed:', e); }
+    }
+
+    // --- Wait for telegram-web-app.js to load, then init everything ---
+    // This ensures tg is available before checkTgLoginBar and checkAuth
     window.addEventListener('load', function() {
-      if (!tg) tg = initTelegramWebApp();
+      // Retry TG init (async script should be loaded by now)
+      if (!tg) {
+        tg = initTelegramWebApp();
+      }
+      // Now check login bar (tg is set, even in Mini App)
+      checkTgLoginBar();
+      // Check auth status
+      checkAuth();
+    });
+
+    // Also try immediately (for browsers without Telegram — checkTgLoginBar shows bar)
+    // But only for NON-Mini-App contexts (don't show bar in Mini App)
+    if (!window.Telegram) {
+      // No Telegram at all — definitely a browser → show login bar
+      checkTgLoginBar();
+      checkAuth();
+    }
+
+    // Periodic auth check — picks up "logout all devices" within ~2 minutes
+    // for already-open tabs without requiring a manual page reload.
+    // Only runs in browser context (Mini App initData is always authenticated).
+    setInterval(function() {
+      if (tg && tg.initData) return; // skip Mini App
+      checkAuth();
+    }, 120000);
+
+    // --- Register service worker for offline PWA support ---
+    // Caches the app shell (index.html, icons, manifest, bridge.js) so the
+    // main page works offline. Player and API calls always need network.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+          console.log('[sw] registered, scope:', reg.scope);
+        }).catch(function(e) {
+          console.warn('[sw] registration failed:', e);
+        });
+      });
+    }
+
+    // --- PWA install info (mobile-only) ---
+    // Shows a floating "📲 Как установить приложение" button ONLY when:
+    //   - NOT in Telegram Mini App
+    //   - NOT already running as installed PWA (display-mode: standalone)
+    //   - On a mobile device (phone or tablet)
+    // Desktop browsers have their own native install prompts (Chrome ⊕ in
+    // address bar) so we don't show this button there.
+    //
+    // Click opens a modal with platform-specific instructions:
+    //   - iOS Safari: Share → На экран Домой
+    //   - Chrome/Edge Android: uses beforeinstallprompt (native install dialog)
+    //     if available, otherwise instructions for menu ⋮
+    //   - Firefox / other Android browsers: menu ⋮ → Добавить на главный экран
+
+    function pwaIsStandalone() {
+      try {
+        return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+               (window.navigator.standalone === true) ||
+               (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches);
+      } catch (_) { return false; }
+    }
+
+    function pwaIsTelegramMiniApp() {
+      try {
+        var t = window.Telegram && window.Telegram.WebApp;
+        if (!t) return false;
+        if (t.initData && t.initData.length > 0) return true;
+        if (t.platform && t.platform !== 'unknown') return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaIsIOS() {
+      try {
+        var ua = navigator.userAgent || '';
+        var platform = navigator.platform || '';
+        if (/iPhone|iPad|iPod/i.test(ua)) return true;
+        // iPadOS 13+ reports as MacIntel with touch
+        if (platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaIsMobile() {
+      try {
+        var ua = navigator.userAgent || '';
+        // Android phone, iPhone, iPad, small Windows/Mac touch devices
+        if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return true;
+        // iPadOS 13+
+        if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaShowInstallInfoButton() {
+      // Skip: Mini App, already-installed PWA, desktop browsers
+      if (pwaIsTelegramMiniApp()) return;
+      if (pwaIsStandalone()) return;
+      if (!pwaIsMobile()) return;
+
+      // Floating button at bottom-right corner (less intrusive than centered bar)
+      var btn = document.createElement('button');
+      btn.id = 'pwaInstallInfoBtn';
+      btn.textContent = '📲';
+      btn.title = 'Как установить приложение';
+      btn.setAttribute('aria-label', 'Как установить приложение');
+      btn.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#007AFF;color:#fff;border:none;width:52px;height:52px;border-radius:50%;font-size:24px;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.5);font-family:inherit;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;line-height:1;';
+      document.body.appendChild(btn);
+
+      var deferredPrompt = null;
+      var isIOS = pwaIsIOS();
+
+      // Chrome/Edge fire beforeinstallprompt — capture for native flow
+      window.addEventListener('beforeinstallprompt', function(e) {
+        console.log('[pwa] beforeinstallprompt fired');
+        e.preventDefault();
+        deferredPrompt = e;
+      });
+
+      // If app gets installed (any browser), hide button
+      window.addEventListener('appinstalled', function() {
+        console.log('[pwa] app installed');
+        btn.remove();
+      });
+
+      btn.addEventListener('click', function() {
+        if (deferredPrompt) {
+          // Native Chrome/Edge flow — show install prompt directly
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function() {
+            deferredPrompt = null;
+          }).catch(function() {});
+        } else if (isIOS) {
+          pwaShowIosInstructions();
+        } else {
+          // Android non-Chrome (Firefox, Samsung Internet, etc.)
+          pwaShowAndroidInstructions();
+        }
+      });
+    }
+
+    function pwaShowIosInstructions() {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      var modal = document.createElement('div');
+      modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+      modal.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка на iPhone/iPad</div>' +
+        '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
+        '<p style="margin:0 0 10px;">1. Нажмите кнопку <b>«Поделиться»</b> внизу Safari (квадрат со стрелкой вверх ▲).</p>' +
+        '<p style="margin:0 0 10px;">2. В меню выберите <b>«На экран&nbsp;Домой»</b> (➕).</p>' +
+        '<p style="margin:0 0 10px;">3. Нажмите <b>«Добавить»</b> в правом верхнем углу.</p>' +
+        '<p style="margin:0;">Приложение появится на главном экране.</p>' +
+        '</div>' +
+        '<button id="pwaIosClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.id === 'pwaIosClose') overlay.remove();
+      });
+    }
+
+    function pwaShowAndroidInstructions() {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      var modal = document.createElement('div');
+      modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+      var ua = navigator.userAgent || '';
+      var browserName = 'браузере';
+      if (ua.indexOf('Firefox') !== -1) browserName = 'Firefox';
+      else if (ua.indexOf('SamsungBrowser') !== -1) browserName = 'Samsung Internet';
+      else if (ua.indexOf('Edg/') !== -1) browserName = 'Edge';
+      else if (ua.indexOf('Chrome') !== -1) browserName = 'Chrome';
+      modal.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка на Android</div>' +
+        '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
+        '<p style="margin:0 0 10px;">В ' + browserName + ':</p>' +
+        '<p style="margin:0 0 10px;">1. Нажмите меню браузера (значок <b>⋮</b> в правом верхнем углу).</p>' +
+        '<p style="margin:0 0 10px;">2. Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</p>' +
+        '<p style="margin:0 0 10px;">3. Подтвердите установку.</p>' +
+        '<p style="margin:0;">Приложение появится на рабочем столе и в списке приложений.</p>' +
+        '</div>' +
+        '<button id="pwaAndroidClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.id === 'pwaAndroidClose') overlay.remove();
+      });
+    }
+
+    // Wait for window load so telegram-web-app.js has a chance to initialize
+    // (we need its platform field to detect Mini App).
+    window.addEventListener('load', function() {
+      setTimeout(pwaShowInstallInfoButton, 300);
     });
 
     // --- Tracking ---
+    // tgInitData is read DYNAMICALLY each time (not cached)
+    function getTgInitData() {
+      const t = window.Telegram && window.Telegram.WebApp;
+      return (t && t.initData) || '';
+    }
+
     async function trackEvent(type, payload = {}) {
       try {
+        const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
         await fetch('/api/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type,
-            initData: tgInitData,
-            userId: browserUserId, // fallback for browser users
+            initData: getTgInitData(),
+            userId: getUserId(),
+            username: tgUsername,
             ...payload
           })
         });
@@ -273,15 +579,15 @@
     let resumeFilm = null;
 
     async function loadResumeCard() {
-      // Skip if user dismissed recently (sessionStorage)
-      if (sessionStorage.getItem('genopoisk_resume_dismissed') === '1') return;
+      // Note: removed sessionStorage dismissal check — card should always show
+      // if user has a recently watched film.
       try {
         const res = await fetch('/api/last-film', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            initData: tgInitData,
-            userId: browserUserId // fallback for browser users
+            initData: getTgInitData(),
+            userId: getUserId() // fallback for browser users
           })
         });
         if (!res.ok) return;
@@ -291,19 +597,41 @@
         const age = Date.now() - new Date(data.film.ts).getTime();
         if (age > 48 * 60 * 60 * 1000) return;
         resumeFilm = data.film;
-        resumeTitle.textContent = data.film.title;
-        // Read saved position from localStorage (stored by player.html)
-        let positionText = '';
-        try {
-          const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
-          if (raw) {
-            const pos = JSON.parse(raw);
-            if (pos && pos.t && pos.t > 5) {
-              positionText = '▶ с ' + formatResumeTime(pos.t);
+
+        // Resolve the best position to display + use for resume:
+        //   1. Server-provided position (cross-device, saved by player.html on another device)
+        //   2. localStorage position (this device's last session)
+        // Server wins because it's the most recent across all devices.
+        let bestPosition = 0;
+        if (typeof data.film.position === 'number' && data.film.position > 5) {
+          bestPosition = data.film.position;
+        } else {
+          try {
+            const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
+            if (raw) {
+              const pos = JSON.parse(raw);
+              if (pos && pos.t && pos.t > 5) bestPosition = pos.t;
             }
-          }
-        } catch (_) {}
-        resumeMeta.textContent = positionText || 'Продолжить просмотр';
+          } catch (_) {}
+        }
+
+        // Save server position to localStorage so player.html picks it up
+        // even if it doesn't read ?t= URL param.
+        if (bestPosition > 5) {
+          try {
+            localStorage.setItem(`genopoisk_position_${data.film.filmId}`, JSON.stringify({
+              t: bestPosition,
+              d: data.film.duration || 0,
+              ts: new Date().toISOString(),
+              title: data.film.title
+            }));
+          } catch (_) {}
+          resumeTitle.textContent = data.film.title;
+          resumeMeta.textContent = '▶ с ' + formatResumeTime(bestPosition);
+        } else {
+          resumeTitle.textContent = data.film.title;
+          resumeMeta.textContent = 'Продолжить просмотр';
+        }
         resumeCard.classList.add('visible');
       } catch (e) { console.warn('resume load error:', e); }
     }
@@ -317,22 +645,52 @@
       return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
     }
 
-    resumeCard.addEventListener('click', (e) => {
+    resumeCard.addEventListener('click', async (e) => {
       if (e.target === resumeClose) return;
       if (resumeFilm) {
-        trackEvent('movies_opened', { filmId: resumeFilm.filmId, title: resumeFilm.title });
-        // Resume is handled by player.html via bridge.js postMessage seek
-        window.location.href = `debug-player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
+        const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
+        const payload = JSON.stringify({
+          type: 'movies_opened',
+          initData: getTgInitData(),
+          userId: getUserId(),
+          username: tgUsername,
+          filmId: resumeFilm.filmId,
+          title: resumeFilm.title
+        });
+        try {
+          await fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          });
+        } catch (err) {
+          console.warn('track error:', err);
+          try {
+            if (navigator.sendBeacon) {
+              const blob = new Blob([payload], { type: 'application/json' });
+              navigator.sendBeacon('/api/track', blob);
+            }
+          } catch (_) {}
+        }
+        // Pass ?t= so player.html knows the cross-device resume position
+        const startPos = (typeof resumeFilm.position === 'number' && resumeFilm.position > 5)
+          ? resumeFilm.position
+          : 0;
+        const tParam = startPos > 0 ? `&t=${startPos}` : '';
+        setTimeout(function() {
+          window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}${tParam}`;
+        }, 100);
       }
     });
     resumeClose.addEventListener('click', (e) => {
       e.stopPropagation();
       resumeCard.classList.remove('visible');
-      sessionStorage.setItem('genopoisk_resume_dismissed', '1');
     });
 
     // Fire async — don't block page load
     loadResumeCard();
+
     // Retry after window load — telegram-web-app.js loads async, so tgInitData
     // may not be available on first call. Without initData, browser userId is
     // used as fallback, but in Telegram Mini App we want the real Telegram ID.
@@ -445,10 +803,16 @@
 
     function displayFilms(films, forceCenter = false) {
       clearFilms();
+      appendFilms(films, forceCenter);
+    }
+
+    // Append films to grid without clearing (for infinite scroll)
+    function appendFilms(films, forceCenter = false) {
       if (!films || films.length === 0) {
-        showEmptyState('Фильмы не найдены');
+        if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
         return;
       }
+      filmGrid.classList.remove('centered');
       const frag = document.createDocumentFragment();
       films.forEach((film, index) => {
         const filmId = film.filmId || film.kinopoiskId;
@@ -478,11 +842,38 @@
       }
     }
 
-    function openPlayer(filmId, title) {
-      trackEvent('movies_opened', { filmId, title });
-      // Resume is handled by player.html via bridge.js postMessage seek
-      // (venoplayer does NOT support ?t= URL parameter)
-      window.location.href = `debug-player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+    async function openPlayer(filmId, title) {
+      // Send track event reliably before navigating.
+      const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
+      const payload = JSON.stringify({
+        type: 'movies_opened',
+        initData: getTgInitData(),
+        userId: getUserId(),
+        username: tgUsername,
+        filmId: filmId,
+        title: title
+      });
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        });
+      } catch (e) {
+        console.warn('track error:', e);
+        // Fallback: sendBeacon (may not parse as JSON on server, but better than nothing)
+        try {
+          if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon('/api/track', blob);
+          }
+        } catch (_) {}
+      }
+      // Small delay to ensure request is sent before navigation
+      setTimeout(function() {
+        window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+      }, 100);
     }
 
     async function loadCategory(category) {
@@ -506,6 +897,54 @@
       }
     }
 
+    // Load user's favorites from backend and display as a grid.
+    // Each favorite has filmId + title; we fetch poster from kinopoisk by id.
+    async function loadFavorites() {
+      currentCategory = null;
+      hasMore = false;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      const uid = getUserId();
+      if (!uid || uid.startsWith('web_')) {
+        showEmptyState('Войдите через Telegram, чтобы видеть избранное');
+        return;
+      }
+      try {
+        const res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const favs = data.favorites || [];
+        if (favs.length === 0) {
+          showEmptyState('В избранном пока пусто. Нажмите ☆ в плеере, чтобы добавить фильм.');
+          return;
+        }
+        // Fetch each film's details from kinopoisk (poster, year, rating).
+        // Do it in parallel for speed; cap at 30 to avoid hammering API.
+        const films = await Promise.all(favs.slice(0, 30).map(async function(f) {
+          try {
+            const r = await fetch('/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(f.filmId));
+            if (!r.ok) return null;
+            const j = await r.json();
+            return extractFilms({ films: [j] })[0] || null;
+          } catch (_) { return null; }
+        }));
+        // Filter out failed fetches
+        const valid = films.filter(Boolean);
+        if (valid.length === 0) {
+          showEmptyState('Не удалось загрузить постеры фильмов из избранного');
+          return;
+        }
+        displayFilms(valid);
+      } catch (e) {
+        showEmptyState('Ошибка загрузки избранного: ' + e.message);
+      }
+    }
+
     async function loadMoreFilms() {
       if (isLoading || !hasMore || !currentCategory) return;
       isLoading = true;
@@ -523,7 +962,7 @@
             break;
         }
         if (films.length > 0) {
-          displayFilms(films);
+          appendFilms(films);
           currentPage++;
         } else {
           hasMore = false;
@@ -539,6 +978,29 @@
     }
 
     let searchTimeout;
+    // Clear button: clears the field AND dismisses the keyboard on mobile
+    // (blur() is what actually triggers keyboard dismissal on iOS Safari
+    // and Android Chrome). Also restores the previous category view.
+    const searchClearBtn = document.getElementById('searchClear');
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        searchInput.blur(); // dismiss keyboard
+        if (currentCategory) {
+          loadCategory(currentCategory);
+        } else {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+      });
+    }
+    // Enter key on mobile keyboard = "Готово"/Done → dismiss keyboard
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchInput.blur();
+      }
+    });
     searchInput.addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
       const val = e.target.value.trim();

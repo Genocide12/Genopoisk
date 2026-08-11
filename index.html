@@ -229,20 +229,22 @@
     const browserUserId = getBrowserUserId();
 
     // --- Telegram OIDC Login ---
-    // Uses Telegram Authorization Code Flow + PKCE (server-side)
-    // /api/auth/telegram/login → redirect to Telegram OAuth
-    // /api/auth/telegram/callback → exchange code → redirect back with ?tg_id=
     const tgLoginBar = document.getElementById('tgLoginBar');
 
     function checkTgLoginBar() {
+      // In Mini App: tg exists and has initData → hide bar
+      // In browser with stored TG ID → hide bar
+      // In browser without TG ID → show bar
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
-      if (!isInTelegram && !storedTgId) {
-        tgLoginBar.classList.add('visible');
-      } else {
+      if (isInTelegram || storedTgId) {
         tgLoginBar.classList.remove('visible');
+      } else {
+        tgLoginBar.classList.add('visible');
       }
     }
+    // DON'T call checkTgLoginBar yet — wait for telegram-web-app.js to load
+    // (it's async, so tg might be null on first run even in Mini App)
 
     // Check for ?telegram_login=success&tg_id=... (from OAuth callback redirect)
     const urlParams = new URLSearchParams(window.location.search);
@@ -275,13 +277,10 @@
       window.location.reload();
     }
 
-    checkTgLoginBar();
-
     // --- Check if user still exists in stats (after "logout all devices") ---
-    // If not, clear localStorage and reload to show login bar
     async function checkAuth() {
       const tgId = localStorage.getItem('genopoisk_tg_user_id');
-      if (!tgId) return; // not logged in
+      if (!tgId) return;
       if (tg && tg.initData) return; // Mini App — always authenticated
       try {
         const res = await fetch('/api/user-check', {
@@ -299,16 +298,27 @@
         }
       } catch (e) { console.warn('[auth] check failed:', e); }
     }
-    checkAuth();
 
-    // Retry TG init after window load (async script may load late)
+    // --- Wait for telegram-web-app.js to load, then init everything ---
+    // This ensures tg is available before checkTgLoginBar and checkAuth
     window.addEventListener('load', function() {
+      // Retry TG init (async script should be loaded by now)
       if (!tg) {
         tg = initTelegramWebApp();
-        // If TG ID was just stored, update browserUserId for future requests
-        // (already-set browserUserId won't change, but trackEvent uses it)
       }
+      // Now check login bar (tg is set, even in Mini App)
+      checkTgLoginBar();
+      // Check auth status
+      checkAuth();
     });
+
+    // Also try immediately (for browsers without Telegram — checkTgLoginBar shows bar)
+    // But only for NON-Mini-App contexts (don't show bar in Mini App)
+    if (!window.Telegram) {
+      // No Telegram at all — definitely a browser → show login bar
+      checkTgLoginBar();
+      checkAuth();
+    }
 
     // --- Tracking ---
     async function trackEvent(type, payload = {}) {

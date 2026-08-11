@@ -85,7 +85,7 @@ function usersListKeyboard(users, page) {
   const entries = allEntries.slice(curPage * pageSize, (curPage + 1) * pageSize);
 
   const buttons = entries.map(([id, u]) => [{
-    text: `👤 ${id} (${u.username || '—'}) →`,
+    text: `👤 ${u.username ? '@' + u.username : (u.ip || id)} →`,
     callback_data: `user_${id}`
   }]);
 
@@ -584,15 +584,41 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'menu_clear') {
-      const text = `🧹 <b>Очистить статистику?</b>\n\n⚠️ Это удалит ВСЕ данные:\n— Все пользователи\n— Все события\n— Все фильмы\n— Все оценки\n\nЭто действие необратимо!`;
+      const text = `🧹 <b>Управление статистикой</b>\n\nВыберите действие:`;
+      await edit(text, {
+        inline_keyboard: [
+          [{ text: '🚪 Выйти со всех устройств', callback_data: 'clear_sessions' }],
+          [{ text: '🧹 Очистить всю статистику', callback_data: 'clear_confirm' }],
+          [{ text: '⬅️ Назад', callback_data: 'menu_main' }]
+        ]
+      });
+      return;
+    }
+    if (data === 'clear_sessions') {
+      const text = `🚪 <b>Выйти со всех устройств?</b>\n\nЭто удалит всех пользователей из статистики. Все устройства (браузеры, PWA) должны будут заново пройти авторизацию через Telegram.\n\nИстория просмотров будет потеряна.`;
       await edit(text, {
         inline_keyboard: [
           [
-            { text: '✅ Да, очистить', callback_data: 'clear_confirm' },
-            { text: '❌ Отмена', callback_data: 'menu_main' }
+            { text: '✅ Да, выйти везде', callback_data: 'clear_sessions_confirm' },
+            { text: '❌ Отмена', callback_data: 'menu_clear' }
           ]
         ]
       });
+      return;
+    }
+    if (data === 'clear_sessions_confirm') {
+      const { writeStats } = require('../_lib/stats');
+      const oldStats = await readStats();
+      // Keep totals but clear all users
+      await writeStats({
+        version: 1,
+        totals: { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0, ratings: 0 },
+        users: {},
+        daily: {},
+        recent_events: [],
+        last_updated: new Date().toISOString()
+      });
+      await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard());
       return;
     }
     if (data === 'clear_confirm') {

@@ -46,27 +46,31 @@ async function triggerRedeploy() {
     throw new Error('Проект не привязан к Git. Привяжите репозиторий в Vercel.');
   }
 
-  // Determine gitSource based on link type
+  // Determine gitSource based on link type.
+  // Note: link.branch is undefined for newer Vercel projects; productionBranch
+  // is the canonical field.
+  const gitBranch = link.branch || link.productionBranch || 'main';
+
   let gitSource;
   if (link.type === 'github') {
     gitSource = {
       type: 'github',
       org: link.org,
       repo: link.repo,
-      ref: link.branch || 'main'
+      ref: gitBranch
     };
   } else if (link.type === 'gitlab') {
     gitSource = {
       type: 'gitlab',
       projectId: link.repoId,
-      ref: link.branch || 'main'
+      ref: gitBranch
     };
   } else if (link.type === 'bitbucket') {
     gitSource = {
       type: 'bitbucket',
       org: link.org,
       repo: link.repo,
-      ref: link.branch || 'main'
+      ref: gitBranch
     };
   } else {
     throw new Error('Неподдерживаемый тип Git: ' + link.type);

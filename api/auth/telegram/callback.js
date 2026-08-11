@@ -139,6 +139,15 @@ module.exports = async (req, res) => {
     //   - oidcSub    = OIDC sub (e.g. "6611475080888633282") — internal OIDC subject
     //
     // telegram_id is the canonical key. oidc_sub is stored separately for reference.
+    //
+    // Defensive: if `id` is missing from JWT (older Telegram OIDC scope or
+    // future change), we cannot safely link to Mini App. Refuse the login
+    // and log the full payload so we can see what Telegram returned.
+    if (!telegramUser.id) {
+      console.error('[auth] JWT payload is MISSING the `id` field!', JSON.stringify(telegramUser));
+      return res.redirect(302, '/?telegram_login=error&message=no_bot_api_id_in_jwt');
+    }
+
     const telegramId = String(telegramUser.id);
     const oidcSub = String(telegramUser.sub);
     const username = telegramUser.preferred_username || '';

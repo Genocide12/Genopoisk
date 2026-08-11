@@ -141,12 +141,25 @@ module.exports = async (req, res) => {
       'tg_oauth_verifier=; Max-Age=0; Path=/; HttpOnly'
     ]);
 
-    // Redirect to site with user data in URL params
-    // Pass both oidc_sub (for browser tracking) and username (for linking with Mini App)
+    // Create/update user in Supabase DIRECTLY (not waiting for track.js)
+    const { upsertUser } = require('../../_lib/supabase');
     const displayName = name || (firstName + (lastName ? ' ' + lastName : '')) || (username ? '@' + username : 'Telegram');
+    
+    try {
+      await upsertUser(oidcSub, {
+        username: username || null,
+        ip: req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : null,
+        last_seen: new Date().toISOString()
+      });
+      console.log('[auth] User created/updated in Supabase:', oidcSub, username);
+    } catch (e) {
+      console.error('[auth] Supabase upsert failed:', e.message);
+    }
+
+    // Redirect to site with user data
     const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(oidcSub)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;
 
-    console.log('[auth] Redirecting to site with oidc_sub:', oidcSub, 'username:', username);
+    console.log('[auth] Redirecting to site:', oidcSub, username);
     return res.redirect(302, redirectUrl);
 
   } catch (err) {

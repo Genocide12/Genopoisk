@@ -129,10 +129,7 @@ async function cmdStart(chatId, user, text) {
     return;
   }
 
-  await recordEvent('bot_starts', {
-    userId: String(user.id),
-    username: user.username
-  });
+  // Don't record bot_starts (removed from tracking)
 
   const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Нажмите кнопку меню (слева от поля ввода), чтобы открыть приложение.\nИли используйте кнопку ниже:`;
 
@@ -164,14 +161,13 @@ async function cmdHelp(chatId, user) {
 async function buildStatsText() {
   const users = await getAllUsers();
   const totalUsers = users.length;
-  let totalViews = 0, totalSearches = 0, totalMovies = 0, totalBotStarts = 0, totalRatings = 0;
+  let totalViews = 0, totalSearches = 0, totalMovies = 0, totalRatings = 0;
   
   for (const u of users) {
     const ebt = u.events_by_type || {};
     totalViews += ebt.page_views || 0;
     totalSearches += ebt.searches || 0;
     totalMovies += ebt.movies_opened || 0;
-    totalBotStarts += ebt.bot_starts || 0;
     totalRatings += (u.rated_films || []).length;
   }
 
@@ -185,7 +181,6 @@ async function buildStatsText() {
    🔍 Поиски: <b>${totalSearches}</b>
    🎬 Фильмов открыто: <b>${totalMovies}</b>
    ⭐ Оценено фильмов: <b>${totalRatings}</b>
-   🤖 Запусков бота: <b>${totalBotStarts}</b>
 
 <b>Сегодня:</b>
    👥 Уникальных: ${todayUsers}
@@ -210,7 +205,41 @@ async function buildUserProfileText(targetId) {
   const ebt = u.events_by_type || {};
   const first = u.first_seen ? new Date(u.first_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
   const last = u.last_seen ? new Date(u.last_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
-  const ipHistory = (u.ip_history || []).slice(0, 10).join("\n   • ") || "—";
+
+  // IP history with device
+  var ipHistoryText = "—";
+  if (u.ip_history && u.ip_history.length > 0) {
+    ipHistoryText = u.ip_history.slice(0, 10).map(function(ip) {
+      return ip;
+    }).join("\n   • ");
+  }
+
+  // Determine IDs
+  var telegramId = u.telegram_id || "";
+  var browserId = "";
+  if (telegramId.length > 12) {
+    browserId = telegramId;
+    telegramId = "—";
+  }
+
+  // Platform
+  var platform = "Telegram";
+  if (browserId) platform = "браузер";
+
+  // Online status (last_seen within 2 minutes = online)
+  var isOnline = false;
+  var currentFilm = "";
+  if (u.last_seen) {
+    var ageMs = Date.now() - new Date(u.last_seen).getTime();
+    if (ageMs < 120000) isOnline = true;
+  }
+  if (u.last_film && isOnline) {
+    var filmAgeMs = Date.now() - new Date(u.last_film.ts || 0).getTime();
+    if (filmAgeMs < 600000) currentFilm = ' (смотрит: «' + u.last_film.title + '»)';
+  }
+  var onlineStatus = isOnline ? '🟢 Онлайн' + currentFilm : '⚫ Офлайн';
+
+  // Watched films
   const watchedFilms = u.watched_films || (u.last_film ? [u.last_film] : []);
   let filmsText = "—";
   if (watchedFilms.length > 0) {
@@ -220,17 +249,23 @@ async function buildUserProfileText(targetId) {
     }).join("\n   ");
     if (watchedFilms.length > 15) filmsText += "\n   ... и ещё " + (watchedFilms.length - 15);
   }
-  let platform = "Telegram";
-  if (targetId.startsWith("web_")) platform = "браузер";
-  const text = `👤 <b>Профиль пользователя</b>\n\n<b>ID:</b> <code>${escapeHtml(u.telegram_id || u.id)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Платформа:</b> ${platform}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>История IP:</b>\n   • ${ipHistory}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   🤖 Запусков бота: ${ebt.bot_starts || 0}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+
+  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser ID:</b> <code>${browserId || "—"}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Платформа:</b> ${platform}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
   return { text, hasLastFilm: !!u.last_film };
 }
 
 // ---- My films view (films watched by the user who clicked the button) ----
 async function buildMyFilmsText(targetUserId) {
-  const u = await getUser(targetUserId);
+  // Try by telegram_id first, then by username
+  let u = await getUser(targetUserId);
   if (!u) {
-    return { text: `❌ Пользователь <code>${targetUserId}</code> не найден.`, films: [] };
+    // Maybe targetUserId is a Bot API ID but user was created with OIDC sub
+    // Try finding by searching all users (getAllUsers) and matching
+    const allUsers = await getAllUsers();
+    u = allUsers.find(x => x.username === targetUserId || x.telegram_id === targetUserId);
+  }
+  if (!u) {
+    return { text: `🎬 <b>Мои фильмы</b>\n\nИстория ещё не создана. Откройте фильм, чтобы он появился здесь.`, films: [] };
   }
   const films = u.watched_films || (u.last_film ? [u.last_film] : []);
   if (films.length === 0) {
@@ -622,22 +657,20 @@ async function handleCallback(update) {
         return;
       }
       const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
-      await answerCallback(cq.id, 'Открываю...');
-      // Build star rating buttons (1-5)
+      await answerCallback(cq.id, '');
       var currentRating = film.rating || 0;
       var starButtons = [];
       for (var s = 1; s <= 5; s++) {
         var star = s <= currentRating ? '⭐' : '☆';
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
-      await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-            starButtons,
-            [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
-          ]
-        }
+      // EDIT existing message instead of sending new
+      await edit('🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
+        inline_keyboard: [
+          [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
+          starButtons,
+          [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
+        ]
       });
       return;
     }

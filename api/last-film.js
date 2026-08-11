@@ -1,5 +1,6 @@
 // Returns the current user's last watched film
-const { getUser, getUserByUsername } = require('./_lib/supabase');
+// Works cross-device: if user watched on Mini App, browser shows resume card
+const { getUser, getUserByUsername, getAllUsers } = require('./_lib/supabase');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,36 +9,54 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
-    let telegramId = null;
+    let user = null;
 
-    // Try initData
+    // 1. Try initData (Mini App)
     if (body.initData) {
       try {
         const params = new URLSearchParams(body.initData);
         const userJson = params.get('user');
         if (userJson) {
-          telegramId = String(JSON.parse(userJson).id);
+          const tgUser = JSON.parse(userJson);
+          user = await getUser(String(tgUser.id));
+          if (!user) {
+            // Try by username
+            user = await getUserByUsername(tgUser.username);
+          }
         }
       } catch (_) {}
     }
 
-    // Try by username
-    if (!telegramId && body.userId && body.username) {
-      const user = await getUserByUsername(body.username);
-      if (user) telegramId = user.telegram_id;
+    // 2. Try by username (browser OIDC)
+    if (!user && body.username) {
+      user = await getUserByUsername(body.username);
     }
 
-    // Fallback to userId
-    if (!telegramId && body.userId) {
-      telegramId = String(body.userId);
+    // 3. Try by userId
+    if (!user && body.userId) {
+      user = await getUser(String(body.userId));
+      if (!user) {
+        // Maybe userId is OIDC sub, try by searching
+        const allUsers = await getAllUsers();
+        user = allUsers.find(u => u.telegram_id === body.userId);
+      }
     }
 
-    if (!telegramId) return res.status(200).json({ film: null });
+    if (!user || !user.last_film) {
+      return res.status(200).json({ film: null });
+    }
 
-    const user = await getUser(telegramId);
-    if (!user || !user.last_film) return res.status(200).json({ film: null });
+    // Check if film was watched within last 48h
+    const age = Date.now() - new Date(user.last_film.ts).getTime();
+    if (age > 48 * 60 * 60 * 1000) {
+      return res.status(200).json({ film: null });
+    }
 
-    return res.status(200).json({ film: user.last_film, user_id: telegramId });
+    return res.status(200).json({
+      film: user.last_film,
+      user_id: user.telegram_id,
+      username: user.username
+    });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

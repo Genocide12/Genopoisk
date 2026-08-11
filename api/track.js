@@ -3,7 +3,7 @@
 const { getUser, recordEvent, getUserByUsername, upsertUser } = require('./_lib/supabase');
 const crypto = require('crypto');
 
-const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
+const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened', 'bot_starts'];
 
 function getClientIp(req) {
   const xff = req.headers['x-forwarded-for'];

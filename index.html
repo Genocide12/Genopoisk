@@ -10,6 +10,8 @@
   <meta name="apple-mobile-web-app-title" content="Genopoisk">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <link rel="shortcut icon" type="image/png" href="/icon-192.png">
   <title>Genopoisk</title>
   <script>
     // ====== Performance & error logging ======
@@ -26,7 +28,7 @@
       console.error('[unhandled rejection]', e.reason && e.reason.message ? e.reason.message : e.reason);
     });
   </script>
-  <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('[tg] telegram-web-app.js failed to load (blocked?). Running without Telegram WebApp.')"></script>
+  <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.log('[tg] telegram-web-app.js unavailable (running outside Telegram Mini App — this is normal)')"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}

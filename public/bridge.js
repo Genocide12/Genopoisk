@@ -253,12 +253,37 @@
 
   // Override WebSocket to block tracking connections only (s.myangular.life).
   // Do NOT block t6.zcvh.net (P2P tracker) — venoplayer needs it.
+  //
+  // For blocked URLs, we return a STUB OBJECT that mimics the WebSocket
+  // interface (readyState, send, close, addEventListener, etc.) but does
+  // nothing. This is silent — no network attempt, no ERR_UNSAFE_PORT error
+  // in console (the previous approach redirected to ws://localhost:0 which
+  // Chrome logs as an unsafe-port error, polluting the debug console).
   try {
     var OrigWebSocket = window.WebSocket;
+    function BlockedWebSocketStub(url) {
+      log('Blocked WebSocket (silent stub):', String(url).slice(0, 100));
+      // Mimic WebSocket constants
+      this.readyState = OrigWebSocket.CLOSED; // never opens
+      this.url = url;
+      this.extensions = '';
+      this.protocol = '';
+      this.bufferedAmount = 0;
+      this.binaryType = 'blob';
+      this.onopen = null;
+      this.onclose = null;
+      this.onerror = null;
+      this.onmessage = null;
+      // Stub methods — all no-ops
+      this.send = function() {};
+      this.close = function() {};
+      this.addEventListener = function() {};
+      this.removeEventListener = function() {};
+      this.dispatchEvent = function() { return true; };
+    }
     var WrappedWebSocket = function(url, protocols) {
       if (typeof url === 'string' && trackingPattern.test(url)) {
-        log('Blocked WebSocket (rewriting URL):', url.slice(0, 100));
-        url = 'ws://localhost:0/blocked';
+        return new BlockedWebSocketStub(url);
       }
       if (protocols !== undefined) {
         return new OrigWebSocket(url, protocols);

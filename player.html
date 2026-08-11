@@ -248,7 +248,13 @@
     tryInitTg();
     window.addEventListener('load', function() { if (!tg) tryInitTg(); });
 
-    function getBrowserUserId() {
+    // getUserId — prefers Telegram ID (set after OIDC login or in Mini App),
+    // falls back to a temp web_* ID for unauthorised browser sessions.
+    // This MUST match the logic in index.html so player and site use the
+    // same identifier — otherwise cross-device resume breaks.
+    function getUserId() {
+      var tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) return tgId;
       var id = localStorage.getItem('genopoisk_user_id');
       if (!id) {
         var rand = Math.random().toString(36).slice(2, 11);
@@ -258,7 +264,7 @@
       }
       return id;
     }
-    var browserUserId = getBrowserUserId();
+    var browserUserId = getUserId();
     var tgInitData = (tg && tg.initData) || '';
 
     var toastTimer = null;
@@ -272,7 +278,8 @@
 
     function trackEvent(type, payload) {
       payload = payload || {};
-      var body = { type: type, initData: tgInitData, userId: browserUserId };
+      // Re-read userId (in case login completed after page load)
+      var body = { type: type, initData: tgInitData, userId: getUserId() };
       Object.keys(payload).forEach(function(k) { body[k] = payload[k]; });
       try {
         fetch('/api/track', {
@@ -288,12 +295,14 @@
     // works even when called from pagehide / beforeunload.
     function sendPositionToBackend(seconds, duration) {
       if (!seconds || seconds < 5 || !isFinite(seconds)) return;
+      // Re-read userId (in case login completed after page load)
+      var uid = getUserId();
       // Don't send if userId is a guest web_* ID — server would skip it anyway
-      if (String(browserUserId).indexOf('web_') === 0) return;
+      if (String(uid).indexOf('web_') === 0) return;
       var payload = JSON.stringify({
         type: 'position_update',
         initData: tgInitData,
-        userId: browserUserId,
+        userId: uid,
         username: localStorage.getItem('genopoisk_tg_username') || '',
         filmId: kid,
         title: title,

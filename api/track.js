@@ -22,8 +22,7 @@ const ALLOWED_TYPES = [
   'categories_opened',
   'position_update', // saves video position to last_film for cross-device resume
   'favorite_added',
-  'favorite_removed',
-  'search_deleted' // removes a query from user.search_history
+  'favorite_removed'
 ];
 
 function getClientIp(req) {

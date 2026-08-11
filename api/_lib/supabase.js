@@ -278,17 +278,6 @@ async function recordEvent(telegramId, eventType, data) {
     return;
   }
 
-  // search_deleted — remove a specific query from search_history
-  if (eventType === 'search_deleted') {
-    const user = await getUser(telegramId);
-    if (!user) return;
-    if (!data.query) return;
-    const q = String(data.query).toLowerCase();
-    const filtered = (user.search_history || []).filter(s => String(s.query || '').toLowerCase() !== q);
-    await updateUser(telegramId, { search_history: filtered, last_seen: nowIso });
-    return;
-  }
-
   // Get current user
   const user = await getUser(telegramId);
   if (!user) {
@@ -319,12 +308,9 @@ async function recordEvent(telegramId, eventType, data) {
         watched_films: [{ filmId: data.filmId, title: data.title, ts: nowIso, position: 0, duration: 0 }]
       });
     }
-    // If searches, add to search_history (defensive — column may not exist)
-    if (eventType === 'searches' && data.query) {
-      await updateUser(telegramId, {
-        search_history: [{ query: String(data.query), ts: nowIso }]
-      });
-    }
+    // Note: 'searches' events only increment the events_by_type counter set
+    // above — we no longer save the actual query text to search_history
+    // (user-requested removal of search query saving).
     return;
   }
 
@@ -377,14 +363,9 @@ async function recordEvent(telegramId, eventType, data) {
     updates.last_film = { filmId: String(data.filmId), title: data.title, ts: nowIso, position: 0, duration: 0 };
   }
 
-  // Add to search_history if searches
-  if (eventType === 'searches' && data.query) {
-    const q = String(data.query);
-    let sh = (user.search_history || []).filter(s => String(s.query).toLowerCase() !== q.toLowerCase());
-    sh.unshift({ query: q, ts: nowIso });
-    if (sh.length > 20) sh.pop();
-    updates.search_history = sh;
-  }
+  // Note: 'searches' events only increment the events_by_type counter set
+  // above — we no longer save the actual query text to search_history
+  // (user-requested removal of search query saving).
 
   await updateUser(telegramId, updates);
 }

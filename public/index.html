@@ -41,12 +41,6 @@
     .hero-subtitle{font-size:clamp(14px,2vw,17px);color:var(--text-secondary);font-weight:500;letter-spacing:-0.01em;}
     .search-wrapper{margin-bottom:24px;}
     .search-container{position:relative;max-width:600px;margin:0 auto;}
-    .search-history{max-width:600px;margin:8px auto 0;display:flex;flex-wrap:wrap;gap:6px;}
-    .search-history-item{display:inline-flex;align-items:center;gap:6px;padding:6px 8px 6px 12px;background:var(--fill);border:1px solid var(--separator);border-radius:14px;font-size:13px;color:var(--text-primary);cursor:pointer;transition:all 0.2s;max-width:100%;}
-    .search-history-item:hover{background:var(--bg-tertiary);border-color:var(--ios-blue);}
-    .search-history-item-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
-    .search-history-item-close{background:rgba(255,255,255,0.1);border:none;color:var(--text-secondary);width:18px;height:18px;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;line-height:1;}
-    .search-history-item-close:hover{background:#f33;color:#fff;}
     .search-input{width:100%;padding:14px 20px 14px 44px;font-size:17px;font-weight:500;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:16px;color:var(--text-primary);outline:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);font-family:inherit;}
     .search-input::placeholder{color:var(--text-secondary);}
     .search-input:focus{background:var(--bg-tertiary);border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);transform:translateY(-2px);}
@@ -141,7 +135,6 @@
         <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" enterkeyhint="done" inputmode="search" />
         <button class="search-clear" id="searchClear" type="button" title="Очистить">✕</button>
       </div>
-      <div class="search-history" id="searchHistory"></div>
     </div>
     <div class="actions">
       <div class="action-card" onclick="loadCategory('popular')">
@@ -161,7 +154,7 @@
         <div class="action-title">Случайный</div>
       </div>
       <div class="action-card" onclick="loadFavorites()">
-        <span class="action-icon">⭐</span>
+        <span class="action-icon">❤️</span>
         <div class="action-title">Избранное</div>
       </div>
     </div>
@@ -374,39 +367,150 @@
       });
     }
 
-    // --- PWA install prompt ---
-    // Chrome on mobile shows a mini-infobar after criteria are met (HTTPS,
-    // manifest with icons, SW with fetch handler, sufficient engagement).
-    // We capture beforeinstallprompt and provide an explicit "Установить"
-    // button — this is more reliable than waiting for the auto-prompt,
-    // which can be dismissed or hidden by user settings.
-    let deferredInstallPrompt = null;
-    const installBtn = document.createElement('button');
-    installBtn.textContent = '📲 Установить приложение';
-    installBtn.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#007AFF;color:#fff;border:none;padding:12px 20px;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.4);display:none;font-family:inherit;';
-    document.body.appendChild(installBtn);
+    // --- PWA install prompt (universal) ---
+    // Shows an "Установить приложение" button on every browser EXCEPT
+    // Telegram Mini App and already-installed (standalone) sessions.
+    //
+    // Behavior by platform:
+    //   - Telegram Mini App: button never shown (Mini App is its own context)
+    //   - Already installed (display-mode: standalone or navigator.standalone): hidden
+    //   - iOS Safari (no beforeinstallprompt support): shows an instruction
+    //     modal explaining "Поделиться → На экран Домой"
+    //   - Chrome/Edge Android & Desktop: uses beforeinstallprompt (native prompt)
+    //   - Firefox / other: shows instruction modal with platform-appropriate steps
 
-    window.addEventListener('beforeinstallprompt', function(e) {
-      console.log('[pwa] beforeinstallprompt fired');
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      installBtn.style.display = 'block';
-    });
-
-    installBtn.addEventListener('click', async function() {
-      if (!deferredInstallPrompt) return;
-      installBtn.style.display = 'none';
-      deferredInstallPrompt.prompt();
+    function pwaIsStandalone() {
       try {
-        const choice = await deferredInstallPrompt.userChoice;
-        console.log('[pwa] user choice:', choice.outcome);
-      } catch (_) {}
-      deferredInstallPrompt = null;
-    });
+        return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+               (window.navigator.standalone === true) ||
+               (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches);
+      } catch (_) { return false; }
+    }
 
-    window.addEventListener('appinstalled', function() {
-      console.log('[pwa] app installed');
-      installBtn.style.display = 'none';
+    function pwaIsTelegramMiniApp() {
+      try {
+        // Telegram WebApp sets platform to 'tdesktop','ios','android','web','unknown'
+        // Mini App also has initData. We treat any non-'unknown' platform as Mini App.
+        var t = window.Telegram && window.Telegram.WebApp;
+        if (!t) return false;
+        if (t.initData && t.initData.length > 0) return true;
+        if (t.platform && t.platform !== 'unknown') return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaIsIOS() {
+      try {
+        var ua = navigator.userAgent || '';
+        var platform = navigator.platform || '';
+        // iPadOS 13+ reports as MacIntel with touch — detect that too
+        if (/iPhone|iPad|iPod/i.test(ua)) return true;
+        if (platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaShowInstallButton() {
+      // Don't show inside Telegram Mini App
+      if (pwaIsTelegramMiniApp()) return;
+      // Don't show if already running as installed PWA
+      if (pwaIsStandalone()) return;
+
+      var btn = document.createElement('button');
+      btn.id = 'pwaInstallBtn';
+      btn.textContent = '📲 Установить приложение';
+      btn.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#007AFF;color:#fff;border:none;padding:12px 20px;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.4);font-family:inherit;-webkit-tap-highlight-color:transparent;';
+      document.body.appendChild(btn);
+
+      var deferredPrompt = null;
+      var isIOS = pwaIsIOS();
+
+      // Chrome/Edge fire beforeinstallprompt — capture and use native prompt
+      window.addEventListener('beforeinstallprompt', function(e) {
+        console.log('[pwa] beforeinstallprompt fired');
+        e.preventDefault();
+        deferredPrompt = e;
+      });
+
+      // If app gets installed (any browser), hide button
+      window.addEventListener('appinstalled', function() {
+        console.log('[pwa] app installed');
+        btn.remove();
+      });
+
+      btn.addEventListener('click', function() {
+        if (deferredPrompt) {
+          // Native Chrome/Edge flow
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function() {
+            deferredPrompt = null;
+          }).catch(function() {});
+        } else if (isIOS) {
+          // iOS Safari: no API, show instructions modal
+          pwaShowIosInstructions();
+        } else {
+          // Other browsers (Firefox etc.) — show generic instructions
+          pwaShowGenericInstructions();
+        }
+      });
+
+      // If beforeinstallprompt already fired before our listener was attached,
+      // we won't have it. The button still works — click will show instructions.
+    }
+
+    function pwaShowIosInstructions() {
+      // Modal with step-by-step for iOS Safari: Share → На экран Домой
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      var modal = document.createElement('div');
+      modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+      modal.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка на iPhone/iPad</div>' +
+        '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
+        '<p style="margin:0 0 10px;">1. Нажмите кнопку <b>«Поделиться»</b> внизу Safari (квадрат со стрелкой вверх ▲).</p>' +
+        '<p style="margin:0 0 10px;">2. В меню выберите <b>«На экран&nbsp;Домой»</b> (➕).</p>' +
+        '<p style="margin:0 0 10px;">3. Нажмите <b>«Добавить»</b> в правом верхнем углу.</p>' +
+        '<p style="margin:0;">Приложение появится на главном экране.</p>' +
+        '</div>' +
+        '<button id="pwaIosClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.id === 'pwaIosClose') overlay.remove();
+      });
+    }
+
+    function pwaShowGenericInstructions() {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      var modal = document.createElement('div');
+      modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+      var ua = navigator.userAgent || '';
+      var browserName = 'вашем браузере';
+      if (ua.indexOf('Firefox') !== -1) browserName = 'Firefox';
+      else if (ua.indexOf('Edg/') !== -1) browserName = 'Edge';
+      else if (ua.indexOf('Chrome') !== -1) browserName = 'Chrome';
+      modal.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка приложения</div>' +
+        '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
+        '<p style="margin:0 0 10px;">В ' + browserName + ' установку можно выполнить через меню браузера:</p>' +
+        '<p style="margin:0 0 10px;">📱 <b>Android</b>: меню ⋮ → «Установить приложение» / «Добавить на главный экран».</p>' +
+        '<p style="margin:0 0 10px;">💻 <b>Компьютер</b>: адресная строка → значок установки ⊕ справа (или меню → «Установить Genopoisk»).</p>' +
+        '<p style="margin:0;">После установки приложение открывается в отдельном окне без адресной строки.</p>' +
+        '</div>' +
+        '<button id="pwaGenericClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.id === 'pwaGenericClose') overlay.remove();
+      });
+    }
+
+    // Wait for window load so telegram-web-app.js has a chance to initialize
+    // (we need its platform field to detect Mini App).
+    window.addEventListener('load', function() {
+      // Small delay to let tg.platform settle
+      setTimeout(pwaShowInstallButton, 300);
     });
 
     // --- Tracking ---
@@ -555,97 +659,7 @@
 
     // Fire async — don't block page load
     loadResumeCard();
-    loadSearchHistory();
 
-    // --- Search history ---
-    const searchHistoryEl = document.getElementById('searchHistory');
-
-    async function loadSearchHistory() {
-      if (!searchHistoryEl) return;
-      const uid = getUserId();
-      const initData = getTgInitData();
-      // Skip if we don't have a real identifier (either Telegram ID or initData)
-      if ((!uid || uid.startsWith('web_')) && !initData) {
-        searchHistoryEl.innerHTML = '';
-        return;
-      }
-      try {
-        const res = await fetch('/api/my-films', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: uid || '', initData: initData })
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const items = data.search_history || [];
-        if (items.length === 0) {
-          searchHistoryEl.innerHTML = '';
-          return;
-        }
-        searchHistoryEl.innerHTML = items.slice(0, 10).map((item, idx) => {
-          const q = escapeHtml(item.query || '');
-          return '<div class="search-history-item" data-idx="' + idx + '" data-query="' + q + '">' +
-                 '<span class="search-history-item-text">' + q + '</span>' +
-                 '<button class="search-history-item-close" data-query="' + q + '" title="Удалить">✕</button>' +
-                 '</div>';
-        }).join('');
-
-        // Bind click on item text (search again)
-        searchHistoryEl.querySelectorAll('.search-history-item').forEach(function(el) {
-          el.addEventListener('click', function(e) {
-            if (e.target.classList.contains('search-history-item-close')) return;
-            const q = el.getAttribute('data-query');
-            if (q) {
-              searchInput.value = q;
-              searchFilms(q);
-            }
-          });
-        });
-        // Bind click on close button (delete this query)
-        searchHistoryEl.querySelectorAll('.search-history-item-close').forEach(function(btn) {
-          btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const q = btn.getAttribute('data-query');
-            if (q) deleteSearchQuery(q);
-          });
-        });
-      } catch (e) {
-        console.warn('[search-history] load failed', e);
-      }
-    }
-
-    async function deleteSearchQuery(query) {
-      const uid = getUserId();
-      if (!uid || uid.startsWith('web_')) return;
-      try {
-        await fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'search_deleted',
-            initData: getTgInitData(),
-            userId: uid,
-            username: localStorage.getItem('genopoisk_tg_username') || '',
-            query: query
-          }),
-          keepalive: true
-        });
-        // Reload history after deletion
-        loadSearchHistory();
-      } catch (e) {
-        console.warn('[search-history] delete failed', e);
-      }
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
     // Retry after window load — telegram-web-app.js loads async, so tgInitData
     // may not be available on first call. Without initData, browser userId is
     // used as fallback, but in Telegram Mini App we want the real Telegram ID.
@@ -656,10 +670,6 @@
       if (!resumeCard.classList.contains('visible')) {
         loadResumeCard();
       }
-      // Retry search history — on first run getUserId() may have returned
-      // a web_* ID (because TG script wasn't loaded), so history was skipped.
-      // After load, the real telegram ID is in localStorage.
-      loadSearchHistory();
     });
 
     let currentCategory = null;
@@ -977,7 +987,6 @@
         clearFilms();
         showLoader();
         trackEvent('searches', { query: val });
-        loadSearchHistory(); // refresh search history chips after a new search
         try {
           const films = await searchFilms(val);
           displayFilms(films);

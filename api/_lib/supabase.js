@@ -57,11 +57,15 @@ async function getAllUsers() {
 async function getUserByUsername(username) {
   if (!username) return null;
   const cleanName = username.replace(/^@/, '');
-  const url = SUPABASE_URL + '/rest/v1/users?username=eq.' + encodeURIComponent(cleanName) + '&limit=1';
+  // Order by length ASC — prefer Bot API ID (short) over OIDC sub (long)
+  const url = SUPABASE_URL + '/rest/v1/users?username=eq.' + encodeURIComponent(cleanName) + '&order=telegram_id.asc&limit=1';
   const res = await fetch(url, { headers: sbHeaders() });
   if (!res.ok) return null;
   const rows = await res.json();
-  return rows[0] || null;
+  if (!rows || rows.length === 0) return null;
+  // If multiple users with same username, prefer the one with shorter telegram_id (Bot API ID)
+  rows.sort((a, b) => (a.telegram_id || '').length - (b.telegram_id || '').length);
+  return rows[0];
 }
 
 // Update user fields

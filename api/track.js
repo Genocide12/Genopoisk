@@ -109,37 +109,34 @@ module.exports = async (req, res) => {
     // Capture client IP for per-user stats
     const ip = getClientIp(req);
 
-    // Fallback for browser users: use the stable localStorage ID sent by client.
-    // This ID persists across VPN changes (stored in browser localStorage),
-    // so user history is preserved regardless of network/IP changes.
+    // Fallback for browser users
     if (userId === 'anon') {
-      if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
+      if (body.userId) {
         userId = String(body.userId);
+      }
+      // Use username from body (localStorage) if available
+      if (body.username) {
+        username = body.username;
+      } else if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
         const ua = req.headers['user-agent'] || 'unknown';
-        const deviceName = getDeviceName(ua);
-        username = deviceName + ' (браузер)';
-      } else if (body.userId) {
-        userId = String(body.userId);
-        // For OIDC users: use username from body (stored in localStorage)
-        if (body.username) {
-          username = body.username;
-        }
+        username = getDeviceName(ua) + ' (браузер)';
       }
     }
 
-    // 2. OIDC browser users: userId is OIDC sub (long number).
-    // Try to find matching Bot API user by username → use Bot API ID instead.
-    // This links browser (OIDC) and Mini App (Bot API) profiles.
+    // LINKING: If this user has a username, try to find a Bot API user
+    // (short numeric ID) with the same username. Use that ID instead.
+    // This links browser (OIDC/web_) and Mini App (Bot API) profiles.
     const linkUsername = username || body.username || '';
-    if (userId !== 'anon' && userId.length > 12 && linkUsername) {
+    if (userId !== 'anon' && linkUsername) {
       try {
         const stats = await readStats();
         for (const [uid, u] of Object.entries(stats.users || {})) {
-          if (u && uid.length <= 12) {
-            // Match by username (with or without @)
+          if (!u || uid === userId) continue;
+          // Only link to Bot API users (short numeric IDs, not web_ or OIDC sub)
+          if (/^\d{1,12}$/.test(uid)) {
             if (u.username === linkUsername || u.username === '@' + linkUsername ||
                 '@' + u.username === linkUsername) {
-              console.log('[track] Linked OIDC sub to Bot API ID:', userId, '→', uid, 'via username:', linkUsername);
+              console.log('[track] Linked to Bot API ID:', userId, '→', uid, 'via username:', linkUsername);
               userId = uid;
               if (!username) username = u.username;
               break;
@@ -149,8 +146,8 @@ module.exports = async (req, res) => {
       } catch (_) {}
     }
 
-    // If still OIDC sub and no match found, use body.username for display
-    if (userId !== 'anon' && userId.length > 12 && !username && body.username) {
+    // If no match found and still not Bot API ID, use body.username for display
+    if (userId !== 'anon' && !username && body.username) {
       username = body.username;
     }
 

@@ -649,7 +649,8 @@ const USER_ALLOWED_REGEX = [
   /^myfilm_\d+$/,
   /^rate_\d+_\d+$/,
   /^favs_\d+$/,
-  /^favfilm_\d+$/
+  /^favfilm_\d+$/,
+  /^favremove_\d+$/
 ];
 
 async function handleCallback(update) {
@@ -756,7 +757,7 @@ async function handleCallback(update) {
       await edit(result.text, favoritesKeyboard(result.films, page));
       return;
     }
-    // Favorite film click → open player
+    // Favorite film click → open film card with Watch / Remove / Back buttons
     const favFilmMatch = data.match(/^favfilm_(\d+)$/);
     if (favFilmMatch) {
       const idx = parseInt(favFilmMatch[1], 10);
@@ -768,12 +769,59 @@ async function handleCallback(update) {
       }
       const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
       await answerCallback(cq.id, '');
-      await edit('⭐ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер:', {
+      await edit('⭐ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или "Убрать", чтобы удалить из избранного:', {
         inline_keyboard: [
           [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-          [{ text: '⬅️ К избранному', callback_data: 'menu_favorites' }]
+          [
+            { text: '🗑 Убрать из избранного', callback_data: 'favremove_' + idx },
+            { text: '⬅️ К избранному', callback_data: 'menu_favorites' }
+          ]
         ]
       });
+      return;
+    }
+
+    // Remove film from favorites — sends favorite_removed event to /api/track,
+    // which deletes the film from user.favorite_films in Supabase. This is
+    // the SAME backend that the website reads, so the change is reflected
+    // everywhere (bot favorites list, website ❤️ Избранное section, player ☆
+    // button state) automatically.
+    const favRemoveMatch = data.match(/^favremove_(\d+)$/);
+    if (favRemoveMatch) {
+      const idx = parseInt(favRemoveMatch[1], 10);
+      const films = getCachedMyFilms('fav_' + fromId);
+      const film = films[idx];
+      if (!film) {
+        await answerCallback(cq.id, 'Фильм не найден. Обновите список.');
+        return;
+      }
+      // Send favorite_removed event to backend
+      try {
+        await fetch(SITE_URL.replace(/\/$/, '') + '/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'favorite_removed',
+            userId: String(fromId),
+            username: cq.from.username || '',
+            filmId: film.filmId,
+            title: film.title
+          })
+        });
+        // Remove from local cache too
+        const updated = films.filter(function(_, i) { return i !== idx; });
+        cacheMyFilms('fav_' + fromId, updated);
+        console.log('[fav] Removed from favorites:', film.filmId, film.title);
+      } catch (e) {
+        console.error('[fav] Remove failed:', e.message);
+        await answerCallback(cq.id, 'Ошибка удаления');
+        return;
+      }
+      await answerCallback(cq.id, '✅ Удалено из избранного');
+      // Re-render the favorites list (without the removed film)
+      const result = await buildFavoritesText(String(fromId));
+      cacheMyFilms('fav_' + fromId, result.films);
+      await edit(result.text, favoritesKeyboard(result.films, 0));
       return;
     }
     if (data === 'menu_users') {
@@ -1020,6 +1068,14 @@ async function registerBotCommands() {
   if (commandsRegistered) return;
   commandsRegistered = true; // set early to prevent concurrent calls
   try {
+    // First wipe ALL previously registered command scopes (default, all_chats,
+    // and any per-chat commands set via BotFather). Without this, setMyCommands
+    // for the default scope doesn't override commands that were registered
+    // individually per chat or via BotFather.
+    await tg('deleteMyCommands', {});
+    console.log('[bot] Cleared all previous commands');
+
+    // Then register the new minimal command list
     await tg('setMyCommands', {
       commands: [
         { command: 'start', description: 'Открыть главное меню' },

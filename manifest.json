@@ -1,28 +1,41 @@
 {
-  "name": "Genopoisk",
+  "name": "Genopoisk — Кинотеатр в Telegram",
   "short_name": "Genopoisk",
   "description": "Смотри фильмы в хорошем качестве - каталог лучших фильмов",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#F6F7F8",
+  "display_override": ["standalone", "browser"],
+  "background_color": "#000000",
   "theme_color": "#007AFF",
   "orientation": "portrait-primary",
   "dir": "ltr",
   "lang": "ru",
+  "categories": ["entertainment", "movies"],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ],
-  "categories": ["entertainment", "movies"]
+  ]
 }

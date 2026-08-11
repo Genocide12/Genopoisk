@@ -43,18 +43,17 @@ function mainMenuKeyboard() {
     inline_keyboard: [
       [
         { text: '📊 Статистика', callback_data: 'menu_stats' },
-        { text: '📈 Аналитика', callback_data: 'menu_analytics' }
-      ],
-      [
-        { text: '👥 Пользователи', callback_data: 'menu_users' },
-        { text: '🚀 Деплой', callback_data: 'menu_deploy' }
+        { text: '👥 Пользователи', callback_data: 'menu_users' }
       ],
       [
         { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
-        { text: '⭐ Избранное', callback_data: 'menu_favorites' }
+        { text: '🚀 Деплой', callback_data: 'menu_deploy' }
       ],
       [
-        { text: '📢 Уведомление', callback_data: 'menu_broadcast' },
+        { text: '⭐ Избранное', callback_data: 'menu_favorites' },
+        { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
+      ],
+      [
         { text: '🧹 Очистить статистику', callback_data: 'menu_clear' }
       ],
       [{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]
@@ -167,6 +166,21 @@ async function buildStatsText() {
   const totalUsers = users.length;
   let totalViews = 0, totalSearches = 0, totalMovies = 0, totalRatings = 0, totalFavorites = 0;
 
+  // Daily watch counts for last 7 days (no bar chart, just numbers)
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    days.push({
+      date: d.toISOString().slice(0, 10),
+      label: d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'numeric' }),
+      movies: 0
+    });
+  }
+  const dayMap = {};
+  days.forEach((d, i) => { dayMap[d.date] = i; });
+
   for (const u of users) {
     const ebt = u.events_by_type || {};
     // Exclude bot_starts (legacy, no longer tracked)
@@ -175,10 +189,24 @@ async function buildStatsText() {
     totalMovies += ebt.movies_opened || 0;
     totalRatings += (u.rated_films || []).length;
     totalFavorites += (u.favorite_films || []).length;
+
+    // Tally watched films per day (by watched_films[].ts)
+    for (const f of (u.watched_films || [])) {
+      if (!f.ts) continue;
+      const day = String(f.ts).slice(0, 10);
+      if (dayMap[day] !== undefined) {
+        days[dayMap[day]].movies++;
+      }
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10);
   const todayUsers = users.filter(u => u.last_seen && u.last_seen.startsWith(today)).length;
+
+  // Build per-day list (no bar chart, just "label: N")
+  const weekText = days.map(function(d) {
+    return '   ' + d.label + ': ' + d.movies;
+  }).join('\n');
 
   return `📊 <b>Статистика Genopoisk</b>
 
@@ -191,6 +219,9 @@ async function buildStatsText() {
 
 <b>Сегодня:</b>
    👥 Уникальных: ${todayUsers}
+
+<b>🎬 Фильмов открыто за неделю:</b>
+${weekText}
 
 <b>Аудитория:</b>
    Всего пользователей: <b>${totalUsers}</b>`;
@@ -375,107 +406,6 @@ function favoritesKeyboard(films, page) {
   buttons.push(navRow);
   buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
-}
-
-// ---- Analytics view ----
-async function buildAnalyticsText() {
-  const users = await getAllUsers();
-  if (users.length === 0) return '📈 <b>Аналитика</b>\n\nНет данных.';
-
-  // Daily activity for last 7 days
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
-    days.push({
-      date: d.toISOString().slice(0, 10),
-      label: d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' }),
-      views: 0, searches: 0, movies: 0
-    });
-  }
-
-  // Build a quick lookup of date → day index
-  const dayMap = {};
-  days.forEach((d, i) => { dayMap[d.date] = i; });
-
-  let totalViews = 0, totalSearches = 0, totalMovies = 0;
-  const filmCount = {}; // filmId → { title, count }
-
-  for (const u of users) {
-    const ebt = u.events_by_type || {};
-    totalViews += ebt.page_views || 0;
-    totalSearches += ebt.searches || 0;
-    totalMovies += ebt.movies_opened || 0;
-
-    // Tally watched films
-    const watched = u.watched_films || [];
-    for (const f of watched) {
-      if (!filmCount[f.filmId]) {
-        filmCount[f.filmId] = { title: f.title || '?', count: 0 };
-      }
-      filmCount[f.filmId].count++;
-    }
-
-    // Activity by day — using last_seen of each event-like field
-    // (we approximate daily activity by counting films watched on each day)
-    for (const f of watched) {
-      if (!f.ts) continue;
-      const day = f.ts.slice(0, 10);
-      if (dayMap[day] !== undefined) {
-        days[dayMap[day]].movies++;
-      }
-    }
-  }
-
-  // Top 5 films by watch count
-  const topFilms = Object.entries(filmCount)
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 5);
-
-  // Build ASCII bar chart for last 7 days
-  const maxMovies = Math.max(1, ...days.map(d => d.movies));
-  const barWidth = 20;
-  let chartText = '';
-  for (const d of days) {
-    const barLen = Math.round((d.movies / maxMovies) * barWidth);
-    const bar = '█'.repeat(barLen) + '░'.repeat(barWidth - barLen);
-    chartText += '\n ' + d.label.padEnd(8) + ' ' + bar + ' ' + d.movies;
-  }
-
-  // Average watch position (across watched_films with position > 0)
-  let posSum = 0, posCount = 0;
-  for (const u of users) {
-    for (const f of (u.watched_films || [])) {
-      if (typeof f.position === 'number' && f.position > 5) {
-        posSum += f.position;
-        posCount++;
-      }
-    }
-  }
-  const avgPos = posCount > 0 ? formatPosition(Math.round(posSum / posCount)) : '—';
-
-  let topFilmsText = '—';
-  if (topFilms.length > 0) {
-    topFilmsText = topFilms.map(([, info], i) => {
-      return (i + 1) + '. «' + escapeHtml(info.title) + '» — ' + info.count + ' 👁';
-    }).join('\n');
-  }
-
-  return `📈 <b>Аналитика за 7 дней</b>
-
-<b>📊 Просмотры фильмов по дням:</b>${chartText}
-
-<b>🎬 Топ фильмов:</b>
-   ${topFilmsText}
-
-<b>⏱ Средняя позиция просмотра:</b> ${avgPos}
-
-<b>📊 Всего по сервису:</b>
-   👁 Просмотры: ${totalViews}
-   🔍 Поиски: ${totalSearches}
-   🎬 Фильмов открыто: ${totalMovies}
-   👥 Пользователей: ${users.length}`;
 }
 
 // ---- Deploy views ----
@@ -705,10 +635,6 @@ async function handleCallback(update) {
       const result = await buildFavoritesText(String(fromId));
       cacheMyFilms('fav_' + fromId, result.films); // reuse cache for favorites
       await edit(result.text, favoritesKeyboard(result.films, 0));
-      return;
-    }
-    if (data === 'menu_analytics') {
-      await edit(await buildAnalyticsText(), mainMenuKeyboard());
       return;
     }
     // Favorites pagination

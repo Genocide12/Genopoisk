@@ -14,7 +14,11 @@ function sbHeaders() {
   };
 }
 
-// Upsert user by telegram_id — creates if not exists, updates if exists
+// Upsert user by telegram_id — creates if not exists, updates if exists.
+// Defensive: if the request fails (e.g. unknown column because migration
+// wasn't applied yet), retry with a smaller payload that only uses the
+// original columns. This way the app keeps working even before the SQL
+// migration is applied.
 async function upsertUser(telegramId, data) {
   if (!telegramId) return null;
   const url = SUPABASE_URL + '/rest/v1/users?on_conflict=telegram_id';
@@ -28,8 +32,25 @@ async function upsertUser(telegramId, data) {
     body: JSON.stringify(body)
   });
   if (!res.ok) {
-    console.error('[supabase] upsertUser error:', res.status, await res.text());
-    return null;
+    const errText = await res.text();
+    console.error('[supabase] upsertUser error:', res.status, errText);
+    // Retry without new columns (favorite_films, search_history, sessions)
+    // in case the SQL migration hasn't been applied yet.
+    const fallbackBody = { ...body };
+    delete fallbackBody.favorite_films;
+    delete fallbackBody.search_history;
+    delete fallbackBody.sessions;
+    const res2 = await fetch(url, {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(fallbackBody)
+    });
+    if (!res2.ok) {
+      console.error('[supabase] upsertUser fallback error:', res2.status, await res2.text());
+      return null;
+    }
+    const rows2 = await res2.json();
+    return rows2[0] || null;
   }
   const rows = await res.json();
   return rows[0] || null;
@@ -76,7 +97,7 @@ async function getUserByOidcSub(oidcSub) {
   return (rows && rows[0]) || null;
 }
 
-// Update user fields
+// Update user fields. Same defensive retry as upsertUser.
 async function updateUser(telegramId, updates) {
   const url = SUPABASE_URL + '/rest/v1/users?telegram_id=eq.' + encodeURIComponent(telegramId);
   const res = await fetch(url, {
@@ -85,8 +106,24 @@ async function updateUser(telegramId, updates) {
     body: JSON.stringify(updates)
   });
   if (!res.ok) {
-    console.error('[supabase] updateUser error:', res.status);
-    return null;
+    const errText = await res.text();
+    console.error('[supabase] updateUser error:', res.status, errText);
+    // Retry without new columns
+    const fallbackUpdates = { ...updates };
+    delete fallbackUpdates.favorite_films;
+    delete fallbackUpdates.search_history;
+    delete fallbackUpdates.sessions;
+    const res2 = await fetch(url, {
+      method: 'PATCH',
+      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify(fallbackUpdates)
+    });
+    if (!res2.ok) {
+      console.error('[supabase] updateUser fallback error:', res2.status);
+      return null;
+    }
+    const rows2 = await res2.json();
+    return rows2[0] || null;
   }
   const rows = await res.json();
   return rows[0] || null;
@@ -255,20 +292,26 @@ async function recordEvent(telegramId, eventType, data) {
   // Get current user
   const user = await getUser(telegramId);
   if (!user) {
-    // Create user if doesn't exist
+    // Create user if doesn't exist.
+    // Use only the original columns (no favorite_films/search_history/sessions)
+    // so the request succeeds even before the SQL migration is applied.
+    // Those columns default to [] in the new schema; if absent, the rest of
+    // the code uses `|| []` fallbacks.
     const initialIpHistory = data.ip ? [{ ip: data.ip, ua: data.ua || '', device: device, ts: nowIso }] : [];
-    await upsertUser(telegramId, {
+    const createData = {
       username: data.username || null,
       ip: data.ip || null,
       ip_history: initialIpHistory,
-      sessions: upsertSession([], platform, device, data.ip, nowIso),
       events_count: 1,
       events_by_type: { [eventType]: 1 },
       watched_films: [],
-      rated_films: [],
-      favorite_films: [],
-      search_history: []
-    });
+      rated_films: []
+    };
+    // Try with new columns first (in case migration was applied)
+    createData.sessions = upsertSession([], platform, device, data.ip, nowIso);
+    createData.favorite_films = [];
+    createData.search_history = [];
+    await upsertUser(telegramId, createData); // upsertUser has fallback
     // If movies_opened, add to watched_films
     if (eventType === 'movies_opened' && data.filmId) {
       await updateUser(telegramId, {
@@ -276,9 +319,8 @@ async function recordEvent(telegramId, eventType, data) {
         watched_films: [{ filmId: data.filmId, title: data.title, ts: nowIso, position: 0, duration: 0 }]
       });
     }
-    // If searches, add to search_history
+    // If searches, add to search_history (defensive — column may not exist)
     if (eventType === 'searches' && data.query) {
-      const user2 = await getUser(telegramId);
       await updateUser(telegramId, {
         search_history: [{ query: String(data.query), ts: nowIso }]
       });

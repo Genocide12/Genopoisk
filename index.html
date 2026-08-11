@@ -51,6 +51,12 @@
     .search-input::placeholder{color:var(--text-secondary);}
     .search-input:focus{background:var(--bg-tertiary);border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);transform:translateY(-2px);}
     .search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;opacity:0.6;}
+    .search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.18);border:none;color:var(--text-primary);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;line-height:1;-webkit-tap-highlight-color:transparent;}
+    .search-clear.visible{display:flex;}
+    .search-clear:active{background:rgba(255,255,255,0.32);transform:translateY(-50%) scale(0.92);}
+    /* Make room for the clear button when visible */
+    .search-input{padding-right:44px;}
+    .search-input:not(:placeholder-shown) ~ .search-clear{display:flex;}
     .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
     .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
     .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
@@ -132,7 +138,8 @@
     <div class="search-wrapper">
       <div class="search-container">
         <span class="search-icon">🔍</span>
-        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" />
+        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" enterkeyhint="done" inputmode="search" />
+        <button class="search-clear" id="searchClear" type="button" title="Очистить">✕</button>
       </div>
       <div class="search-history" id="searchHistory"></div>
     </div>
@@ -152,6 +159,10 @@
       <div class="action-card" onclick="loadCategory('random')">
         <span class="action-icon">🎯</span>
         <div class="action-title">Случайный</div>
+      </div>
+      <div class="action-card" onclick="loadFavorites()">
+        <span class="action-icon">⭐</span>
+        <div class="action-title">Избранное</div>
       </div>
     </div>
     <div class="content hidden" id="content">
@@ -355,11 +366,48 @@
     // main page works offline. Player and API calls always need network.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js').catch(function(e) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+          console.log('[sw] registered, scope:', reg.scope);
+        }).catch(function(e) {
           console.warn('[sw] registration failed:', e);
         });
       });
     }
+
+    // --- PWA install prompt ---
+    // Chrome on mobile shows a mini-infobar after criteria are met (HTTPS,
+    // manifest with icons, SW with fetch handler, sufficient engagement).
+    // We capture beforeinstallprompt and provide an explicit "Установить"
+    // button — this is more reliable than waiting for the auto-prompt,
+    // which can be dismissed or hidden by user settings.
+    let deferredInstallPrompt = null;
+    const installBtn = document.createElement('button');
+    installBtn.textContent = '📲 Установить приложение';
+    installBtn.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#007AFF;color:#fff;border:none;padding:12px 20px;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.4);display:none;font-family:inherit;';
+    document.body.appendChild(installBtn);
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+      console.log('[pwa] beforeinstallprompt fired');
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      installBtn.style.display = 'block';
+    });
+
+    installBtn.addEventListener('click', async function() {
+      if (!deferredInstallPrompt) return;
+      installBtn.style.display = 'none';
+      deferredInstallPrompt.prompt();
+      try {
+        const choice = await deferredInstallPrompt.userChoice;
+        console.log('[pwa] user choice:', choice.outcome);
+      } catch (_) {}
+      deferredInstallPrompt = null;
+    });
+
+    window.addEventListener('appinstalled', function() {
+      console.log('[pwa] app installed');
+      installBtn.style.display = 'none';
+    });
 
     // --- Tracking ---
     // tgInitData is read DYNAMICALLY each time (not cached)
@@ -515,7 +563,9 @@
     async function loadSearchHistory() {
       if (!searchHistoryEl) return;
       const uid = getUserId();
-      if (!uid || uid.startsWith('web_')) {
+      const initData = getTgInitData();
+      // Skip if we don't have a real identifier (either Telegram ID or initData)
+      if ((!uid || uid.startsWith('web_')) && !initData) {
         searchHistoryEl.innerHTML = '';
         return;
       }
@@ -523,7 +573,7 @@
         const res = await fetch('/api/my-films', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+          body: JSON.stringify({ userId: uid || '', initData: initData })
         });
         if (!res.ok) return;
         const data = await res.json();
@@ -606,6 +656,10 @@
       if (!resumeCard.classList.contains('visible')) {
         loadResumeCard();
       }
+      // Retry search history — on first run getUserId() may have returned
+      // a web_* ID (because TG script wasn't loaded), so history was skipped.
+      // After load, the real telegram ID is in localStorage.
+      loadSearchHistory();
     });
 
     let currentCategory = null;
@@ -802,6 +856,54 @@
       }
     }
 
+    // Load user's favorites from backend and display as a grid.
+    // Each favorite has filmId + title; we fetch poster from kinopoisk by id.
+    async function loadFavorites() {
+      currentCategory = null;
+      hasMore = false;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      const uid = getUserId();
+      if (!uid || uid.startsWith('web_')) {
+        showEmptyState('Войдите через Telegram, чтобы видеть избранное');
+        return;
+      }
+      try {
+        const res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const favs = data.favorites || [];
+        if (favs.length === 0) {
+          showEmptyState('В избранном пока пусто. Нажмите ☆ в плеере, чтобы добавить фильм.');
+          return;
+        }
+        // Fetch each film's details from kinopoisk (poster, year, rating).
+        // Do it in parallel for speed; cap at 30 to avoid hammering API.
+        const films = await Promise.all(favs.slice(0, 30).map(async function(f) {
+          try {
+            const r = await fetch('/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(f.filmId));
+            if (!r.ok) return null;
+            const j = await r.json();
+            return extractFilms({ films: [j] })[0] || null;
+          } catch (_) { return null; }
+        }));
+        // Filter out failed fetches
+        const valid = films.filter(Boolean);
+        if (valid.length === 0) {
+          showEmptyState('Не удалось загрузить постеры фильмов из избранного');
+          return;
+        }
+        displayFilms(valid);
+      } catch (e) {
+        showEmptyState('Ошибка загрузки избранного: ' + e.message);
+      }
+    }
+
     async function loadMoreFilms() {
       if (isLoading || !hasMore || !currentCategory) return;
       isLoading = true;
@@ -835,6 +937,29 @@
     }
 
     let searchTimeout;
+    // Clear button: clears the field AND dismisses the keyboard on mobile
+    // (blur() is what actually triggers keyboard dismissal on iOS Safari
+    // and Android Chrome). Also restores the previous category view.
+    const searchClearBtn = document.getElementById('searchClear');
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        searchInput.blur(); // dismiss keyboard
+        if (currentCategory) {
+          loadCategory(currentCategory);
+        } else {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+      });
+    }
+    // Enter key on mobile keyboard = "Готово"/Done → dismiss keyboard
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchInput.blur();
+      }
+    });
     searchInput.addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
       const val = e.target.value.trim();

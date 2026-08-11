@@ -1,5 +1,8 @@
 // Returns the user's watched films list
-const { getUser, getUserByUsername } = require('./_lib/supabase');
+// Uses telegram_id (Bot API user.id) as the canonical key — same for both
+// Mini App (initData → user.id) and Browser OIDC (id_token.id stored as tg_id).
+
+const { getUser, getUserByOidcSub } = require('./_lib/supabase');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,6 +13,7 @@ module.exports = async (req, res) => {
     const body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
     let telegramId = null;
 
+    // 1) Mini App: parse initData → user.id (Bot API ID)
     if (body.initData) {
       try {
         const params = new URLSearchParams(body.initData);
@@ -18,13 +22,15 @@ module.exports = async (req, res) => {
       } catch (_) {}
     }
 
-    if (!telegramId && body.userId && body.username) {
-      const user = await getUserByUsername(body.username);
-      if (user) telegramId = user.telegram_id;
-    }
-
+    // 2) Browser: use body.userId (Bot API ID, set by OIDC callback)
     if (!telegramId && body.userId) {
       telegramId = String(body.userId);
+    }
+
+    // 3) Legacy fallback: if userId is a long OIDC sub, resolve via oidc_sub
+    if (telegramId && telegramId.length > 12) {
+      const resolved = await getUserByOidcSub(telegramId);
+      if (resolved) telegramId = resolved.telegram_id;
     }
 
     if (!telegramId) return res.status(200).json({ films: [] });

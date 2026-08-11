@@ -53,19 +53,27 @@ async function getAllUsers() {
   return await res.json();
 }
 
-// Get user by username (for linking)
+// Get user by username (legacy fallback — prefer telegram_id / oidc_sub lookups)
 async function getUserByUsername(username) {
   if (!username) return null;
   const cleanName = username.replace(/^@/, '');
-  // Order by length ASC — prefer Bot API ID (short) over OIDC sub (long)
-  const url = SUPABASE_URL + '/rest/v1/users?username=eq.' + encodeURIComponent(cleanName) + '&order=telegram_id.asc&limit=1';
+  const url = SUPABASE_URL + '/rest/v1/users?username=eq.' + encodeURIComponent(cleanName) + '&limit=1';
   const res = await fetch(url, { headers: sbHeaders() });
   if (!res.ok) return null;
   const rows = await res.json();
   if (!rows || rows.length === 0) return null;
-  // If multiple users with same username, prefer the one with shorter telegram_id (Bot API ID)
-  rows.sort((a, b) => (a.telegram_id || '').length - (b.telegram_id || '').length);
   return rows[0];
+}
+
+// Get user by OIDC sub (the long subject identifier from Telegram OIDC id_token).
+// Used as a fallback when looking up browser sessions after migration.
+async function getUserByOidcSub(oidcSub) {
+  if (!oidcSub) return null;
+  const url = SUPABASE_URL + '/rest/v1/users?oidc_sub=eq.' + encodeURIComponent(oidcSub) + '&limit=1';
+  const res = await fetch(url, { headers: sbHeaders() });
+  if (!res.ok) return null;
+  const rows = await res.json();
+  return (rows && rows[0]) || null;
 }
 
 // Update user fields
@@ -186,6 +194,6 @@ async function rateFilm(telegramId, filmId, title, rating) {
 }
 
 module.exports = {
-  upsertUser, getUser, getAllUsers, getUserByUsername,
+  upsertUser, getUser, getAllUsers, getUserByUsername, getUserByOidcSub,
   updateUser, recordEvent, deleteAllUsers, deleteUser, rateFilm
 };

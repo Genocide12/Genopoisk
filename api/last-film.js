@@ -1,6 +1,10 @@
 // Returns the current user's last watched film
-// Works cross-device: if user watched on Mini App, browser shows resume card
-const { getUser, getUserByUsername, getAllUsers } = require('./_lib/supabase');
+// Works cross-device: if user watched on Mini App, browser shows resume card.
+//
+// Both Mini App and Browser now resolve to the SAME user record because both
+// use the Bot API user.id as telegram_id (Browser receives it via OIDC id_token.id).
+
+const { getUser, getUserByOidcSub } = require('./_lib/supabase');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,7 +15,7 @@ module.exports = async (req, res) => {
     const body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
     let user = null;
 
-    // 1. Try initData (Mini App)
+    // 1) Mini App: parse initData → user.id (Bot API ID)
     if (body.initData) {
       try {
         const params = new URLSearchParams(body.initData);
@@ -19,26 +23,19 @@ module.exports = async (req, res) => {
         if (userJson) {
           const tgUser = JSON.parse(userJson);
           user = await getUser(String(tgUser.id));
-          if (!user) {
-            // Try by username
-            user = await getUserByUsername(tgUser.username);
-          }
         }
       } catch (_) {}
     }
 
-    // 2. Try by username (browser OIDC)
-    if (!user && body.username) {
-      user = await getUserByUsername(body.username);
-    }
-
-    // 3. Try by userId
+    // 2) Browser: use body.userId (Bot API ID, set by OIDC callback)
     if (!user && body.userId) {
-      user = await getUser(String(body.userId));
-      if (!user) {
-        // Maybe userId is OIDC sub, try by searching
-        const allUsers = await getAllUsers();
-        user = allUsers.find(u => u.telegram_id === body.userId);
+      const userId = String(body.userId);
+      // Try by telegram_id first
+      user = await getUser(userId);
+      // Legacy fallback: if userId is a long OIDC sub, try resolving via oidc_sub
+      if (!user && userId.length > 12) {
+        const resolved = await getUserByOidcSub(userId);
+        if (resolved) user = await getUser(resolved.telegram_id);
       }
     }
 

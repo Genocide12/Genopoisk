@@ -206,7 +206,7 @@ async function buildUserProfileText(targetId) {
   const first = u.first_seen ? new Date(u.first_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
   const last = u.last_seen ? new Date(u.last_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
 
-  // IP history with device
+  // IP history
   var ipHistoryText = "—";
   if (u.ip_history && u.ip_history.length > 0) {
     ipHistoryText = u.ip_history.slice(0, 10).map(function(ip) {
@@ -214,17 +214,15 @@ async function buildUserProfileText(targetId) {
     }).join("\n   • ");
   }
 
-  // Determine IDs
-  var telegramId = u.telegram_id || "";
-  var browserId = "";
-  if (telegramId.length > 12) {
-    browserId = telegramId;
-    telegramId = "—";
-  }
+  // After the auth fix:
+  //   - telegram_id = Bot API user.id (short, e.g. 854765520) — used by both Mini App & Browser
+  //   - oidc_sub    = OIDC subject identifier (long, e.g. 6611475080888633282) — only from Browser OIDC
+  var telegramId = u.telegram_id || "—";
+  var browserOidcSub = u.oidc_sub || "—";
 
-  // Platform
-  var platform = "Telegram";
-  if (browserId) platform = "браузер";
+  // Platform: if oidc_sub is set, the user has logged in via browser at least once
+  var platform = "Mini App";
+  if (browserOidcSub !== "—") platform = "Mini App + браузер";
 
   // Online status (last_seen within 2 minutes = online)
   var isOnline = false;
@@ -250,21 +248,18 @@ async function buildUserProfileText(targetId) {
     if (watchedFilms.length > 15) filmsText += "\n   ... и ещё " + (watchedFilms.length - 15);
   }
 
-  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser ID:</b> <code>${browserId || "—"}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Платформа:</b> ${platform}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Платформа:</b> ${platform}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
   return { text, hasLastFilm: !!u.last_film };
 }
 
 // ---- My films view (films watched by the user who clicked the button) ----
 async function buildMyFilmsText(targetUserId) {
-  // Try by telegram_id first, then by username
+  // targetUserId is the Bot API user.id of the user who pressed the button.
+  // After the auth fix, this matches users.telegram_id directly.
   let u = await getUser(targetUserId);
+
   if (!u) {
-    // Maybe targetUserId is a Bot API ID but user was created with OIDC sub
-    // Try finding by searching all users (getAllUsers) and matching
-    const allUsers = await getAllUsers();
-    u = allUsers.find(x => x.username === targetUserId || x.telegram_id === targetUserId);
-  }
-  if (!u) {
+    // User hasn't done anything yet — no profile in Supabase.
     return { text: `🎬 <b>Мои фильмы</b>\n\nИстория ещё не создана. Откройте фильм, чтобы он появился здесь.`, films: [] };
   }
   const films = u.watched_films || (u.last_film ? [u.last_film] : []);

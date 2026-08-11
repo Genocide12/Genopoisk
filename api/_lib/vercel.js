@@ -36,17 +36,62 @@ async function getDeploymentInfo(deploymentId) {
 }
 
 async function triggerRedeploy() {
-  // Get latest production deployment and trigger redeploy
-  const deployments = await getLatestDeployments(5);
-  const prod = deployments.find(d => d.target === 'production' || d.state === 'READY');
-  if (!prod) throw new Error('No production deployment found');
-  return vc(`/v13/deployments/${prod.uid}/redeploy`, {
+  // The legacy `POST /v13/deployments/{id}/redeploy` endpoint was deprecated
+  // and now returns 404. The supported way to "redeploy" is to create a new
+  // production deployment from the project's linked git source.
+  const project = await getProjectInfo();
+  const link = project.link;
+
+  if (!link) {
+    throw new Error('Проект не привязан к Git. Привяжите репозиторий в Vercel.');
+  }
+
+  // Determine gitSource based on link type
+  let gitSource;
+  if (link.type === 'github') {
+    gitSource = {
+      type: 'github',
+      org: link.org,
+      repo: link.repo,
+      ref: link.branch || 'main'
+    };
+  } else if (link.type === 'gitlab') {
+    gitSource = {
+      type: 'gitlab',
+      projectId: link.repoId,
+      ref: link.branch || 'main'
+    };
+  } else if (link.type === 'bitbucket') {
+    gitSource = {
+      type: 'bitbucket',
+      org: link.org,
+      repo: link.repo,
+      ref: link.branch || 'main'
+    };
+  } else {
+    throw new Error('Неподдерживаемый тип Git: ' + link.type);
+  }
+
+  console.log('[vercel] Creating new deployment from git:', JSON.stringify(gitSource));
+
+  // Create a new production deployment from the same git ref
+  const result = await vc(`/v13/deployments`, {
     method: 'POST',
     body: JSON.stringify({
-      name: prod.name,
-      target: 'production'
+      name: project.name,
+      target: 'production',
+      gitSource: gitSource
     })
   });
+
+  // Vercel returns { id, url, ready, ... } — keep the shape compatible with
+  // old redeploy response (which used { id, url } too).
+  return {
+    id: result.id || result.uid,
+    url: result.url,
+    state: result.readyState || result.state,
+    raw: result
+  };
 }
 
 async function getRecentCommits() {

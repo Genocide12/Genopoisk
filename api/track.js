@@ -1,6 +1,14 @@
-// Tracking endpoint — Supabase, telegram_id as primary key
+// Tracking endpoint — Supabase, telegram_id (Bot API user.id) as primary key
 // ONLY tracks authenticated users. No guest profiles.
-const { getUser, recordEvent, getUserByUsername, upsertUser } = require('./_lib/supabase');
+//
+// Both Mini App (initData) and Browser (OIDC) now use the SAME telegram_id:
+//   - Mini App:  user.id from initData (Bot API ID, e.g. 854765520)
+//   - Browser:   stored tg_id from localStorage, originally set by OIDC callback
+//                using telegramUser.id (Bot API ID — NOT the OIDC sub)
+//
+// No username-based merging is needed anymore.
+
+const { getUser, recordEvent, getUserByOidcSub, upsertUser } = require('./_lib/supabase');
 const crypto = require('crypto');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened', 'bot_starts'];
@@ -48,7 +56,7 @@ module.exports = async (req, res) => {
     let telegramId = null;
     let username = null;
 
-    // 1. Mini App: validate initData → Bot API user.id
+    // 1) Mini App: validate initData → Bot API user.id (canonical telegram_id)
     if (body.initData) {
       const validatedUser = validateInitData(body.initData, process.env.TG_BOT_TOKEN);
       if (validatedUser) {
@@ -57,32 +65,24 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 2. Browser: try to find existing user by username
-    if (!telegramId && body.username) {
-      const existingUser = await getUserByUsername(body.username);
-      if (existingUser) {
-        telegramId = existingUser.telegram_id;
-        console.log('[track] Linked by username:', body.username, '→', telegramId);
-      } else if (body.userId) {
-        // No existing user → create with body.userId (OIDC sub)
-        telegramId = String(body.userId);
-        username = body.username;
-        await upsertUser(telegramId, { username, ip, last_seen: new Date().toISOString() });
-        console.log('[track] Created new user:', telegramId, username);
+    // 2) Browser: use stored userId (which is now the Bot API ID, set by OIDC callback)
+    if (!telegramId && body.userId) {
+      telegramId = String(body.userId);
+      username = body.username || '';
+    }
+
+    // 3) Legacy fallback: if userId looks like a long OIDC sub (length > 12),
+    //    try to resolve the real user via oidc_sub column
+    if (telegramId && telegramId.length > 12) {
+      const resolved = await getUserByOidcSub(telegramId);
+      if (resolved) {
+        console.log('[track] Resolved legacy oidc_sub → telegram_id:', telegramId, '→', resolved.telegram_id);
+        telegramId = resolved.telegram_id;
+        if (!username && resolved.username) username = resolved.username;
       }
     }
 
-    // 3. Mini App: also check if user with same username exists with different ID
-    // If yes → use existing ID (merge profiles)
-    if (telegramId && username) {
-      const existingUser = await getUserByUsername(username);
-      if (existingUser && existingUser.telegram_id !== telegramId) {
-        console.log('[track] Merging:', telegramId, '→', existingUser.telegram_id, '(same username:', username, ')');
-        telegramId = existingUser.telegram_id;
-      }
-    }
-
-    // 4. If still no telegramId → SKIP (guest)
+    // 4) If still no telegramId → SKIP (guest)
     if (!telegramId) {
       return res.status(200).json({ ok: true, skipped: true });
     }

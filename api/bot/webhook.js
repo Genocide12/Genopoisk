@@ -116,10 +116,12 @@ async function cmdStart(chatId, user, text) {
   if (startParam === 'login') {
     const name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : ('@' + (user.username || 'Telegram'));
     const loginUrl = SITE_URL.replace(/\/$/, '') + '/?tg_id=' + user.id + '&tg_name=' + encodeURIComponent(name);
-    await sendMessage(chatId, '🔐 <b>Привязка устройства</b>\n\nВаш Telegram ID: <code>' + user.id + '</code>\n\nНажмите кнопку ниже, чтобы открыть сайт в браузере и привязать это устройство к вашему аккаунту:', {
+    await sendMessage(chatId, '🔐 <b>Привязка устройства</b>\n\nВаш Telegram ID: <code>' + user.id + '</code>\n\nЧтобы привязать это устройство:\n\n1. Скопируйте ссылку ниже\n2. Откройте Safari (или ваш браузер)\n3. Вставьте ссылку в адресную строку\n\n' +
+      '<code>' + loginUrl + '</code>\n\n' +
+      'Или нажмите на ссылку и удерживайте → "Открыть в Safari"', {
       reply_markup: {
         inline_keyboard: [[
-          { text: '🌐 Открыть сайт в браузере', url: loginUrl }
+          { text: '🌐 Открыть в браузере', url: loginUrl }
         ]]
       }
     });

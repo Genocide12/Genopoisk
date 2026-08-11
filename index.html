@@ -105,10 +105,7 @@
 <body>
   <div class="container">
     <div class="tg-login-bar" id="tgLoginBar">
-      <a href="#" id="tgLoginBtn" style="background:#229ED9;color:#fff;padding:12px 28px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
-        Войти через Telegram
-      </a>
+      <div id="tgWidgetContainer"></div>
     </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
@@ -227,34 +224,101 @@
     }
     const browserUserId = getBrowserUserId();
 
-    // --- Telegram Login (bot deep link approach) ---
-    // Telegram Login Widget (oauth.telegram.org) is DEPRECATED by Telegram.
-    // This approach: site button → opens Telegram → bot replies with URL button
-    // → opens external browser with ?tg_id= → linked.
+    // --- Telegram Login Widget ---
+    // Widget renders the button. We intercept the click to avoid the
+    // deprecated oauth popup. Instead: redirect to t.me/Genopoiskbot?start=login
+    // which opens Telegram app. Bot replies with a COPYABLE link (as text)
+    // that the user opens in Safari (not Telegram in-app browser).
     const tgLoginBar = document.getElementById('tgLoginBar');
-    const tgLoginBtn = document.getElementById('tgLoginBtn');
+    const tgWidgetContainer = document.getElementById('tgWidgetContainer');
 
     function checkTgLoginBar() {
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
       if (!isInTelegram && !storedTgId) {
         tgLoginBar.classList.add('visible');
+        if (!tgWidgetContainer.querySelector('script')) {
+          const widget = document.createElement('script');
+          widget.async = true;
+          widget.src = 'https://telegram.org/js/telegram-widget.js?22';
+          widget.setAttribute('data-telegram-login', 'Genopoiskbot');
+          widget.setAttribute('data-size', 'large');
+          widget.setAttribute('data-userpic', 'false');
+          widget.setAttribute('data-onauth', 'onTelegramAuth(user)');
+          widget.setAttribute('data-request-access', 'write');
+          tgWidgetContainer.appendChild(widget);
+          console.log('[tg] Telegram Login Widget loaded');
+          // After widget loads, override the button click
+          setTimeout(overrideWidgetClick, 2000);
+          setTimeout(overrideWidgetClick, 4000);
+        }
       } else {
         tgLoginBar.classList.remove('visible');
       }
     }
 
-    if (tgLoginBtn) {
-      tgLoginBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'https://t.me/Genopoiskbot?start=login';
-      });
+    // Override the widget button click — redirect to Telegram app instead of deprecated popup
+    function overrideWidgetClick() {
+      var iframe = document.getElementById('telegram-login-Genopoiskbot');
+      if (!iframe) return;
+      try {
+        // Can't access cross-origin iframe DOM, but we can overlay a transparent button
+        var rect = iframe.getBoundingClientRect();
+        if (rect.width === 0) return;
+        // Create transparent overlay on top of the iframe
+        var overlay = document.getElementById('tgClickOverlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'tgClickOverlay';
+          overlay.style.cssText = 'position:absolute;z-index:9999;cursor:pointer;';
+          tgWidgetContainer.style.position = 'relative';
+          tgWidgetContainer.appendChild(overlay);
+          overlay.addEventListener('click', function() {
+            window.location.href = 'https://t.me/Genopoiskbot?start=login';
+          });
+        }
+        overlay.style.left = rect.left + 'px';
+        overlay.style.top = rect.top + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
+      } catch(e) { console.warn('[tg] overlay failed:', e); }
     }
 
-    // ?tg_id= from bot (opens in external browser)
+    // Telegram Login Widget callback (if oauth starts working again)
+    window.onTelegramAuth = function(user) {
+      if (user && user.id) {
+        localStorage.setItem('genopoisk_tg_user_id', String(user.id));
+        var name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : ('@' + (user.username || 'Telegram'));
+        localStorage.setItem('genopoisk_tg_user_name', name);
+        console.log('[tg] Login successful via widget, user ID:', user.id);
+        checkTgLoginBar();
+        window.location.reload();
+      }
+    };
+
+    // Detect if opened in Telegram in-app browser → show "Open in Safari" prompt
+    var ua = navigator.userAgent.toLowerCase();
+    var isInTelegramBrowser = ua.indexOf('telegram') > -1 && !tg;
+    if (isInTelegramBrowser) {
+      var tgIdFromUrl2 = new URLSearchParams(window.location.search).get('tg_id');
+      if (tgIdFromUrl2) {
+        // We have tg_id but we're in Telegram in-app browser.
+        // Show prompt to open in Safari.
+        document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:system-ui;padding:20px;text-align:center;">' +
+          '<div style="font-size:48px;margin-bottom:20px;">🔗</div>' +
+          '<h2 style="font-size:20px;margin-bottom:16px;">Откройте в Safari</h2>' +
+          '<p style="font-size:15px;color:#98989D;margin-bottom:24px;max-width:300px;line-height:1.5;">Для привязки устройства откройте эту ссылку в Safari, а не во встроенном браузере Telegram.</p>' +
+          '<p style="font-size:14px;color:#98989D;margin-bottom:20px;">1. Нажмите на ссылку ниже и удерживайте</p>' +
+          '<p style="font-size:16px;color:#007AFF;word-break:break-all;max-width:300px;margin-bottom:24px;">' + window.location.href + '</p>' +
+          '<p style="font-size:14px;color:#98989D;">2. Выберите "Открыть в Safari"</p>' +
+          '</div>';
+      }
+    }
+
+    // ?tg_id= from bot (must be in Safari, not Telegram in-app browser)
     const urlParams = new URLSearchParams(window.location.search);
     const tgIdFromUrl = urlParams.get('tg_id');
-    if (tgIdFromUrl) {
+    if (tgIdFromUrl && !isInTelegramBrowser) {
       localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
       const tgNameFromUrl = urlParams.get('tg_name');
       if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);

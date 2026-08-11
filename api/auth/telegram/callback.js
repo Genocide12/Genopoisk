@@ -271,6 +271,27 @@ module.exports = async (req, res) => {
       console.log('[auth] Created new user:', telegramId, username);
     }
 
+    // 6) Cleanup ghost users: delete any rows with the same username but
+    //    telegram_id starting with "web_" (created by track.js before login
+    //    was enforced). These are temp browser IDs that fragment user data.
+    if (username) {
+      try {
+        const { getAllUsers } = require('../../_lib/supabase');
+        const allUsers = await getAllUsers();
+        const ghosts = allUsers.filter(u =>
+          u.username === username &&
+          u.telegram_id !== telegramId &&
+          String(u.telegram_id || '').startsWith('web_')
+        );
+        for (const g of ghosts) {
+          console.log('[auth] Cleaning up ghost user:', g.telegram_id, '(username:', username, ')');
+          try { await deleteUser(g.telegram_id); } catch (e) { console.warn('[auth] Ghost delete failed:', e.message); }
+        }
+      } catch (e) {
+        console.warn('[auth] Ghost cleanup failed (non-fatal):', e.message);
+      }
+    }
+
     // Redirect to site — pass telegramId (Bot API ID, same as Mini App uses)
     const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(telegramId)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;
 

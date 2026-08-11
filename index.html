@@ -396,19 +396,41 @@
         const age = Date.now() - new Date(data.film.ts).getTime();
         if (age > 48 * 60 * 60 * 1000) return;
         resumeFilm = data.film;
-        resumeTitle.textContent = data.film.title;
-        // Read saved position from localStorage (stored by player.html)
-        let positionText = '';
-        try {
-          const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
-          if (raw) {
-            const pos = JSON.parse(raw);
-            if (pos && pos.t && pos.t > 5) {
-              positionText = '▶ с ' + formatResumeTime(pos.t);
+
+        // Resolve the best position to display + use for resume:
+        //   1. Server-provided position (cross-device, saved by player.html on another device)
+        //   2. localStorage position (this device's last session)
+        // Server wins because it's the most recent across all devices.
+        let bestPosition = 0;
+        if (typeof data.film.position === 'number' && data.film.position > 5) {
+          bestPosition = data.film.position;
+        } else {
+          try {
+            const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
+            if (raw) {
+              const pos = JSON.parse(raw);
+              if (pos && pos.t && pos.t > 5) bestPosition = pos.t;
             }
-          }
-        } catch (_) {}
-        resumeMeta.textContent = positionText || 'Продолжить просмотр';
+          } catch (_) {}
+        }
+
+        // Save server position to localStorage so player.html picks it up
+        // even if it doesn't read ?t= URL param.
+        if (bestPosition > 5) {
+          try {
+            localStorage.setItem(`genopoisk_position_${data.film.filmId}`, JSON.stringify({
+              t: bestPosition,
+              d: data.film.duration || 0,
+              ts: new Date().toISOString(),
+              title: data.film.title
+            }));
+          } catch (_) {}
+          resumeTitle.textContent = data.film.title;
+          resumeMeta.textContent = '▶ с ' + formatResumeTime(bestPosition);
+        } else {
+          resumeTitle.textContent = data.film.title;
+          resumeMeta.textContent = 'Продолжить просмотр';
+        }
         resumeCard.classList.add('visible');
       } catch (e) { console.warn('resume load error:', e); }
     }
@@ -450,8 +472,13 @@
             }
           } catch (_) {}
         }
+        // Pass ?t= so player.html knows the cross-device resume position
+        const startPos = (typeof resumeFilm.position === 'number' && resumeFilm.position > 5)
+          ? resumeFilm.position
+          : 0;
+        const tParam = startPos > 0 ? `&t=${startPos}` : '';
         setTimeout(function() {
-          window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}`;
+          window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}${tParam}`;
         }, 100);
       }
     });

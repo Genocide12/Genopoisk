@@ -1,5 +1,6 @@
 // Returns the current user's last watched film
-// Works cross-device: if user watched on Mini App, browser shows resume card.
+// Works cross-device: if user watched on Mini App, browser shows resume card
+// with the position saved from the other device.
 //
 // Both Mini App and Browser now resolve to the SAME user record because both
 // use the Bot API user.id as telegram_id (Browser receives it via OIDC id_token.id).
@@ -30,6 +31,10 @@ module.exports = async (req, res) => {
     // 2) Browser: use body.userId (Bot API ID, set by OIDC callback)
     if (!user && body.userId) {
       const userId = String(body.userId);
+      // Skip web_* IDs — they are guest browser IDs, no real user behind them
+      if (userId.startsWith('web_')) {
+        return res.status(200).json({ film: null });
+      }
       // Try by telegram_id first
       user = await getUser(userId);
       // Legacy fallback: if userId is a long OIDC sub, try resolving via oidc_sub
@@ -50,7 +55,13 @@ module.exports = async (req, res) => {
     }
 
     return res.status(200).json({
-      film: user.last_film,
+      film: {
+        filmId: user.last_film.filmId,
+        title: user.last_film.title,
+        ts: user.last_film.ts,
+        position: typeof user.last_film.position === 'number' ? user.last_film.position : 0,
+        duration: typeof user.last_film.duration === 'number' ? user.last_film.duration : 0
+      },
       user_id: user.telegram_id,
       username: user.username
     });

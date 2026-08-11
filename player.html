@@ -284,6 +284,32 @@
     }
     trackEvent('page_views', { path: '/player' });
 
+    // Send position to backend for cross-device resume. Uses keepalive so it
+    // works even when called from pagehide / beforeunload.
+    function sendPositionToBackend(seconds, duration) {
+      if (!seconds || seconds < 5 || !isFinite(seconds)) return;
+      // Don't send if userId is a guest web_* ID — server would skip it anyway
+      if (String(browserUserId).indexOf('web_') === 0) return;
+      var payload = JSON.stringify({
+        type: 'position_update',
+        initData: tgInitData,
+        userId: browserUserId,
+        username: localStorage.getItem('genopoisk_tg_username') || '',
+        filmId: kid,
+        title: title,
+        position: Math.floor(seconds),
+        duration: Math.floor(duration || 0)
+      });
+      try {
+        fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        }).catch(function() {});
+      } catch (e) {}
+    }
+
     function positionKey(filmId) { return 'genopoisk_position_' + filmId; }
 
     function savePosition(seconds, duration) {
@@ -321,11 +347,25 @@
       return h > 0 ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
     }
 
-    var savedPos = loadPosition();
+    // Choose the best resume position:
+    //   1. ?t= URL param (set by index.html resume card from server data)
+    //   2. localStorage position (from previous session on THIS device)
+    // Server-provided ?t= wins because it may be more recent (saved from
+    // another device a few seconds ago).
+    var urlStartSec = parseInt(startTime, 10) || 0;
+    var savedPos = null;
+    if (urlStartSec > 5) {
+      savedPos = { t: urlStartSec, d: 0, ts: new Date().toISOString(), title: title, fromUrl: true };
+      console.log('[player] Using ?t=' + urlStartSec + ' from URL (cross-device resume)');
+    } else {
+      savedPos = loadPosition();
+      if (savedPos) console.log('[player] Using localStorage position:', savedPos.t);
+    }
     var playerReady = false;
     var lastKnownTime = 0;
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
+    var lastBackendSaveTime = 0;
     var seekRetries = 0;
     var isResuming = false; // true while we're seeking to saved position
 
@@ -364,9 +404,15 @@
     function maybeSavePosition(t) {
       if (!t || t < 5 || !isFinite(t)) return;
       var now = Date.now();
+      // Save to localStorage every 3s
       if (now - lastSaveTime < 3000) return;
       lastSaveTime = now;
       savePosition(t, lastKnownDuration);
+      // Send to backend every 10s (for cross-device resume)
+      if (now - lastBackendSaveTime >= 10000) {
+        lastBackendSaveTime = now;
+        sendPositionToBackend(t, lastKnownDuration);
+      }
     }
 
     window.addEventListener('message', function(e) {
@@ -422,6 +468,7 @@
     function saveBeforeLeave() {
       if (lastKnownTime > 5) {
         savePosition(lastKnownTime, lastKnownDuration);
+        sendPositionToBackend(lastKnownTime, lastKnownDuration);
       }
     }
     window.addEventListener('pagehide', saveBeforeLeave);

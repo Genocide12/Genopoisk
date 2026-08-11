@@ -95,7 +95,58 @@ async function updateUser(telegramId, updates) {
 // Record an event for a user
 async function recordEvent(telegramId, eventType, data) {
   if (!telegramId) return;
-  
+  data = data || {};
+
+  // position_update is special — it does NOT increment events_count,
+  // it only updates last_film.position so cross-device resume works.
+  if (eventType === 'position_update') {
+    const user = await getUser(telegramId);
+    if (!user) return; // can't save position for non-existent user
+    if (!data.filmId || typeof data.position !== 'number') return;
+
+    const position = Math.max(0, Math.floor(data.position));
+    const duration = typeof data.duration === 'number' ? Math.floor(data.duration) : 0;
+    const nowIso = new Date().toISOString();
+
+    // Only update last_film if it's the same film — don't override a different film
+    const lastFilm = user.last_film;
+    if (lastFilm && String(lastFilm.filmId) === String(data.filmId)) {
+      // Update position on existing last_film
+      await updateUser(telegramId, {
+        last_film: {
+          filmId: String(data.filmId),
+          title: lastFilm.title || data.title || '',
+          ts: nowIso,
+          position: position,
+          duration: duration || lastFilm.duration || 0
+        },
+        last_seen: nowIso
+      });
+    } else {
+      // Different film — create new last_film entry with position
+      await updateUser(telegramId, {
+        last_film: {
+          filmId: String(data.filmId),
+          title: data.title || '',
+          ts: nowIso,
+          position: position,
+          duration: duration
+        },
+        last_seen: nowIso
+      });
+    }
+
+    // Also update position inside watched_films array (so /api/my-films shows it)
+    const watched = (user.watched_films || []).map(f => {
+      if (String(f.filmId) === String(data.filmId)) {
+        return { ...f, position: position, duration: duration || f.duration || 0, ts: nowIso };
+      }
+      return f;
+    });
+    await updateUser(telegramId, { watched_films: watched });
+    return;
+  }
+
   // Get current user
   const user = await getUser(telegramId);
   if (!user) {
@@ -112,8 +163,8 @@ async function recordEvent(telegramId, eventType, data) {
     // If movies_opened, add to watched_films
     if (eventType === 'movies_opened' && data.filmId) {
       await updateUser(telegramId, {
-        last_film: { filmId: data.filmId, title: data.title, ts: new Date().toISOString() },
-        watched_films: [{ filmId: data.filmId, title: data.title, ts: new Date().toISOString() }]
+        last_film: { filmId: data.filmId, title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 },
+        watched_films: [{ filmId: data.filmId, title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 }]
       });
     }
     return;
@@ -151,10 +202,10 @@ async function recordEvent(telegramId, eventType, data) {
     const watched = user.watched_films || [];
     // Remove if already exists (dedupe)
     const filtered = watched.filter(f => f.filmId !== String(data.filmId));
-    filtered.unshift({ filmId: String(data.filmId), title: data.title, ts: new Date().toISOString() });
+    filtered.unshift({ filmId: String(data.filmId), title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 });
     if (filtered.length > 50) filtered.pop();
     updates.watched_films = filtered;
-    updates.last_film = { filmId: String(data.filmId), title: data.title, ts: new Date().toISOString() };
+    updates.last_film = { filmId: String(data.filmId), title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 };
   }
 
   await updateUser(telegramId, updates);

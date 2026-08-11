@@ -37,33 +37,22 @@
     });
   } catch(e) { log('adsConfig override failed', e); }
 
-  // ====== 0. Show only native center play/pause button ======
-  // Hide ALL venoplayer custom UI except the center play/pause button.
-  // Hide native video.controls (bottom bar) — only keep the big center button.
+  // ====== 0. Hide ad / fullscreen-disabled overlays only ======
+  // Previously we hid venoplayer's bottom bar, progress bar, fullscreen button
+  // AND set `video { pointer-events:none }`. That last rule blocked all
+  // touch/click events from reaching venoplayer, so its controls never
+  // appeared on tap. Now we let venoplayer manage its own UI and only hide
+  // the ad-disabled overlay messages.
   function injectControlsFix() {
     if (document.querySelector('style[data-genopoisk-controls]')) return;
     var css =
-      // Hide venoplayer bottom bar, side panels, etc — keep only center play button
-      '.vp-controls, .vp-control-bar, .vjs-control-bar, .player-controls, ' +
-      '.vp-bottom-bar, .vp-top-bar, ' +
-      '.vp-settings-panel, .vp-volume-panel, .vp-time-display, ' +
-      '.vp-progress-bar, ' +
-      '.vp-fullscreen-button, .vp-mute-button { display:none !important; }' +
-      // Keep the center big play button visible
-      '.vp-big-play-button, .vp-center-controls, .vp-overlay { display:flex !important; opacity:1 !important; visibility:visible !important; }' +
-      // Hide loading spinner (we have our own)
-      '.vp-loading-spinner { display:none !important; }' +
-      // No native bottom controls
-      'video { pointer-events:none !important; }' +
-      // But allow clicks on the center play button
-      '.vp-big-play-button, .vp-center-controls { pointer-events:auto !important; }' +
-      // Hide ad-related overlays
+      // Hide ad-related overlays and "fullscreen disabled during ad" messages
       '.vp-ad-overlay, .vp-ad-message, .ad-message, [class*="ad-disabled"], [class*="fullscreen-disabled"] { display:none !important; }';
     var style = document.createElement('style');
     style.setAttribute('data-genopoisk-controls', 'true');
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
-    log('Controls fix CSS injected (center play/pause only)');
+    log('Controls fix CSS injected (ad overlays only — venoplayer controls untouched)');
   }
   if (document.head) { injectControlsFix(); }
   else {

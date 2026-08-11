@@ -92,10 +92,82 @@ async function updateUser(telegramId, updates) {
   return rows[0] || null;
 }
 
+// Parse User-Agent into a compact device description.
+// Returns "Safari / iPhone", "Chrome / Windows", "Telegram / Android" etc.
+function parseUserAgent(ua) {
+  if (!ua || typeof ua !== 'string') return 'неизвестно';
+  const uaLower = ua.toLowerCase();
+
+  // Detect Telegram Mini App first (it has Telegram in UA)
+  const isTelegram = uaLower.indexOf('telegram') !== -1;
+
+  // Browser
+  let browser = 'Браузер';
+  if (uaLower.indexOf('edg/') !== -1) browser = 'Edge';
+  else if (uaLower.indexOf('chrome') !== -1 || uaLower.indexOf('crios') !== -1) browser = 'Chrome';
+  else if (uaLower.indexOf('firefox') !== -1 || uaLower.indexOf('fxios') !== -1) browser = 'Firefox';
+  else if (uaLower.indexOf('safari') !== -1) browser = 'Safari';
+  else if (uaLower.indexOf('opera') !== -1 || uaLower.indexOf('opr/') !== -1) browser = 'Opera';
+
+  // OS / Device
+  let os = 'устройство';
+  if (uaLower.indexOf('iphone') !== -1) os = 'iPhone';
+  else if (uaLower.indexOf('ipad') !== -1 || (uaLower.indexOf('mac') !== -1 && uaLower.indexOf('mobile') !== -1)) os = 'iPad';
+  else if (uaLower.indexOf('android') !== -1) {
+    if (uaLower.indexOf('mobile') !== -1) os = 'Android';
+    else os = 'Android Tablet';
+  }
+  else if (uaLower.indexOf('windows') !== -1) os = 'Windows';
+  else if (uaLower.indexOf('mac os') !== -1 || uaLower.indexOf('macos') !== -1) os = 'macOS';
+  else if (uaLower.indexOf('linux') !== -1) os = 'Linux';
+
+  if (isTelegram) return 'Telegram / ' + os;
+  return browser + ' / ' + os;
+}
+
+// Normalize ip_history entries to {ip, ua, device, ts} format.
+// Old format was a string ("1.2.3.4"); new format is an object.
+function normalizeIpHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history.map(function(entry) {
+    if (typeof entry === 'string') {
+      return { ip: entry, ua: '', device: 'неизвестно', ts: '' };
+    }
+    return {
+      ip: entry.ip || '',
+      ua: entry.ua || '',
+      device: entry.device || (entry.ua ? parseUserAgent(entry.ua) : 'неизвестно'),
+      ts: entry.ts || ''
+    };
+  });
+}
+
+// Update or insert a session entry. Session key = (platform, device).
+// platform: 'miniapp' | 'browser'
+// device: parseUserAgent(ua)
+function upsertSession(sessions, platform, device, ip, nowIso) {
+  if (!Array.isArray(sessions)) sessions = [];
+  const key = platform + '|' + device;
+  const filtered = sessions.filter(s => (s.platform + '|' + s.device) !== key);
+  filtered.unshift({
+    platform: platform,
+    device: device,
+    ip: ip || '',
+    last_seen: nowIso,
+    first_seen: (sessions.find(s => (s.platform + '|' + s.device) === key) || {}).first_seen || nowIso
+  });
+  if (filtered.length > 10) filtered.pop();
+  return filtered;
+}
+
 // Record an event for a user
 async function recordEvent(telegramId, eventType, data) {
   if (!telegramId) return;
   data = data || {};
+
+  const nowIso = new Date().toISOString();
+  const device = data.ua ? parseUserAgent(data.ua) : (data.device || 'неизвестно');
+  const platform = data.platform || (data.ua && data.ua.indexOf('Telegram') !== -1 ? 'miniapp' : 'browser');
 
   // position_update is special — it does NOT increment events_count,
   // it only updates last_film.position so cross-device resume works.
@@ -106,7 +178,6 @@ async function recordEvent(telegramId, eventType, data) {
 
     const position = Math.max(0, Math.floor(data.position));
     const duration = typeof data.duration === 'number' ? Math.floor(data.duration) : 0;
-    const nowIso = new Date().toISOString();
 
     // Only update last_film if it's the same film — don't override a different film
     const lastFilm = user.last_film;
@@ -120,7 +191,8 @@ async function recordEvent(telegramId, eventType, data) {
           position: position,
           duration: duration || lastFilm.duration || 0
         },
-        last_seen: nowIso
+        last_seen: nowIso,
+        sessions: upsertSession(user.sessions || [], platform, device, data.ip, nowIso)
       });
     } else {
       // Different film — create new last_film entry with position
@@ -132,7 +204,8 @@ async function recordEvent(telegramId, eventType, data) {
           position: position,
           duration: duration
         },
-        last_seen: nowIso
+        last_seen: nowIso,
+        sessions: upsertSession(user.sessions || [], platform, device, data.ip, nowIso)
       });
     }
 
@@ -147,24 +220,67 @@ async function recordEvent(telegramId, eventType, data) {
     return;
   }
 
+  // favorite_added / favorite_removed
+  if (eventType === 'favorite_added' || eventType === 'favorite_removed') {
+    const user = await getUser(telegramId);
+    if (!user) return;
+    if (!data.filmId) return;
+    let favs = user.favorite_films || [];
+    if (eventType === 'favorite_added') {
+      // Add (dedupe)
+      const exists = favs.some(f => String(f.filmId) === String(data.filmId));
+      if (!exists) {
+        favs.unshift({ filmId: String(data.filmId), title: data.title || '', ts: nowIso });
+        if (favs.length > 100) favs.pop();
+      }
+    } else {
+      // Remove
+      favs = favs.filter(f => String(f.filmId) !== String(data.filmId));
+    }
+    await updateUser(telegramId, { favorite_films: favs, last_seen: nowIso });
+    return;
+  }
+
+  // search_deleted — remove a specific query from search_history
+  if (eventType === 'search_deleted') {
+    const user = await getUser(telegramId);
+    if (!user) return;
+    if (!data.query) return;
+    const q = String(data.query).toLowerCase();
+    const filtered = (user.search_history || []).filter(s => String(s.query || '').toLowerCase() !== q);
+    await updateUser(telegramId, { search_history: filtered, last_seen: nowIso });
+    return;
+  }
+
   // Get current user
   const user = await getUser(telegramId);
   if (!user) {
     // Create user if doesn't exist
+    const initialIpHistory = data.ip ? [{ ip: data.ip, ua: data.ua || '', device: device, ts: nowIso }] : [];
     await upsertUser(telegramId, {
       username: data.username || null,
       ip: data.ip || null,
-      ip_history: data.ip ? [data.ip] : [],
+      ip_history: initialIpHistory,
+      sessions: upsertSession([], platform, device, data.ip, nowIso),
       events_count: 1,
       events_by_type: { [eventType]: 1 },
       watched_films: [],
-      rated_films: []
+      rated_films: [],
+      favorite_films: [],
+      search_history: []
     });
     // If movies_opened, add to watched_films
     if (eventType === 'movies_opened' && data.filmId) {
       await updateUser(telegramId, {
-        last_film: { filmId: data.filmId, title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 },
-        watched_films: [{ filmId: data.filmId, title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 }]
+        last_film: { filmId: data.filmId, title: data.title, ts: nowIso, position: 0, duration: 0 },
+        watched_films: [{ filmId: data.filmId, title: data.title, ts: nowIso, position: 0, duration: 0 }]
+      });
+    }
+    // If searches, add to search_history
+    if (eventType === 'searches' && data.query) {
+      const user2 = await getUser(telegramId);
+      await updateUser(telegramId, {
+        search_history: [{ query: String(data.query), ts: nowIso }]
       });
     }
     return;
@@ -172,7 +288,7 @@ async function recordEvent(telegramId, eventType, data) {
 
   // Update existing user
   const updates = {
-    last_seen: new Date().toISOString(),
+    last_seen: nowIso,
     events_count: (user.events_count || 0) + 1
   };
 
@@ -181,16 +297,27 @@ async function recordEvent(telegramId, eventType, data) {
   ebt[eventType] = (ebt[eventType] || 0) + 1;
   updates.events_by_type = ebt;
 
-  // Update IP
+  // Update IP + device info (ip_history as objects)
   if (data.ip) {
     updates.ip = data.ip;
-    const ipHistory = user.ip_history || [];
-    if (!ipHistory.includes(data.ip)) {
-      ipHistory.unshift(data.ip);
+    const ipHistory = normalizeIpHistory(user.ip_history || []);
+    // Check if this IP already exists
+    const existingIdx = ipHistory.findIndex(e => e.ip === data.ip);
+    if (existingIdx !== -1) {
+      // Update device/ts for existing IP entry
+      ipHistory[existingIdx].ua = data.ua || ipHistory[existingIdx].ua;
+      ipHistory[existingIdx].device = device;
+      ipHistory[existingIdx].ts = nowIso;
+    } else {
+      // Add new entry at start
+      ipHistory.unshift({ ip: data.ip, ua: data.ua || '', device: device, ts: nowIso });
       if (ipHistory.length > 10) ipHistory.pop();
-      updates.ip_history = ipHistory;
     }
+    updates.ip_history = ipHistory;
   }
+
+  // Update sessions
+  updates.sessions = upsertSession(user.sessions || [], platform, device, data.ip, nowIso);
 
   // Update username if provided and different
   if (data.username && user.username !== data.username) {
@@ -202,10 +329,19 @@ async function recordEvent(telegramId, eventType, data) {
     const watched = user.watched_films || [];
     // Remove if already exists (dedupe)
     const filtered = watched.filter(f => f.filmId !== String(data.filmId));
-    filtered.unshift({ filmId: String(data.filmId), title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 });
+    filtered.unshift({ filmId: String(data.filmId), title: data.title, ts: nowIso, position: 0, duration: 0 });
     if (filtered.length > 50) filtered.pop();
     updates.watched_films = filtered;
-    updates.last_film = { filmId: String(data.filmId), title: data.title, ts: new Date().toISOString(), position: 0, duration: 0 };
+    updates.last_film = { filmId: String(data.filmId), title: data.title, ts: nowIso, position: 0, duration: 0 };
+  }
+
+  // Add to search_history if searches
+  if (eventType === 'searches' && data.query) {
+    const q = String(data.query);
+    let sh = (user.search_history || []).filter(s => String(s.query).toLowerCase() !== q.toLowerCase());
+    sh.unshift({ query: q, ts: nowIso });
+    if (sh.length > 20) sh.pop();
+    updates.search_history = sh;
   }
 
   await updateUser(telegramId, updates);
@@ -246,5 +382,5 @@ async function rateFilm(telegramId, filmId, title, rating) {
 
 module.exports = {
   upsertUser, getUser, getAllUsers, getUserByUsername, getUserByOidcSub,
-  updateUser, recordEvent, deleteAllUsers, deleteUser, rateFilm
+  updateUser, recordEvent, deleteAllUsers, deleteUser, rateFilm, parseUserAgent
 };

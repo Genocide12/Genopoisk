@@ -41,6 +41,12 @@
     .hero-subtitle{font-size:clamp(14px,2vw,17px);color:var(--text-secondary);font-weight:500;letter-spacing:-0.01em;}
     .search-wrapper{margin-bottom:24px;}
     .search-container{position:relative;max-width:600px;margin:0 auto;}
+    .search-history{max-width:600px;margin:8px auto 0;display:flex;flex-wrap:wrap;gap:6px;}
+    .search-history-item{display:inline-flex;align-items:center;gap:6px;padding:6px 8px 6px 12px;background:var(--fill);border:1px solid var(--separator);border-radius:14px;font-size:13px;color:var(--text-primary);cursor:pointer;transition:all 0.2s;max-width:100%;}
+    .search-history-item:hover{background:var(--bg-tertiary);border-color:var(--ios-blue);}
+    .search-history-item-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+    .search-history-item-close{background:rgba(255,255,255,0.1);border:none;color:var(--text-secondary);width:18px;height:18px;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;line-height:1;}
+    .search-history-item-close:hover{background:#f33;color:#fff;}
     .search-input{width:100%;padding:14px 20px 14px 44px;font-size:17px;font-weight:500;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:16px;color:var(--text-primary);outline:none;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);font-family:inherit;}
     .search-input::placeholder{color:var(--text-secondary);}
     .search-input:focus{background:var(--bg-tertiary);border-color:var(--ios-blue);box-shadow:0 0 0 4px rgba(0,122,255,0.2);transform:translateY(-2px);}
@@ -128,6 +134,7 @@
         <span class="search-icon">🔍</span>
         <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" />
       </div>
+      <div class="search-history" id="searchHistory"></div>
     </div>
     <div class="actions">
       <div class="action-card" onclick="loadCategory('popular')">
@@ -343,6 +350,17 @@
       checkAuth();
     }, 120000);
 
+    // --- Register service worker for offline PWA support ---
+    // Caches the app shell (index.html, icons, manifest, bridge.js) so the
+    // main page works offline. Player and API calls always need network.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(e) {
+          console.warn('[sw] registration failed:', e);
+        });
+      });
+    }
+
     // --- Tracking ---
     // tgInitData is read DYNAMICALLY each time (not cached)
     function getTgInitData() {
@@ -489,6 +507,95 @@
 
     // Fire async — don't block page load
     loadResumeCard();
+    loadSearchHistory();
+
+    // --- Search history ---
+    const searchHistoryEl = document.getElementById('searchHistory');
+
+    async function loadSearchHistory() {
+      if (!searchHistoryEl) return;
+      const uid = getUserId();
+      if (!uid || uid.startsWith('web_')) {
+        searchHistoryEl.innerHTML = '';
+        return;
+      }
+      try {
+        const res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = data.search_history || [];
+        if (items.length === 0) {
+          searchHistoryEl.innerHTML = '';
+          return;
+        }
+        searchHistoryEl.innerHTML = items.slice(0, 10).map((item, idx) => {
+          const q = escapeHtml(item.query || '');
+          return '<div class="search-history-item" data-idx="' + idx + '" data-query="' + q + '">' +
+                 '<span class="search-history-item-text">' + q + '</span>' +
+                 '<button class="search-history-item-close" data-query="' + q + '" title="Удалить">✕</button>' +
+                 '</div>';
+        }).join('');
+
+        // Bind click on item text (search again)
+        searchHistoryEl.querySelectorAll('.search-history-item').forEach(function(el) {
+          el.addEventListener('click', function(e) {
+            if (e.target.classList.contains('search-history-item-close')) return;
+            const q = el.getAttribute('data-query');
+            if (q) {
+              searchInput.value = q;
+              searchFilms(q);
+            }
+          });
+        });
+        // Bind click on close button (delete this query)
+        searchHistoryEl.querySelectorAll('.search-history-item-close').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const q = btn.getAttribute('data-query');
+            if (q) deleteSearchQuery(q);
+          });
+        });
+      } catch (e) {
+        console.warn('[search-history] load failed', e);
+      }
+    }
+
+    async function deleteSearchQuery(query) {
+      const uid = getUserId();
+      if (!uid || uid.startsWith('web_')) return;
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'search_deleted',
+            initData: getTgInitData(),
+            userId: uid,
+            username: localStorage.getItem('genopoisk_tg_username') || '',
+            query: query
+          }),
+          keepalive: true
+        });
+        // Reload history after deletion
+        loadSearchHistory();
+      } catch (e) {
+        console.warn('[search-history] delete failed', e);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
     // Retry after window load — telegram-web-app.js loads async, so tgInitData
     // may not be available on first call. Without initData, browser userId is
     // used as fallback, but in Telegram Mini App we want the real Telegram ID.
@@ -745,6 +852,7 @@
         clearFilms();
         showLoader();
         trackEvent('searches', { query: val });
+        loadSearchHistory(); // refresh search history chips after a new search
         try {
           const films = await searchFilms(val);
           displayFilms(films);

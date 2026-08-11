@@ -20,8 +20,10 @@ const ALLOWED_TYPES = [
   'searches',
   'movies_opened',
   'categories_opened',
-  'bot_starts',
-  'position_update' // saves video position to last_film for cross-device resume
+  'position_update', // saves video position to last_film for cross-device resume
+  'favorite_added',
+  'favorite_removed',
+  'search_deleted' // removes a query from user.search_history
 ];
 
 function getClientIp(req) {
@@ -30,6 +32,10 @@ function getClientIp(req) {
   if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
   if (req.headers['x-vercel-ip']) return String(req.headers['x-vercel-ip']);
   return null;
+}
+
+function getUserAgent(req) {
+  return req.headers['user-agent'] || '';
 }
 
 function validateInitData(initData, botToken) {
@@ -64,6 +70,7 @@ module.exports = async (req, res) => {
     if (!ALLOWED_TYPES.includes(type)) return res.status(400).json({ error: 'Invalid type' });
 
     const ip = getClientIp(req);
+    const ua = getUserAgent(req);
     let telegramId = null;
     let username = null;
 
@@ -109,6 +116,7 @@ module.exports = async (req, res) => {
     await recordEvent(telegramId, type, {
       username: username || undefined,
       ip: ip || undefined,
+      ua: ua || undefined,
       filmId: body.filmId || undefined,
       title: body.title || undefined,
       position: body.position || undefined, // for position_update

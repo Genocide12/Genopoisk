@@ -1,4 +1,4 @@
-// Returns the user's watched films list
+// Returns the user's watched films list, favorites, and search history
 // Uses telegram_id (Bot API user.id) as the canonical key — same for both
 // Mini App (initData → user.id) and Browser OIDC (id_token.id stored as tg_id).
 
@@ -40,6 +40,8 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({
       films: user.watched_films || [],
+      favorites: user.favorite_films || [],
+      search_history: user.search_history || [],
       user_id: telegramId,
       username: user.username
     });

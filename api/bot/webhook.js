@@ -1,6 +1,6 @@
 // Telegram bot webhook handler
 const { isAdmin, sendMessage, editMessage, answerCallback, tg } = require('../_lib/telegram');
-const { getAllUsers, getUser, deleteUser, deleteAllUsers, recordEvent, rateFilm } = require('../_lib/supabase');
+const { getAllUsers, getUser, deleteUser, deleteAllUsers, recordEvent, rateFilm, parseUserAgent } = require('../_lib/supabase');
 const {
   getProjectInfo,
   getLatestDeployments,
@@ -43,11 +43,15 @@ function mainMenuKeyboard() {
     inline_keyboard: [
       [
         { text: '📊 Статистика', callback_data: 'menu_stats' },
-        { text: '👥 Пользователи', callback_data: 'menu_users' }
+        { text: '📈 Аналитика', callback_data: 'menu_analytics' }
+      ],
+      [
+        { text: '👥 Пользователи', callback_data: 'menu_users' },
+        { text: '🚀 Деплой', callback_data: 'menu_deploy' }
       ],
       [
         { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
-        { text: '🚀 Деплой', callback_data: 'menu_deploy' }
+        { text: '⭐ Избранное', callback_data: 'menu_favorites' }
       ],
       [
         { text: '📢 Уведомление', callback_data: 'menu_broadcast' },
@@ -161,14 +165,16 @@ async function cmdHelp(chatId, user) {
 async function buildStatsText() {
   const users = await getAllUsers();
   const totalUsers = users.length;
-  let totalViews = 0, totalSearches = 0, totalMovies = 0, totalRatings = 0;
-  
+  let totalViews = 0, totalSearches = 0, totalMovies = 0, totalRatings = 0, totalFavorites = 0;
+
   for (const u of users) {
     const ebt = u.events_by_type || {};
+    // Exclude bot_starts (legacy, no longer tracked)
     totalViews += ebt.page_views || 0;
     totalSearches += ebt.searches || 0;
     totalMovies += ebt.movies_opened || 0;
     totalRatings += (u.rated_films || []).length;
+    totalFavorites += (u.favorite_films || []).length;
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -181,6 +187,7 @@ async function buildStatsText() {
    🔍 Поиски: <b>${totalSearches}</b>
    🎬 Фильмов открыто: <b>${totalMovies}</b>
    ⭐ Оценено фильмов: <b>${totalRatings}</b>
+   ⭐ В избранном: <b>${totalFavorites}</b>
 
 <b>Сегодня:</b>
    👥 Уникальных: ${todayUsers}
@@ -206,11 +213,27 @@ async function buildUserProfileText(targetId) {
   const first = u.first_seen ? new Date(u.first_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
   const last = u.last_seen ? new Date(u.last_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
 
-  // IP history
+  // IP history with device info — support both old (string) and new (object) formats
   var ipHistoryText = "—";
   if (u.ip_history && u.ip_history.length > 0) {
-    ipHistoryText = u.ip_history.slice(0, 10).map(function(ip) {
-      return ip;
+    ipHistoryText = u.ip_history.slice(0, 10).map(function(entry) {
+      if (typeof entry === 'string') {
+        return escapeHtml(entry) + ' — ' + '<i>неизвестно</i>';
+      }
+      var ip = escapeHtml(entry.ip || '');
+      var dev = escapeHtml(entry.device || 'неизвестно');
+      var ts = entry.ts ? new Date(entry.ts).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : '';
+      return '<code>' + ip + '</code> — ' + dev + (ts ? ' (' + ts + ')' : '');
+    }).join("\n   • ");
+  }
+
+  // Sessions list
+  var sessionsText = "—";
+  if (u.sessions && u.sessions.length > 0) {
+    sessionsText = u.sessions.slice(0, 5).map(function(s) {
+      var platformIcon = s.platform === 'miniapp' ? '📱 Mini App' : '🌐 Браузер';
+      var lastSeen = s.last_seen ? new Date(s.last_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : '?';
+      return platformIcon + ' — ' + escapeHtml(s.device || 'неизвестно') + '\n      ↳ ' + lastSeen + (s.ip ? ' · <code>' + escapeHtml(s.ip) + '</code>' : '');
     }).join("\n   • ");
   }
 
@@ -219,10 +242,6 @@ async function buildUserProfileText(targetId) {
   //   - oidc_sub    = OIDC subject identifier (long, e.g. 6611475080888633282) — only from Browser OIDC
   var telegramId = u.telegram_id || "—";
   var browserOidcSub = u.oidc_sub || "—";
-
-  // Platform: if oidc_sub is set, the user has logged in via browser at least once
-  var platform = "Mini App";
-  if (browserOidcSub !== "—") platform = "Mini App + браузер";
 
   // Online status (last_seen within 2 minutes = online)
   var isOnline = false;
@@ -243,13 +262,33 @@ async function buildUserProfileText(targetId) {
   if (watchedFilms.length > 0) {
     filmsText = watchedFilms.slice(0, 15).map(function(f, i) {
       var rating = f.rating ? " ⭐" + f.rating : "";
-      return (i + 1) + ". «" + escapeHtml(f.title) + "»" + rating;
+      var pos = (typeof f.position === 'number' && f.position > 5) ? ' ⏱' + formatPosition(f.position) : '';
+      return (i + 1) + ". «" + escapeHtml(f.title) + "»" + rating + pos;
     }).join("\n   ");
     if (watchedFilms.length > 15) filmsText += "\n   ... и ещё " + (watchedFilms.length - 15);
   }
 
-  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Платформа:</b> ${platform}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+  // Favorites
+  const favorites = u.favorite_films || [];
+  let favText = "—";
+  if (favorites.length > 0) {
+    favText = favorites.slice(0, 10).map(function(f, i) {
+      return (i + 1) + ". «" + escapeHtml(f.title) + "»";
+    }).join("\n   ");
+    if (favorites.length > 10) favText += "\n   ... и ещё " + (favorites.length - 10);
+  }
+
+  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В избранном: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Избранное (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
   return { text, hasLastFilm: !!u.last_film };
+}
+
+function formatPosition(seconds) {
+  if (!seconds || seconds < 0 || !isFinite(seconds)) return '0:00';
+  var h = Math.floor(seconds / 3600);
+  var m = Math.floor((seconds % 3600) / 60);
+  var s = Math.floor(seconds % 60);
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : m + ':' + pad(s);
 }
 
 // ---- My films view (films watched by the user who clicked the button) ----
@@ -296,6 +335,147 @@ function myFilmsKeyboard(films, page) {
   buttons.push(navRow);
   buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
+}
+
+// ---- Favorites view (films favorited by the user who clicked the button) ----
+async function buildFavoritesText(targetUserId) {
+  let u = await getUser(targetUserId);
+  if (!u) {
+    return { text: `⭐ <b>Избранное</b>\n\nИстория ещё не создана.`, films: [] };
+  }
+  const films = u.favorite_films || [];
+  if (films.length === 0) {
+    return { text: `⭐ <b>Избранное</b>\n\nВы ещё не добавляли фильмы в избранное. Нажмите ⭐ в плеере, чтобы добавить.`, films: [] };
+  }
+  var lines = films.slice(0, 20).map(function(f, i) {
+    return (i + 1) + '. «' + escapeHtml(f.title) + '»';
+  }).join('\n');
+  return {
+    text: '⭐ <b>Избранное</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    films: films
+  };
+}
+
+function favoritesKeyboard(films, page) {
+  var pageSize = 8;
+  var totalPages = Math.max(1, Math.ceil(films.length / pageSize));
+  var curPage = Math.min(Math.max(0, page), totalPages - 1);
+  var startIdx = curPage * pageSize;
+  var entries = films.slice(startIdx, startIdx + pageSize);
+
+  var buttons = entries.map(function(f, i) {
+    var idx = startIdx + i;
+    return [{ text: '⭐ ' + f.title.slice(0, 40), callback_data: 'favfilm_' + idx }];
+  });
+
+  var navRow = [];
+  if (curPage > 0) navRow.push({ text: '⬅️', callback_data: 'favs_' + (curPage - 1) });
+  navRow.push({ text: (curPage + 1) + '/' + totalPages, callback_data: 'noop' });
+  if (curPage < totalPages - 1) navRow.push({ text: '➡️', callback_data: 'favs_' + (curPage + 1) });
+  buttons.push(navRow);
+  buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
+  return { inline_keyboard: buttons };
+}
+
+// ---- Analytics view ----
+async function buildAnalyticsText() {
+  const users = await getAllUsers();
+  if (users.length === 0) return '📈 <b>Аналитика</b>\n\nНет данных.';
+
+  // Daily activity for last 7 days
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    days.push({
+      date: d.toISOString().slice(0, 10),
+      label: d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' }),
+      views: 0, searches: 0, movies: 0
+    });
+  }
+
+  // Build a quick lookup of date → day index
+  const dayMap = {};
+  days.forEach((d, i) => { dayMap[d.date] = i; });
+
+  let totalViews = 0, totalSearches = 0, totalMovies = 0;
+  const filmCount = {}; // filmId → { title, count }
+
+  for (const u of users) {
+    const ebt = u.events_by_type || {};
+    totalViews += ebt.page_views || 0;
+    totalSearches += ebt.searches || 0;
+    totalMovies += ebt.movies_opened || 0;
+
+    // Tally watched films
+    const watched = u.watched_films || [];
+    for (const f of watched) {
+      if (!filmCount[f.filmId]) {
+        filmCount[f.filmId] = { title: f.title || '?', count: 0 };
+      }
+      filmCount[f.filmId].count++;
+    }
+
+    // Activity by day — using last_seen of each event-like field
+    // (we approximate daily activity by counting films watched on each day)
+    for (const f of watched) {
+      if (!f.ts) continue;
+      const day = f.ts.slice(0, 10);
+      if (dayMap[day] !== undefined) {
+        days[dayMap[day]].movies++;
+      }
+    }
+  }
+
+  // Top 5 films by watch count
+  const topFilms = Object.entries(filmCount)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 5);
+
+  // Build ASCII bar chart for last 7 days
+  const maxMovies = Math.max(1, ...days.map(d => d.movies));
+  const barWidth = 20;
+  let chartText = '';
+  for (const d of days) {
+    const barLen = Math.round((d.movies / maxMovies) * barWidth);
+    const bar = '█'.repeat(barLen) + '░'.repeat(barWidth - barLen);
+    chartText += '\n ' + d.label.padEnd(8) + ' ' + bar + ' ' + d.movies;
+  }
+
+  // Average watch position (across watched_films with position > 0)
+  let posSum = 0, posCount = 0;
+  for (const u of users) {
+    for (const f of (u.watched_films || [])) {
+      if (typeof f.position === 'number' && f.position > 5) {
+        posSum += f.position;
+        posCount++;
+      }
+    }
+  }
+  const avgPos = posCount > 0 ? formatPosition(Math.round(posSum / posCount)) : '—';
+
+  let topFilmsText = '—';
+  if (topFilms.length > 0) {
+    topFilmsText = topFilms.map(([, info], i) => {
+      return (i + 1) + '. «' + escapeHtml(info.title) + '» — ' + info.count + ' 👁';
+    }).join('\n');
+  }
+
+  return `📈 <b>Аналитика за 7 дней</b>
+
+<b>📊 Просмотры фильмов по дням:</b>${chartText}
+
+<b>🎬 Топ фильмов:</b>
+   ${topFilmsText}
+
+<b>⏱ Средняя позиция просмотра:</b> ${avgPos}
+
+<b>📊 Всего по сервису:</b>
+   👁 Просмотры: ${totalViews}
+   🔍 Поиски: ${totalSearches}
+   🎬 Фильмов открыто: ${totalMovies}
+   👥 Пользователей: ${users.length}`;
 }
 
 // ---- Deploy views ----
@@ -519,6 +699,45 @@ async function handleCallback(update) {
       const result = await buildMyFilmsText(String(fromId));
       cacheMyFilms(fromId, result.films); // cache for film button callbacks
       await edit(result.text, myFilmsKeyboard(result.films, 0));
+      return;
+    }
+    if (data === 'menu_favorites') {
+      const result = await buildFavoritesText(String(fromId));
+      cacheMyFilms('fav_' + fromId, result.films); // reuse cache for favorites
+      await edit(result.text, favoritesKeyboard(result.films, 0));
+      return;
+    }
+    if (data === 'menu_analytics') {
+      await edit(await buildAnalyticsText(), mainMenuKeyboard());
+      return;
+    }
+    // Favorites pagination
+    const favsPageMatch = data.match(/^favs_(\d+)$/);
+    if (favsPageMatch) {
+      const page = parseInt(favsPageMatch[1], 10);
+      const result = await buildFavoritesText(String(fromId));
+      cacheMyFilms('fav_' + fromId, result.films);
+      await edit(result.text, favoritesKeyboard(result.films, page));
+      return;
+    }
+    // Favorite film click → open player
+    const favFilmMatch = data.match(/^favfilm_(\d+)$/);
+    if (favFilmMatch) {
+      const idx = parseInt(favFilmMatch[1], 10);
+      const films = getCachedMyFilms('fav_' + fromId);
+      const film = films[idx];
+      if (!film) {
+        await answerCallback(cq.id, 'Фильм не найден. Обновите список.');
+        return;
+      }
+      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
+      await answerCallback(cq.id, '');
+      await edit('⭐ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер:', {
+        inline_keyboard: [
+          [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
+          [{ text: '⬅️ К избранному', callback_data: 'menu_favorites' }]
+        ]
+      });
       return;
     }
     if (data === 'menu_users') {

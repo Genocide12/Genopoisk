@@ -82,6 +82,28 @@
     .btn:active { background:rgba(50,150,225,0.23); transform: scale(0.95); }
     .btn-close { background:#f33; margin-left:4px; }
     .btn-close:active { background:#a00; transform: scale(0.95); }
+    .btn-fav { background:rgba(255,200,0,0.18); color:#ffd54a; font-size:18px; }
+    .btn-fav.active { background:rgba(255,200,0,0.45); color:#fff; }
+    .btn-fav:active { transform: scale(0.95); }
+    .loading-text {
+      margin-left: 4px;
+      display: flex;
+      flex-direction: column;
+      max-width: 70vw;
+    }
+    .loading-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .loading-subtitle {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 4px;
+    }
     .player-main {
       position:absolute;
       top:52px;
@@ -175,6 +197,7 @@
   <div class="player-header" id="playerHeader">
     <span class="title" id="videoTitle">Загрузка...</span>
     <div class="btn-group">
+      <button class="btn btn-fav" id="favBtn" title="В избранное">☆</button>
       <button class="btn btn-close" id="closeBtn" title="Закрыть">✕</button>
     </div>
   </div>
@@ -182,7 +205,10 @@
     <iframe id="playerIframe" class="player-iframe" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="origin"></iframe>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
-      <span>Загрузка плеера...</span>
+      <div class="loading-text">
+        <div class="loading-title" id="loadingTitle">Загрузка плеера...</div>
+        <div class="loading-subtitle" id="loadingSubtitle"></div>
+      </div>
     </div>
     <div class="toast" id="toast"></div>
   </div>
@@ -218,22 +244,42 @@
     var playerMain = document.getElementById('playerMain');
     var toastEl = document.getElementById('toast');
     var loadingOverlay = document.getElementById('loadingOverlay');
+    var loadingTitle = document.getElementById('loadingTitle');
+    var loadingSubtitle = document.getElementById('loadingSubtitle');
+
+    // Show film title + resume position in the loading overlay (preloader)
+    if (loadingTitle) loadingTitle.textContent = decodeURIComponent(title);
+    if (loadingSubtitle) {
+      var startSec = parseInt(startTime, 10) || 0;
+      if (startSec > 5) {
+        loadingSubtitle.textContent = '▶ Продолжить с ' + formatTime(startSec);
+      } else {
+        loadingSubtitle.textContent = 'Загрузка видео...';
+      }
+    }
 
     var tg = window.Telegram && window.Telegram.WebApp;
     function tryInitTg() {
       tg = window.Telegram && window.Telegram.WebApp;
       if (!tg) return false;
       try {
-        tg.ready();
-        tg.expand();
+        // Call ready() FIRST so Telegram knows we're ready to receive events,
+        // then expand() to take full viewport. Without ready(), expand() may
+        // be ignored on some clients.
+        if (tg.ready) tg.ready();
+        if (tg.expand) tg.expand();
         if (tg.setHeaderColor) tg.setHeaderColor('#000000');
         if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
         if (tg.BackButton && tg.BackButton.hide) tg.BackButton.hide();
+        // Enable vertical swipes for fullscreen control in Mini App
+        if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
       } catch(_) {}
       return true;
     }
     tryInitTg();
     window.addEventListener('load', function() { if (!tg) tryInitTg(); });
+    // Retry once more after a short delay (covers slow TG script load)
+    setTimeout(function() { if (!tg) tryInitTg(); }, 1500);
 
     // getUserId — prefers Telegram ID (set after OIDC login or in Mini App),
     // falls back to a temp web_* ID for unauthorised browser sessions.
@@ -364,12 +410,75 @@
     var lastBackendSaveTime = 0;
     var seekRetries = 0;
     var isResuming = false; // true while we're seeking to saved position
+    var isFavorite = false; // current favorite state, loaded from backend
 
     function sendToPlayer(msg) {
       try {
         iframe.contentWindow.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), '*');
       } catch (_) {}
     }
+
+    // ====== Favorite button ======
+    var favBtn = document.getElementById('favBtn');
+    function updateFavBtn() {
+      if (!favBtn) return;
+      favBtn.textContent = isFavorite ? '★' : '☆';
+      favBtn.classList.toggle('active', isFavorite);
+      favBtn.title = isFavorite ? 'Убрать из избранного' : 'В избранное';
+    }
+
+    // Load initial favorite state from backend
+    async function loadFavoriteState() {
+      var uid = getUserId();
+      if (!uid || String(uid).indexOf('web_') === 0) return;
+      try {
+        var res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: tgInitData })
+        });
+        if (!res.ok) return;
+        var data = await res.json();
+        var favs = data.favorites || [];
+        isFavorite = favs.some(function(f) { return String(f.filmId) === String(kid); });
+        updateFavBtn();
+      } catch (e) { console.warn('[fav] load state failed', e); }
+    }
+
+    async function toggleFavorite() {
+      var uid = getUserId();
+      if (!uid || String(uid).indexOf('web_') === 0) {
+        showToast('Войдите через Telegram, чтобы сохранять избранное', 3000);
+        return;
+      }
+      var newType = isFavorite ? 'favorite_removed' : 'favorite_added';
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: newType,
+            initData: tgInitData,
+            userId: uid,
+            username: localStorage.getItem('genopoisk_tg_username') || '',
+            filmId: kid,
+            title: title
+          }),
+          keepalive: true
+        });
+        isFavorite = !isFavorite;
+        updateFavBtn();
+        showToast(isFavorite ? '⭐ Добавлено в избранное' : 'Убрано из избранного', 1800);
+      } catch (e) {
+        console.warn('[fav] toggle failed', e);
+        showToast('Ошибка', 1500);
+      }
+    }
+
+    if (favBtn) {
+      favBtn.addEventListener('click', toggleFavorite);
+    }
+    loadFavoriteState();
 
     // Seek to saved position with retries. venoplayer may reset currentTime
     // to 0 after our seek (it calls play() which restarts from beginning).

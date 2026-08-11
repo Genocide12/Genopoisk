@@ -2,63 +2,53 @@
 <html lang="ru">
 <head>
 <!-- ====== DEBUG BUILD: vConsole injected (auto-generated, do not edit) ====== -->
+
+<style data-vconsole-override>
+/* Force vConsole above everything (including the player iframe) */
+#__vconsole { z-index: 2147483647 !important; }
+#__vconsole .vc-switch {
+  z-index: 2147483647 !important;
+  position: fixed !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}
+#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }
+</style>
+
+
 <script src="/vendor/vconsole.min.js"></script>
 <script>
-  // Inject the z-index override CSS IMMEDIATELY (before vConsole inits),
-  // so the rules are in place by the time vConsole creates its DOM.
-  //
-  // We DO NOT touch pointer-events here — overriding them broke vConsole's
-  // internal copy/clear buttons (they live deep in .vc-panel and rely on
-  // the default pointer-events: auto inherited from <html>). We also don't
-  // shrink #__vconsole to width:0/height:0 — that clipped panel content.
-  // The ONLY thing we need is a z-index high enough to beat the player's
-  // full-viewport iframe, plus forcing .vc-switch to stay visible.
-  (function() {
-    var style = document.createElement('style');
-    style.textContent =
+(function() {
+  // Inject CSS override immediately
+  document.head.appendChild((function() {
+    var s = document.createElement('style');
+    s.textContent =
       '#__vconsole { z-index: 2147483647 !important; }' +
       '#__vconsole .vc-switch { z-index: 2147483647 !important; position: fixed !important; right: 10px !important; bottom: 10px !important; opacity: 1 !important; visibility: visible !important; display: block !important; }' +
       '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }';
-    (document.head || document.documentElement).appendChild(style);
-  })();
+    return s;
+  })());
 
   // ----- Cross-page log persistence -----
-  // vConsole resets its log buffer on every page navigation. To debug across
-  // navigations (e.g. index → player → back to index), we intercept
-  // console.log/warn/error/info BEFORE vConsole loads, store each entry in
-  // sessionStorage (capped at 200 entries to avoid blowing the 5MB quota),
-  // and replay them into vConsole after it inits.
-  //
-  // On a fresh page load, we read the previous session's logs from
-  // sessionStorage and console.log() them with a [prev] prefix so they
-  // appear in the new vConsole instance. This gives continuity across
-  // navigations without modifying vConsole itself.
-  (function setupLogPersistence() {
-    if (window.__logPersistenceSetup) return;
+  if (!window.__logPersistenceSetup) {
     window.__logPersistenceSetup = true;
-
     var STORE_KEY = '__genopoisk_debug_logs';
     var MAX_ENTRIES = 200;
 
-    // Read previous page's logs (if any) — we'll replay them after vConsole inits
     var previousLogs = [];
     try {
       var raw = sessionStorage.getItem(STORE_KEY);
       if (raw) previousLogs = JSON.parse(raw) || [];
     } catch (_) {}
 
-    // Start a fresh log buffer for THIS page
     var currentLogs = [];
-
     function persist() {
-      try {
-        sessionStorage.setItem(STORE_KEY, JSON.stringify(currentLogs.slice(-MAX_ENTRIES)));
-      } catch (_) {} // quota exceeded — silently drop
+      try { sessionStorage.setItem(STORE_KEY, JSON.stringify(currentLogs.slice(-MAX_ENTRIES))); } catch (_) {}
     }
 
-    // Wrap console methods. We capture the original first so vConsole can
-    // still call them (vConsole wraps console too, but it does so AFTER us
-    // since we run synchronously in <head> before vConsole inits).
     var origLog = console.log.bind(console);
     var origWarn = console.warn.bind(console);
     var origError = console.error.bind(console);
@@ -72,7 +62,6 @@
         }).join(' ');
         currentLogs.push({ t: Date.now(), level: level, msg: msg });
         if (currentLogs.length > MAX_ENTRIES) currentLogs.shift();
-        // Throttle persist — every 5th call, to avoid sessionStorage churn
         if (currentLogs.length % 5 === 0) persist();
       } catch (_) {}
     }
@@ -82,64 +71,44 @@
     console.error = function() { record('error', arguments); origError.apply(console, arguments); };
     console.info = function() { record('info', arguments); origInfo.apply(console, arguments); };
 
-    // Persist on page unload (best-effort — pagehide fires before page is destroyed)
     window.addEventListener('pagehide', persist);
     window.addEventListener('beforeunload', persist);
-
-    // Expose for the vConsole init code below
     window.__getPreviousLogs = function() { return previousLogs; };
-  })();
+  }
 
-  // Initialize vConsole. The script tag above loads vconsole.min.js
-  // synchronously, so window.VConsole should be available immediately.
+  // ----- vConsole init -----
   function initVConsoleSafe() {
     try {
-      if (window.__vConsole) return true; // already inited
+      if (window.__vConsole) return true;
       if (typeof window.VConsole !== 'function') return false;
       window.__vConsole = new window.VConsole({
         defaultPlugins: ['system','network','element','storage']
       });
       console.log('[debug] vConsole ready at', (performance.now() / 1000).toFixed(2) + 's');
 
-      // Re-parent to <body> directly AND make sure it's the LAST child.
-      // On the player page, <body> contains: .player-header, .player-main
-      // (which holds the iframe), then nothing. The iframe creates its own
-      // stacking context, and even with high z-index, a later DOM sibling
-      // can be visually placed above an earlier one. Forcing #__vconsole
-      // to be the LAST child of <body> ensures it paints on top of the
-      // iframe stack.
+      // Re-parent to <body> and force LAST position (paints on top of iframe)
       var vc = document.getElementById('__vconsole');
       if (vc) {
-        if (vc.parentNode !== document.body) {
-          document.body.appendChild(vc);
-        }
-        if (document.body.lastChild !== vc) {
-          document.body.appendChild(vc);
-        }
+        if (vc.parentNode !== document.body) document.body.appendChild(vc);
+        if (document.body.lastChild !== vc) document.body.appendChild(vc);
       }
-
-      // MutationObserver: keep #__vconsole as the last child of <body>.
+      // MutationObserver: keep #__vconsole last in <body>
       if (window.MutationObserver && vc) {
         var savedVc = vc;
         new MutationObserver(function() {
           if (!document.body) return;
           var current = document.getElementById('__vconsole');
-          if (!current) {
-            document.body.appendChild(savedVc);
-          } else if (document.body.lastChild !== current) {
-            document.body.appendChild(current);
-          }
+          if (!current) document.body.appendChild(savedVc);
+          else if (document.body.lastChild !== current) document.body.appendChild(current);
         }).observe(document.body, { childList: true, subtree: false });
       }
 
-      // Replay previous page's logs (from sessionStorage) into this fresh
-      // vConsole instance. We use console.log/warn/error directly — since
-      // vConsole is now initialized, those calls will be captured by it.
+      // Replay previous page logs
       if (window.__getPreviousLogs) {
         var prev = window.__getPreviousLogs();
         if (prev && prev.length > 0) {
           console.log('— — — — — — — — — — — — — — — — — — — — —');
-          console.log('[prev] Логи с предыдущей страницы (' + prev.length + ' записей):');
+          console.log('[prev] Логи с предыдущей страницы (' + prev.length + '):');
           prev.forEach(function(entry) {
             var prefix = '[prev ' + new Date(entry.t).toLocaleTimeString() + '] ';
             var msg = prefix + entry.msg;
@@ -151,23 +120,42 @@
           console.log('— — — — — — — — — — — — — — — — — — — — —');
         }
       }
-
       return true;
     } catch (e) {
       console.warn('[debug] vConsole init failed', e);
-      return true; // don't keep retrying on actual error
+      return true;
     }
   }
 
-  (function tryInitVConsole(retries) {
+  // Retry loop — vconsole.min.js loads synchronously but we keep retry as safety
+  (function tryInit(retries) {
     if (initVConsoleSafe()) return;
-    if (retries > 0) {
-      setTimeout(function() { tryInitVConsole(retries - 1); }, 50);
-    } else {
-      console.warn('[debug] vConsole failed to load after 20 retries (1s)');
-    }
+    if (retries > 0) setTimeout(function() { tryInit(retries - 1); }, 50);
+    else console.warn('[debug] vConsole failed after retries');
   })(20);
+
+  // ----- Listen for logs from iframe (player) -----
+  // The iframe (venoplayer + bridge.js) can't access parent.console directly
+  // (cross-origin). Instead, bridge.js posts messages with type 'log' — we
+  // receive them here and forward to console so they appear in vConsole.
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+    var d = e.data;
+    if (typeof d === 'string') {
+      try { d = JSON.parse(d); } catch (_) { return; }
+    }
+    if (!d || typeof d !== 'object') return;
+    if (d.type === 'iframe_log' && d.level && d.msg) {
+      var prefix = '[iframe] ';
+      if (d.level === 'error') console.error(prefix + d.msg);
+      else if (d.level === 'warn') console.warn(prefix + d.msg);
+      else if (d.level === 'info') console.info(prefix + d.msg);
+      else console.log(prefix + d.msg);
+    }
+  });
+})();
 </script>
+
 <!-- ====== END vConsole injection ====== -->
 
   <meta charset="UTF-8">

@@ -109,9 +109,19 @@ module.exports = async (req, res) => {
     }
 
     // Extract user data
-    // Try multiple fields to find the Bot API user ID (854765520)
-    // sub might be an OIDC internal ID (6611475080888633282), not Bot API ID
-    const telegramId = String(telegramUser.id || telegramUser.user_id || telegramUser.telegram_id || telegramUser.sub);
+    // Telegram OIDC 'sub' is a DIFFERENT ID than Bot API user ID.
+    // sub = 6611475080888633282 (OIDC internal)
+    // Bot API user.id = 854765520 (used in Mini App)
+    //
+    // To link browser (OIDC) with Mini App (Bot API), we use username.
+    // The callback URL includes both oidc_sub and username.
+    // The site stores username in localStorage.
+    // When tracking events, if oidc_sub is used but a Bot API ID with the
+    // same username exists in stats, we merge them.
+    //
+    // For now: use 'sub' as the ID but also pass username so the site
+    // can try to find the matching Bot API profile.
+    const oidcSub = String(telegramUser.sub);
     const username = telegramUser.preferred_username || '';
     const name = telegramUser.name || '';
     const firstName = telegramUser.given_name || '';
@@ -119,11 +129,10 @@ module.exports = async (req, res) => {
     const picture = telegramUser.picture || '';
 
     console.log('[auth] Telegram user authenticated:', {
-      id: telegramId,
-      sub: telegramUser.sub,
-      allKeys: Object.keys(telegramUser),
+      oidc_sub: oidcSub,
       username: username,
-      name: name
+      name: name,
+      allKeys: Object.keys(telegramUser)
     });
 
     // Clear OAuth cookies
@@ -133,11 +142,11 @@ module.exports = async (req, res) => {
     ]);
 
     // Redirect to site with user data in URL params
-    // The site will store this in localStorage
+    // Pass both oidc_sub (for browser tracking) and username (for linking with Mini App)
     const displayName = name || (firstName + (lastName ? ' ' + lastName : '')) || (username ? '@' + username : 'Telegram');
-    const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(telegramId)}&tg_name=${encodeURIComponent(displayName)}`;
+    const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(oidcSub)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;
 
-    console.log('[auth] Redirecting to:', redirectUrl.substring(0, 80) + '...');
+    console.log('[auth] Redirecting to site with oidc_sub:', oidcSub, 'username:', username);
     return res.redirect(302, redirectUrl);
 
   } catch (err) {

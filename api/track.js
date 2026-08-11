@@ -1,5 +1,5 @@
 // Tracking endpoint — receives events from the site
-const { recordEvent } = require('./_lib/stats');
+const { recordEvent, readStats } = require('./_lib/stats');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
 
@@ -101,6 +101,26 @@ module.exports = async (req, res) => {
       } else if (body.userId) {
         userId = String(body.userId);
       }
+    }
+
+    // If this is an OIDC sub (long number, not Bot API ID), try to find
+    // matching Bot API user by username and use that ID instead.
+    // This links browser (OIDC) and Mini App (Bot API) profiles.
+    // Check both username from initData AND from body.username (localStorage)
+    const linkUsername = username || body.username || '';
+    if (userId && userId.length > 12 && linkUsername) {
+      try {
+        const stats = await readStats();
+        for (const [uid, u] of Object.entries(stats.users || {})) {
+          if (u && (u.username === linkUsername || u.username === '@' + linkUsername) && uid.length <= 12) {
+            // Found Bot API user with same username → use Bot API ID
+            console.log('[track] Linked OIDC sub to Bot API ID:', userId, '→', uid, 'via username:', linkUsername);
+            userId = uid;
+            if (!username) username = u.username;
+            break;
+          }
+        }
+      } catch (_) {}
     }
 
     const payload = {

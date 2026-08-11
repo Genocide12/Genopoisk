@@ -248,13 +248,14 @@
     const telegramLogin = urlParams.get('telegram_login');
     const tgIdFromUrl = urlParams.get('tg_id');
     const tgNameFromUrl = urlParams.get('tg_name');
-    const loginError = urlParams.get('telegram_login');
+    const tgUsernameFromUrl = urlParams.get('tg_username');
 
     if (telegramLogin === 'success' && tgIdFromUrl) {
       // OAuth success — store user data
       localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
       if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
-      console.log('[tg] OIDC login successful, TG ID:', tgIdFromUrl);
+      if (tgUsernameFromUrl) localStorage.setItem('genopoisk_tg_username', tgUsernameFromUrl);
+      console.log('[tg] OIDC login successful, TG ID:', tgIdFromUrl, 'username:', tgUsernameFromUrl);
       // Clean URL
       history.replaceState(null, '', window.location.pathname);
       window.location.reload();
@@ -287,6 +288,7 @@
     // --- Tracking ---
     async function trackEvent(type, payload = {}) {
       try {
+        const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
         await fetch('/api/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -294,6 +296,7 @@
             type,
             initData: tgInitData,
             userId: browserUserId, // fallback for browser users
+            username: tgUsername, // for OIDC-to-BotAPI linking
             ...payload
           })
         });

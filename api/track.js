@@ -48,7 +48,7 @@ module.exports = async (req, res) => {
     let telegramId = null;
     let username = null;
 
-    // 1. Mini App: validate initData → Bot API user.id (TRUSTED)
+    // 1. Mini App: validate initData → Bot API user.id
     if (body.initData) {
       const validatedUser = validateInitData(body.initData, process.env.TG_BOT_TOKEN);
       if (validatedUser) {
@@ -57,28 +57,37 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 2. Browser user with username: find existing user by username
+    // 2. Browser: try to find existing user by username
     if (!telegramId && body.username) {
       const existingUser = await getUserByUsername(body.username);
       if (existingUser) {
-        // Found existing user (Mini App created it) → use their telegram_id
         telegramId = existingUser.telegram_id;
         console.log('[track] Linked by username:', body.username, '→', telegramId);
       } else if (body.userId) {
-        // No existing user → CREATE one with body.userId as telegram_id
-        // This handles browser-first users (OIDC login before Mini App)
+        // No existing user → create with body.userId (OIDC sub)
         telegramId = String(body.userId);
         username = body.username;
-        console.log('[track] Creating new user:', telegramId, 'username:', username);
+        await upsertUser(telegramId, { username, ip, last_seen: new Date().toISOString() });
+        console.log('[track] Created new user:', telegramId, username);
       }
     }
 
-    // 3. If still no telegramId → SKIP (guest, no username, no userId)
+    // 3. Mini App: also check if user with same username exists with different ID
+    // If yes → use existing ID (merge profiles)
+    if (telegramId && username) {
+      const existingUser = await getUserByUsername(username);
+      if (existingUser && existingUser.telegram_id !== telegramId) {
+        console.log('[track] Merging:', telegramId, '→', existingUser.telegram_id, '(same username:', username, ')');
+        telegramId = existingUser.telegram_id;
+      }
+    }
+
+    // 4. If still no telegramId → SKIP (guest)
     if (!telegramId) {
       return res.status(200).json({ ok: true, skipped: true });
     }
 
-    // Record event in Supabase
+    // Record event
     await recordEvent(telegramId, type, {
       username: username || undefined,
       ip: ip || undefined,

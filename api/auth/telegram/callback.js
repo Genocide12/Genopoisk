@@ -141,25 +141,46 @@ module.exports = async (req, res) => {
       'tg_oauth_verifier=; Max-Age=0; Path=/; HttpOnly'
     ]);
 
-    // Create/update user in Supabase DIRECTLY (not waiting for track.js)
-    const { upsertUser } = require('../../_lib/supabase');
+    // Create/update user in Supabase DIRECTLY
+    const { upsertUser, getUserByUsername, getUser } = require('../../_lib/supabase');
     const displayName = name || (firstName + (lastName ? ' ' + lastName : '')) || (username ? '@' + username : 'Telegram');
+    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : null;
     
+    // KEY: Check if user with same username already exists (from Mini App or previous OIDC)
+    // If yes → use THAT telegram_id (don't create new with oidcSub)
+    // If no → create new with oidcSub
+    let finalTelegramId = oidcSub;
     try {
-      await upsertUser(oidcSub, {
-        username: username || null,
-        ip: req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : null,
-        last_seen: new Date().toISOString()
-      });
-      console.log('[auth] User created/updated in Supabase:', oidcSub, username);
+      const existingUser = await getUserByUsername(username);
+      if (existingUser) {
+        // User already exists (from Mini App with Bot API ID, or previous OIDC)
+        // Use their existing telegram_id — DON'T create a new one
+        finalTelegramId = existingUser.telegram_id;
+        console.log('[auth] Found existing user by username:', username, '→ telegram_id:', finalTelegramId);
+        
+        // Update last_seen and IP
+        await upsertUser(finalTelegramId, {
+          username: username || null,
+          ip: clientIp,
+          last_seen: new Date().toISOString()
+        });
+      } else {
+        // No existing user → create new with oidcSub
+        await upsertUser(oidcSub, {
+          username: username || null,
+          ip: clientIp,
+          last_seen: new Date().toISOString()
+        });
+        console.log('[auth] Created new user:', oidcSub, username);
+      }
     } catch (e) {
-      console.error('[auth] Supabase upsert failed:', e.message);
+      console.error('[auth] Supabase error:', e.message);
     }
 
-    // Redirect to site with user data
-    const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(oidcSub)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;
+    // Redirect to site — pass finalTelegramId (could be oidcSub or existing Bot API ID)
+    const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(finalTelegramId)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;
 
-    console.log('[auth] Redirecting to site:', oidcSub, username);
+    console.log('[auth] Redirecting to site:', finalTelegramId, username);
     return res.redirect(302, redirectUrl);
 
   } catch (err) {

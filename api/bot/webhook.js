@@ -54,7 +54,8 @@ function mainMenuKeyboard() {
         { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
       ],
       [
-        { text: '🧹 Очистить статистику', callback_data: 'menu_clear' }
+        { text: '🧹 Очистить статистику', callback_data: 'menu_clear' },
+        { text: '❓ Помощь', callback_data: 'menu_help' }
       ],
       [{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]
     ]
@@ -199,10 +200,17 @@ function buildUserHelpText() {
 
 async function cmdHelp(chatId, user) {
   if (isAdmin(user.id)) {
+    // Admin sees BOTH admin command reference AND user-facing help
     const text = `<b>🛠 Админ-панель Genopoisk</b>
 
 Используйте кнопки под сообщениями для навигации. Команды:
-/stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear`;
+/stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear
+
+— — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+
+<i>Ниже — справка, которую видят обычные пользователи при нажатии «❓ Помощь»:</i>
+
+` + buildUserHelpText();
     await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard() });
     return;
   }
@@ -703,12 +711,19 @@ async function handleCallback(update) {
     // Help section — available to regular users
     if (data === 'menu_help') {
       if (isAdmin(fromId)) {
-        // Admin help: short technical reference
-        const text = `<b>🛠 Админ-панель Genopoisk</b>
+        // Admin sees BOTH admin command reference AND the user-facing help
+        // text (so admin knows what users see when they press Help).
+        const adminHelp = `<b>🛠 Админ-панель Genopoisk</b>
 
 Используйте кнопки под сообщениями для навигации. Команды:
-/stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear`;
-        await edit(text, mainMenuKeyboard());
+/stats, /users, /status, /logs, /redeploy, /user &lt;id&gt;, /broadcast &lt;текст&gt;, /clear
+
+— — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+
+<i>Ниже — справка, которую видят обычные пользователи при нажатии «❓ Помощь»:</i>
+
+` + buildUserHelpText();
+        await edit(adminHelp, mainMenuKeyboard());
       } else {
         // Regular user — full feature guide
         await edit(buildUserHelpText(), userMenuKeyboard());
@@ -996,6 +1011,28 @@ async function handleCallback(update) {
 }
 
 // ---- Lambda entrypoint ----
+// One-time bot command registration. Sets the command list that users see
+// when they type '/' in the chat. Uses an in-memory flag so we only call
+// setMyCommands once per cold start (avoid spamming the Telegram API on
+// every request). Set to false again to force a refresh on next request.
+let commandsRegistered = false;
+async function registerBotCommands() {
+  if (commandsRegistered) return;
+  commandsRegistered = true; // set early to prevent concurrent calls
+  try {
+    await tg('setMyCommands', {
+      commands: [
+        { command: 'start', description: 'Открыть главное меню' },
+        { command: 'help', description: 'Помощь по боту и приложению' }
+      ]
+    });
+    console.log('[bot] Commands registered: /start, /help');
+  } catch (e) {
+    console.warn('[bot] setMyCommands failed (will retry next request):', e.message);
+    commandsRegistered = false; // allow retry
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(200).json({
@@ -1004,6 +1041,14 @@ module.exports = async (req, res) => {
       endpoints: ['/api/bot/webhook (POST from Telegram)']
     });
   }
+
+  // Register bot command list (only /start and /help) on first request after
+  // cold start. This removes legacy commands (/stats, /users, /status, /logs,
+  // /redeploy, /user, /broadcast, /clear) that were previously registered
+  // via BotFather and cluttered the '/' autocomplete menu.
+  // Admin-only commands are still handled if typed manually, they're just
+  // not advertised in the autocomplete.
+  await registerBotCommands();
 
   const update = req.body;
   console.log('TG update:', JSON.stringify(update).slice(0, 500));

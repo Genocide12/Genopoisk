@@ -6,24 +6,92 @@
 <script>
   // Inject the z-index override CSS IMMEDIATELY (before vConsole inits),
   // so the rules are in place by the time vConsole creates its DOM.
+  //
+  // We DO NOT touch pointer-events here — overriding them broke vConsole's
+  // internal copy/clear buttons (they live deep in .vc-panel and rely on
+  // the default pointer-events: auto inherited from <html>). We also don't
+  // shrink #__vconsole to width:0/height:0 — that clipped panel content.
+  // The ONLY thing we need is a z-index high enough to beat the player's
+  // full-viewport iframe, plus forcing .vc-switch to stay visible.
   (function() {
     var style = document.createElement('style');
     style.textContent =
-      // The #__vconsole root must be the topmost element on the page.
-      // position:fixed + max int32 z-index + pointer-events:none (children
-      // re-enable pointer events) ensures it floats above EVERYTHING,
-      // including the player's full-viewport iframe which otherwise creates
-      // its own stacking context and covers parent fixed elements.
-      '#__vconsole { z-index: 2147483647 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important; pointer-events: none !important; }' +
-      '#__vconsole > * { pointer-events: auto !important; }' +
-      '#__vconsole .vc-switch { z-index: 2147483647 !important; position: fixed !important; right: 10px !important; bottom: 10px !important; opacity: 1 !important; visibility: visible !important; display: block !important; pointer-events: auto !important; }' +
+      '#__vconsole { z-index: 2147483647 !important; }' +
+      '#__vconsole .vc-switch { z-index: 2147483647 !important; position: fixed !important; right: 10px !important; bottom: 10px !important; opacity: 1 !important; visibility: visible !important; display: block !important; }' +
       '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }';
     (document.head || document.documentElement).appendChild(style);
   })();
 
+  // ----- Cross-page log persistence -----
+  // vConsole resets its log buffer on every page navigation. To debug across
+  // navigations (e.g. index → player → back to index), we intercept
+  // console.log/warn/error/info BEFORE vConsole loads, store each entry in
+  // sessionStorage (capped at 200 entries to avoid blowing the 5MB quota),
+  // and replay them into vConsole after it inits.
+  //
+  // On a fresh page load, we read the previous session's logs from
+  // sessionStorage and console.log() them with a [prev] prefix so they
+  // appear in the new vConsole instance. This gives continuity across
+  // navigations without modifying vConsole itself.
+  (function setupLogPersistence() {
+    if (window.__logPersistenceSetup) return;
+    window.__logPersistenceSetup = true;
+
+    var STORE_KEY = '__genopoisk_debug_logs';
+    var MAX_ENTRIES = 200;
+
+    // Read previous page's logs (if any) — we'll replay them after vConsole inits
+    var previousLogs = [];
+    try {
+      var raw = sessionStorage.getItem(STORE_KEY);
+      if (raw) previousLogs = JSON.parse(raw) || [];
+    } catch (_) {}
+
+    // Start a fresh log buffer for THIS page
+    var currentLogs = [];
+
+    function persist() {
+      try {
+        sessionStorage.setItem(STORE_KEY, JSON.stringify(currentLogs.slice(-MAX_ENTRIES)));
+      } catch (_) {} // quota exceeded — silently drop
+    }
+
+    // Wrap console methods. We capture the original first so vConsole can
+    // still call them (vConsole wraps console too, but it does so AFTER us
+    // since we run synchronously in <head> before vConsole inits).
+    var origLog = console.log.bind(console);
+    var origWarn = console.warn.bind(console);
+    var origError = console.error.bind(console);
+    var origInfo = console.info.bind(console);
+
+    function record(level, args) {
+      try {
+        var msg = Array.prototype.map.call(args, function(a) {
+          if (typeof a === 'string') return a;
+          try { return JSON.stringify(a); } catch (_) { return String(a); }
+        }).join(' ');
+        currentLogs.push({ t: Date.now(), level: level, msg: msg });
+        if (currentLogs.length > MAX_ENTRIES) currentLogs.shift();
+        // Throttle persist — every 5th call, to avoid sessionStorage churn
+        if (currentLogs.length % 5 === 0) persist();
+      } catch (_) {}
+    }
+
+    console.log = function() { record('log', arguments); origLog.apply(console, arguments); };
+    console.warn = function() { record('warn', arguments); origWarn.apply(console, arguments); };
+    console.error = function() { record('error', arguments); origError.apply(console, arguments); };
+    console.info = function() { record('info', arguments); origInfo.apply(console, arguments); };
+
+    // Persist on page unload (best-effort — pagehide fires before page is destroyed)
+    window.addEventListener('pagehide', persist);
+    window.addEventListener('beforeunload', persist);
+
+    // Expose for the vConsole init code below
+    window.__getPreviousLogs = function() { return previousLogs; };
+  })();
+
   // Initialize vConsole. The script tag above loads vconsole.min.js
   // synchronously, so window.VConsole should be available immediately.
-  // We still use a retry loop as a safety net for slow parser edge cases.
   function initVConsoleSafe() {
     try {
       if (window.__vConsole) return true; // already inited
@@ -37,23 +105,20 @@
       // On the player page, <body> contains: .player-header, .player-main
       // (which holds the iframe), then nothing. The iframe creates its own
       // stacking context, and even with high z-index, a later DOM sibling
-      // can be visually placed above an earlier one in some browsers when
-      // both are positioned. Forcing #__vconsole to be the LAST child of
-      // <body> ensures it paints on top of the iframe stack.
+      // can be visually placed above an earlier one. Forcing #__vconsole
+      // to be the LAST child of <body> ensures it paints on top of the
+      // iframe stack.
       var vc = document.getElementById('__vconsole');
       if (vc) {
         if (vc.parentNode !== document.body) {
           document.body.appendChild(vc);
         }
-        // Move to end of body (last child = painted last = on top)
         if (document.body.lastChild !== vc) {
           document.body.appendChild(vc);
         }
       }
 
-      // MutationObserver: if anything removes #__vconsole from <body>, OR
-      // if any new sibling is added after it (pushing it out of last
-      // position), re-append it to the end. This keeps vConsole on top.
+      // MutationObserver: keep #__vconsole as the last child of <body>.
       if (window.MutationObserver && vc) {
         var savedVc = vc;
         new MutationObserver(function() {
@@ -66,6 +131,27 @@
           }
         }).observe(document.body, { childList: true, subtree: false });
       }
+
+      // Replay previous page's logs (from sessionStorage) into this fresh
+      // vConsole instance. We use console.log/warn/error directly — since
+      // vConsole is now initialized, those calls will be captured by it.
+      if (window.__getPreviousLogs) {
+        var prev = window.__getPreviousLogs();
+        if (prev && prev.length > 0) {
+          console.log('— — — — — — — — — — — — — — — — — — — — —');
+          console.log('[prev] Логи с предыдущей страницы (' + prev.length + ' записей):');
+          prev.forEach(function(entry) {
+            var prefix = '[prev ' + new Date(entry.t).toLocaleTimeString() + '] ';
+            var msg = prefix + entry.msg;
+            if (entry.level === 'error') console.error(msg);
+            else if (entry.level === 'warn') console.warn(msg);
+            else if (entry.level === 'info') console.info(msg);
+            else console.log(msg);
+          });
+          console.log('— — — — — — — — — — — — — — — — — — — — —');
+        }
+      }
+
       return true;
     } catch (e) {
       console.warn('[debug] vConsole init failed', e);

@@ -75,18 +75,19 @@ function deployMenuKeyboard() {
 
 function usersListKeyboard(users, page) {
   const pageSize = 8;
-  const allEntries = users.map((u, i) => [u.telegram_id || u.id, u]).sort((a, b) => {
-    const aT = new Date(a[1].last_seen || 0).getTime();
-    const bT = new Date(b[1].last_seen || 0).getTime();
+  const userArray = Array.isArray(users) ? users : [];
+  const sorted = userArray.slice().sort((a, b) => {
+    const aT = new Date(a.last_seen || 0).getTime();
+    const bT = new Date(b.last_seen || 0).getTime();
     return bT - aT;
   });
-  const totalPages = Math.max(1, Math.ceil(allEntries.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const curPage = Math.min(Math.max(0, page), totalPages - 1);
-  const entries = allEntries.slice(curPage * pageSize, (curPage + 1) * pageSize);
+  const entries = sorted.slice(curPage * pageSize, (curPage + 1) * pageSize);
 
-  const buttons = entries.map(([id, u]) => [{
-    text: `👤 ${u.username ? '@' + u.username : (u.ip || id)} →`,
-    callback_data: `user_${id}`
+  const buttons = entries.map((u) => [{
+    text: `👤 ${u.username ? '@' + u.username : (u.ip || u.telegram_id || '?')} →`,
+    callback_data: `user_${u.telegram_id || u.id}`
   }]);
 
   const navRow = [];
@@ -191,6 +192,13 @@ async function buildStatsText() {
 
 <b>Аудитория:</b>
    Всего пользователей: <b>${totalUsers}</b>`;
+}
+
+// ---- Users list view ----
+async function buildUsersListText() {
+  const allUsers = await getAllUsers();
+  const count = allUsers.length;
+  return `👥 <b>Пользователи</b> (всего ${count})\n\nВыберите пользователя для просмотра профиля:`;
 }
 
 // ---- User profile view ----
@@ -318,17 +326,16 @@ async function cmdBroadcast(chatId, user, text) {
     return;
   }
   const allUsers = await getAllUsers();
-  const userIds = Object.keys(allUsers || []);
-  if (userIds.length === 0) {
+  if (allUsers.length === 0) {
     await sendMessage(chatId, 'Нет пользователей для рассылки.');
     return;
   }
   let sent = 0;
   let failed = 0;
-  await sendMessage(chatId, `📢 Рассылка ${userIds.length} пользователям...`);
-  for (const uid of userIds) {
+  await sendMessage(chatId, `📢 Рассылка ${allUsers.length} пользователям...`);
+  for (const u of allUsers) {
     try {
-      await sendMessage(Number(uid), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
+      await sendMessage(Number(u.telegram_id), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
       sent++;
     } catch (e) {
       failed++;

@@ -106,7 +106,9 @@ module.exports = async (req, res) => {
     }
 
     // Extract user data
-    const telegramId = String(telegramUser.sub || telegramUser.id);
+    // IMPORTANT: Use telegramUser.id (Bot API user ID, same as Mini App)
+    // NOT telegramUser.sub (OIDC internal subject, different number)
+    const telegramId = String(telegramUser.id || telegramUser.sub);
     const username = telegramUser.preferred_username || '';
     const name = telegramUser.name || '';
     const firstName = telegramUser.given_name || '';
@@ -115,6 +117,7 @@ module.exports = async (req, res) => {
 
     console.log('[auth] Telegram user authenticated:', {
       id: telegramId,
+      sub: telegramUser.sub,
       username: username,
       name: name
     });

@@ -91,15 +91,16 @@ module.exports = async (req, res) => {
     // so user history is preserved regardless of network/IP changes.
     if (userId === 'anon') {
       if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
-        // Browser user — check if we can merge with a TG user that has the same IP.
-        // This handles the case where user first opened in browser (got web_ ID),
-        // then opened in Telegram (got TG ID). We link them by IP.
         userId = String(body.userId);
         const ua = req.headers['user-agent'] || 'unknown';
         const deviceName = getDeviceName(ua);
         username = deviceName + ' (браузер)';
       } else if (body.userId) {
         userId = String(body.userId);
+        // For OIDC users: use username from body (stored in localStorage)
+        if (body.username) {
+          username = body.username;
+        }
       }
     }
 

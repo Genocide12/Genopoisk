@@ -276,6 +276,30 @@
 
     checkTgLoginBar();
 
+    // --- Check if user still exists in stats (after "logout all devices") ---
+    // If not, clear localStorage and reload to show login bar
+    async function checkAuth() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (!tgId) return; // not logged in
+      if (tg && tg.initData) return; // Mini App — always authenticated
+      try {
+        const res = await fetch('/api/user-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: tgId, initData: tgInitData })
+        });
+        const data = await res.json();
+        if (data.reauth) {
+          console.log('[auth] User not found in stats, clearing localStorage');
+          localStorage.removeItem('genopoisk_tg_user_id');
+          localStorage.removeItem('genopoisk_tg_user_name');
+          localStorage.removeItem('genopoisk_tg_username');
+          window.location.reload();
+        }
+      } catch (e) { console.warn('[auth] check failed:', e); }
+    }
+    checkAuth();
+
     // Retry TG init after window load (async script may load late)
     window.addEventListener('load', function() {
       if (!tg) {
@@ -361,10 +385,12 @@
     resumeCard.addEventListener('click', async (e) => {
       if (e.target === resumeClose) return;
       if (resumeFilm) {
+        const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
         const payload = JSON.stringify({
           type: 'movies_opened',
           initData: tgInitData,
           userId: browserUserId,
+          username: tgUsername,
           filmId: resumeFilm.filmId,
           title: resumeFilm.title
         });
@@ -549,12 +575,12 @@
 
     async function openPlayer(filmId, title) {
       // Send track event reliably before navigating.
-      // fetch with keepalive:true survives navigation (modern alternative to sendBeacon)
-      // and is parsed correctly by Vercel body parser (unlike Blob in sendBeacon).
+      const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
       const payload = JSON.stringify({
         type: 'movies_opened',
         initData: tgInitData,
         userId: browserUserId,
+        username: tgUsername,
         filmId: filmId,
         title: title
       });

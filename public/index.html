@@ -335,6 +335,14 @@
       checkAuth();
     }
 
+    // Periodic auth check — picks up "logout all devices" within ~2 minutes
+    // for already-open tabs without requiring a manual page reload.
+    // Only runs in browser context (Mini App initData is always authenticated).
+    setInterval(function() {
+      if (tg && tg.initData) return; // skip Mini App
+      checkAuth();
+    }, 120000);
+
     // --- Tracking ---
     // tgInitData is read DYNAMICALLY each time (not cached)
     function getTgInitData() {

@@ -536,7 +536,7 @@ async function handleCallback(update) {
       await edit(text, {
         inline_keyboard: [
           [{ text: '🚪 Выйти со всех устройств', callback_data: 'clear_sessions' }],
-          [{ text: '🧹 Очистить всю статистику', callback_data: 'clear_confirm' }],
+          [{ text: '🧹 Очистить всю статистику', callback_data: 'clear_stats_prompt' }],
           [{ text: '⬅️ Назад', callback_data: 'menu_main' }]
         ]
       });
@@ -555,10 +555,22 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'clear_sessions_confirm') {
-      
+
       // Keep totals but clear all users
       await deleteAllUsers();
       await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard());
+      return;
+    }
+    if (data === 'clear_stats_prompt') {
+      const text = `🧹 <b>Очистить всю статистику?</b>\n\nБудут удалены безвозвратно:\n• Все пользователи\n• История просмотров\n• Оценки фильмов\n• IP-адреса и события\n\nЭто действие нельзя отменить.`;
+      await edit(text, {
+        inline_keyboard: [
+          [
+            { text: '✅ Да, удалить всё', callback_data: 'clear_confirm' },
+            { text: '❌ Отмена', callback_data: 'menu_clear' }
+          ]
+        ]
+      });
       return;
     }
     if (data === 'clear_confirm') {

@@ -1,6 +1,6 @@
 // Telegram bot webhook handler
 const { isAdmin, sendMessage, editMessage, answerCallback, tg } = require('../_lib/telegram');
-const { readStats, writeStats, recordEvent, readUser } = require('../_lib/stats');
+const { getAllUsers, getUser, deleteUser, deleteAllUsers, recordEvent, rateFilm } = require('../_lib/supabase');
 const {
   getProjectInfo,
   getLatestDeployments,
@@ -75,7 +75,7 @@ function deployMenuKeyboard() {
 
 function usersListKeyboard(users, page) {
   const pageSize = 8;
-  const allEntries = Object.entries(users).sort((a, b) => {
+  const allEntries = users.map((u, i) => [u.telegram_id || u.id, u]).sort((a, b) => {
     const aT = new Date(a[1].last_seen || 0).getTime();
     const bT = new Date(b[1].last_seen || 0).getTime();
     return bT - aT;
@@ -161,146 +161,66 @@ async function cmdHelp(chatId, user) {
 
 // ---- Stats view ----
 async function buildStatsText() {
-  const stats = await readStats();
-  const totals = stats.totals || {};
-  const users = stats.users || {};
-  const daily = stats.daily || {};
+  const users = await getAllUsers();
+  const totalUsers = users.length;
+  let totalViews = 0, totalSearches = 0, totalMovies = 0, totalBotStarts = 0, totalRatings = 0;
+  
+  for (const u of users) {
+    const ebt = u.events_by_type || {};
+    totalViews += ebt.page_views || 0;
+    totalSearches += ebt.searches || 0;
+    totalMovies += ebt.movies_opened || 0;
+    totalBotStarts += ebt.bot_starts || 0;
+    totalRatings += (u.rated_films || []).length;
+  }
+
   const today = new Date().toISOString().slice(0, 10);
-  const todayStats = daily[today] || {};
-
-  const activeUsers7d = Object.values(users).filter(u => {
-    if (!u.last_seen) return false;
-    const age = Date.now() - new Date(u.last_seen).getTime();
-    return age < 7 * 24 * 60 * 60 * 1000;
-  }).length;
-
-  const last7days = Object.entries(daily)
-    .filter(([d]) => {
-      const date = new Date(d);
-      const age = Date.now() - date.getTime();
-      return age < 7 * 24 * 60 * 60 * 1000 && age >= 0;
-    })
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([d, s]) => `   ${d}: 👁${s.page_views||0} 🔍${s.searches||0} 🎬${s.movies_opened||0} 👤${s.unique_users||0}`)
-    .join('\n');
+  const todayUsers = users.filter(u => u.last_seen && u.last_seen.startsWith(today)).length;
 
   return `📊 <b>Статистика Genopoisk</b>
 
 <b>Всего:</b>
-   👁 Просмотры: <b>${totals.page_views || 0}</b>
-   🔍 Поиски: <b>${totals.searches || 0}</b>
-   🎬 Фильмов открыто: <b>${totals.movies_opened || 0}</b>
-   ⭐ Оценено фильмов: <b>${totals.ratings || 0}</b>
-   🤖 Запусков бота: <b>${totals.bot_starts || 0}</b>
+   👁 Просмотры: <b>${totalViews}</b>
+   🔍 Поиски: <b>${totalSearches}</b>
+   🎬 Фильмов открыто: <b>${totalMovies}</b>
+   ⭐ Оценено фильмов: <b>${totalRatings}</b>
+   🤖 Запусков бота: <b>${totalBotStarts}</b>
 
-<b>Сегодня (${today}):</b>
-   👁 ${todayStats.page_views || 0} • 🔍 ${todayStats.searches || 0} • 🎬 ${todayStats.movies_opened || 0}
-   👥 Уникальных: ${todayStats.unique_users || 0}
+<b>Сегодня:</b>
+   👥 Уникальных: ${todayUsers}
 
 <b>Аудитория:</b>
-   Всего: <b>${Object.keys(users).length}</b>
-   Активны 7д: <b>${activeUsers7d}</b>
-
-<b>7 дней:</b>
-${last7days || '   (нет данных)'}
-
-🕐 ${stats.last_updated ? new Date(stats.last_updated).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : 'никогда'}`;
-}
-
-// ---- Users list view ----
-async function buildUsersListText() {
-  const stats = await readStats();
-  const users = stats.users || {};
-  const count = Object.keys(users).length;
-  return `👥 <b>Пользователи</b> (всего ${count})
-
-Выберите пользователя для просмотра профиля:`;
+   Всего пользователей: <b>${totalUsers}</b>`;
 }
 
 // ---- User profile view ----
 async function buildUserProfileText(targetId) {
-  const u = await readUser(targetId);
+  const u = await getUser(targetId);
   if (!u) {
-    return { text: `❌ Пользователь <code>${escapeHtml(targetId)}</code> не найден.`, hasLastFilm: false };
+    return { text: `❌ Пользователь не найден.`, hasLastFilm: false };
   }
-
   const ebt = u.events_by_type || {};
-  const first = u.first_seen ? new Date(u.first_seen).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '?';
-  const last = u.last_seen ? new Date(u.last_seen).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '?';
-
-  const ipHistory = (u.ip_history || []).slice(0, 10).join('\n   • ') || '—';
-
-  // All watched films (not just last) — no dates, just title + rating
+  const first = u.first_seen ? new Date(u.first_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
+  const last = u.last_seen ? new Date(u.last_seen).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "?";
+  const ipHistory = (u.ip_history || []).slice(0, 10).join("\n   • ") || "—";
   const watchedFilms = u.watched_films || (u.last_film ? [u.last_film] : []);
-  let filmsText = '—';
+  let filmsText = "—";
   if (watchedFilms.length > 0) {
     filmsText = watchedFilms.slice(0, 15).map(function(f, i) {
-      var rating = f.rating ? ' ⭐' + f.rating : '';
-      return (i + 1) + '. «' + escapeHtml(f.title) + '»' + rating;
-    }).join('\n   ');
-    if (watchedFilms.length > 15) filmsText += '\n   ... и ещё ' + (watchedFilms.length - 15);
+      var rating = f.rating ? " ⭐" + f.rating : "";
+      return (i + 1) + ". «" + escapeHtml(f.title) + "»" + rating;
+    }).join("\n   ");
+    if (watchedFilms.length > 15) filmsText += "\n   ... и ещё " + (watchedFilms.length - 15);
   }
-
-  // Determine platform from user ID — show just "браузер" or "Telegram"
-  let platform = 'Telegram';
-  if (targetId.startsWith('web_')) {
-    platform = 'браузер';
-  }
-
-  const text = `👤 <b>Профиль пользователя</b>
-
-<b>ID:</b> <code>${escapeHtml(u.id)}</code>
-<b>Username:</b> ${u.username ? escapeHtml(u.username) : '—'}
-<b>Платформа:</b> ${platform}
-<b>Текущий IP:</b> <code>${u.ip || '—'}</code>
-
-<b>История IP:</b>
-   • ${ipHistory}
-
-<b>Активность:</b>
-   🔍 Поиски: ${ebt.searches || 0}
-   🎬 Фильмов открыто: ${ebt.movies_opened || 0}
-   ⭐ Оценено фильмов: ${(u.rated_films || []).length}
-   🤖 Запусков бота: ${ebt.bot_starts || 0}
-
-<b>Просмотренные фильмы (${watchedFilms.length}):</b>
-   ${filmsText}
-
-<b>Первый визит:</b> ${first}
-<b>Последний визит:</b> ${last}`;
-
-  return { text, hasLastFilm: !!u.last_film, watchedFilmsCount: watchedFilms.length };
-}
-
-// ---- Visits view ----
-async function buildVisitsText() {
-  const stats = await readStats();
-  const events = stats.recent_events || [];
-  if (events.length === 0) return '📭 <b>Пока нет событий.</b>';
-
-  const lines = events.slice(0, 20).map(e => {
-    const emoji = {
-      page_views: '👁',
-      searches: '🔍',
-      movies_opened: '🎬',
-      categories_opened: '🔥',
-      bot_starts: '🤖'
-    }[e.type] || '•';
-    const time = new Date(e.ts).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
-    let extra = '';
-    if (e.query) extra = ` "${e.query}"`;
-    else if (e.title) extra = ` "${String(e.title).slice(0, 30)}"`;
-    else if (e.category) extra = ` [${e.category}]`;
-    const ipStr = e.ip ? ` @${e.ip}` : '';
-    return `${emoji} ${time}${extra}${ipStr}`;
-  }).join('\n');
-
-  return `📋 <b>Последние события</b>\n\n${lines}`;
+  let platform = "Telegram";
+  if (targetId.startsWith("web_")) platform = "браузер";
+  const text = `👤 <b>Профиль пользователя</b>\n\n<b>ID:</b> <code>${escapeHtml(u.telegram_id || u.id)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Платформа:</b> ${platform}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>История IP:</b>\n   • ${ipHistory}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   🤖 Запусков бота: ${ebt.bot_starts || 0}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+  return { text, hasLastFilm: !!u.last_film };
 }
 
 // ---- My films view (films watched by the user who clicked the button) ----
 async function buildMyFilmsText(targetUserId) {
-  const u = await readUser(targetUserId);
+  const u = await getUser(targetUserId);
   if (!u) {
     return { text: `❌ Пользователь <code>${targetUserId}</code> не найден.`, films: [] };
   }
@@ -397,8 +317,8 @@ async function cmdBroadcast(chatId, user, text) {
     await sendMessage(chatId, 'Использование: /broadcast &lt;текст сообщения&gt;');
     return;
   }
-  const stats = await readStats();
-  const userIds = Object.keys(stats.users || {});
+  const allUsers = await getAllUsers();
+  const userIds = Object.keys(allUsers || []);
   if (userIds.length === 0) {
     await sendMessage(chatId, 'Нет пользователей для рассылки.');
     return;
@@ -423,15 +343,7 @@ async function cmdClear(chatId, user) {
     await sendMessage(chatId, '⚠️ Доступ только для администратора.');
     return;
   }
-  const { writeStats } = require('../_lib/stats');
-  await writeStats({
-    version: 1,
-    totals: { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0 },
-    users: {},
-    daily: {},
-    recent_events: [],
-    last_updated: new Date().toISOString()
-  });
+      await deleteAllUsers();
   await sendMessage(chatId, '🧹 Статистика сброшена.', { reply_markup: mainMenuKeyboard() });
 }
 
@@ -464,17 +376,16 @@ async function handleMessage(update) {
   if (broadcastPending.get(String(user.id)) && isAdmin(user.id)) {
     broadcastPending.delete(String(user.id));
     const message = text;
-    const stats = await readStats();
-    const userIds = Object.keys(stats.users || {});
-    if (userIds.length === 0) {
+    const allUsers = await getAllUsers();
+    if (allUsers.length === 0) {
       await sendMessage(chatId, 'Нет пользователей для рассылки.', { reply_markup: mainMenuKeyboard() });
       return;
     }
     let sent = 0, failed = 0;
-    await sendMessage(chatId, `📢 Рассылка ${userIds.length} пользователям...`);
-    for (const uid of userIds) {
+    await sendMessage(chatId, `📢 Рассылка ${allUsers.length} пользователям...`);
+    for (const u of allUsers) {
       try {
-        await sendMessage(Number(uid), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
+        await sendMessage(Number(u.telegram_id), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
         sent++;
       } catch (e) { failed++; }
       await new Promise(r => setTimeout(r, 50));
@@ -490,8 +401,8 @@ async function handleMessage(update) {
   if (isAdmin(user.id)) {
     if (text.startsWith('/stats')) return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard() });
     if (text.startsWith('/users')) {
-      const stats = await readStats();
-      return sendMessage(chatId, await buildUsersListText(), { reply_markup: usersListKeyboard(stats.users || {}, 0) });
+      const allUsers = await getAllUsers();
+      return sendMessage(chatId, await buildUsersListText(), { reply_markup: usersListKeyboard(allUsers || [], 0) });
     }
     if (text.startsWith('/user')) return cmdUser(chatId, user, text);
     if (text.startsWith('/status')) return sendMessage(chatId, await buildStatusText(), { reply_markup: deployMenuKeyboard() });
@@ -574,8 +485,8 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'menu_users') {
-      const stats = await readStats();
-      await edit(await buildUsersListText(), usersListKeyboard(stats.users || {}, 0));
+      const allUsers = await getAllUsers();
+      await edit(await buildUsersListText(), usersListKeyboard(allUsers || [], 0));
       return;
     }
     if (data === 'menu_deploy') {
@@ -607,30 +518,14 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'clear_sessions_confirm') {
-      const { writeStats } = require('../_lib/stats');
-      const oldStats = await readStats();
+      
       // Keep totals but clear all users
-      await writeStats({
-        version: 1,
-        totals: { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0, ratings: 0 },
-        users: {},
-        daily: {},
-        recent_events: [],
-        last_updated: new Date().toISOString()
-      });
+      await deleteAllUsers();
       await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard());
       return;
     }
     if (data === 'clear_confirm') {
-      const { writeStats } = require('../_lib/stats');
-      await writeStats({
-        version: 1,
-        totals: { page_views: 0, searches: 0, movies_opened: 0, categories_opened: 0, bot_starts: 0, ratings: 0 },
-        users: {},
-        daily: {},
-        recent_events: [],
-        last_updated: new Date().toISOString()
-      });
+      await deleteAllUsers();
       await edit('✅ <b>Статистика очищена.</b>\n\nВсе данные удалены.', mainMenuKeyboard());
       return;
     }
@@ -691,14 +586,9 @@ async function handleCallback(update) {
     if (delConfirmMatch) {
       const targetId = delConfirmMatch[1];
       try {
-        const stats = await readStats();
-        if (stats.users && stats.users[targetId]) {
-          delete stats.users[targetId];
-          await writeStats(stats);
-          await edit('✅ Профиль <code>' + escapeHtml(targetId) + '</code> удалён.', usersListKeyboard(stats.users || {}, 0));
-        } else {
-          await edit('❌ Профиль не найден.', usersListKeyboard(stats.users || {}, 0));
-        }
+        await deleteUser(targetId);
+        const allUsers = await getAllUsers();
+        await edit('✅ Профиль <code>' + escapeHtml(targetId) + '</code> удалён.', usersListKeyboard(allUsers || [], 0));
       } catch (e) {
         await edit('❌ Ошибка: ' + escapeHtml(e.message), mainMenuKeyboard());
       }
@@ -709,8 +599,8 @@ async function handleCallback(update) {
     const pageMatch = data.match(/^users_(\d+)$/);
     if (pageMatch) {
       const page = parseInt(pageMatch[1], 10);
-      const stats = await readStats();
-      await edit(await buildUsersListText(), usersListKeyboard(stats.users || {}, page));
+      const allUsers = await getAllUsers();
+      await edit(await buildUsersListText(), usersListKeyboard(allUsers || [], page));
       return;
     }
 
@@ -756,39 +646,11 @@ async function handleCallback(update) {
         await answerCallback(cq.id, 'Фильм не найден');
         return;
       }
-      // Save rating to stats
+      // Save rating to Supabase
       try {
-        const stats = await readStats();
-        const userId = String(fromId);
-        if (stats.users && stats.users[userId]) {
-          if (!stats.users[userId].watched_films) stats.users[userId].watched_films = [];
-          var wf = stats.users[userId].watched_films;
-          for (var i = 0; i < wf.length; i++) {
-            if (wf[i].filmId === film.filmId) {
-              wf[i].rating = rating;
-              break;
-            }
-          }
-          if (!stats.users[userId].rated_films) stats.users[userId].rated_films = [];
-          // Remove old rating for this film if exists
-          stats.users[userId].rated_films = stats.users[userId].rated_films.filter(function(r) { return r.filmId !== film.filmId; });
-          stats.users[userId].rated_films.unshift({ filmId: film.filmId, title: film.title, rating: rating, ts: new Date().toISOString() });
-          // Update cache
-          film.rating = rating;
-          cacheMyFilms(fromId, films);
-          // Update totals
-          if (!stats.totals) stats.totals = {};
-          if (!stats.totals.ratings) stats.totals.ratings = 0;
-          // Count unique rated films
-          var ratedCount = 0;
-          for (var uid in stats.users) {
-            if (stats.users[uid] && stats.users[uid].rated_films) {
-              ratedCount += stats.users[uid].rated_films.length;
-            }
-          }
-          stats.totals.ratings = ratedCount;
-          await writeStats(stats);
-        }
+        await rateFilm(String(fromId), film.filmId, film.title, rating);
+        film.rating = rating;
+        cacheMyFilms(fromId, films);
       } catch (e) { console.error('Rate error:', e); }
       // Update the message with new rating
       var stars = '';

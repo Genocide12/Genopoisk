@@ -1,12 +1,8 @@
-// Check if user still exists in stats (after "logout all devices")
-// If not, tell the browser to clear localStorage and show login bar.
-const { readStats } = require('./_lib/stats');
+// Check if user still exists (after "logout all devices")
+const { getUser, getUserByUsername } = require('./_lib/supabase');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
@@ -14,29 +10,24 @@ module.exports = async (req, res) => {
     const userId = body.userId;
     const hasInitData = !!body.initData;
 
-    if (!userId) {
-      return res.status(200).json({ reauth: false });
+    if (!userId) return res.status(200).json({ reauth: false });
+    if (hasInitData) return res.status(200).json({ reauth: false }); // Mini App always auth'd
+
+    // Try by telegram_id first
+    let user = await getUser(userId);
+    
+    // Try by username if not found
+    if (!user && body.username) {
+      user = await getUserByUsername(body.username);
     }
 
-    // Mini App users (has initData) are always authenticated via Telegram
-    // — no need to reauth even if stats were cleared
-    if (hasInitData) {
-      return res.status(200).json({ reauth: false });
-    }
-
-    // Browser users: check if their stored ID still exists in stats
-    const stats = await readStats();
-    const userExists = stats.users && stats.users[userId];
-
-    if (!userExists) {
-      // User was deleted (logout all devices) → browser must reauth
+    if (!user) {
       console.log('[user-check] User not found, reauth required:', userId);
       return res.status(200).json({ reauth: true });
     }
 
     return res.status(200).json({ reauth: false });
   } catch (e) {
-    console.error('[user-check] error:', e);
     return res.status(200).json({ reauth: false });
   }
 };

@@ -1,12 +1,18 @@
-// Tracking endpoint — receives events from the site
-const { recordEvent, readStats } = require('./_lib/stats');
+// Tracking endpoint — uses Supabase, telegram_id as primary key
+const { getUser, recordEvent, getUserByUsername } = require('./_lib/supabase');
 const crypto = require('crypto');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
 
-// Validate Telegram Mini App initData server-side
-// Returns the REAL Bot API user ID (trusted)
-function validateAndExtractUser(initData, botToken) {
+function getClientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
+  if (req.headers['x-vercel-ip']) return String(req.headers['x-vercel-ip']);
+  return null;
+}
+
+function validateInitData(initData, botToken) {
   if (!initData || !botToken) return null;
   try {
     const params = new URLSearchParams(initData);
@@ -15,8 +21,7 @@ function validateAndExtractUser(initData, botToken) {
     params.delete('hash');
     const dataCheckString = Array.from(params.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
+      .map(([k, v]) => `${k}=${v}`).join('\n');
     const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
     const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
     if (calculatedHash !== hash) return null;
@@ -26,146 +31,63 @@ function validateAndExtractUser(initData, botToken) {
   } catch (e) { return null; }
 }
 
-function getClientIp(req) {
-  // Vercel sets these headers — x-forwarded-for contains client IP first
-  const xff = req.headers['x-forwarded-for'];
-  if (xff) {
-    const first = String(xff).split(',')[0].trim();
-    if (first) return first;
-  }
-  if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
-  if (req.headers['x-vercel-forwarded-for']) {
-    return String(req.headers['x-vercel-forwarded-for']).split(',')[0].trim();
-  }
-  if (req.headers['x-vercel-ip']) return String(req.headers['x-vercel-ip']);
-  return null;
-}
-
-// Extract human-readable device name from User-Agent
-function getDeviceName(ua) {
-  if (!ua) return 'Unknown';
-  // iOS
-  if (/iPhone/i.test(ua)) return 'iPhone';
-  if (/iPad/i.test(ua)) return 'iPad';
-  if (/iPod/i.test(ua)) return 'iPod';
-  // Android
-  if (/Android/i.test(ua)) {
-    if (/Mobile/i.test(ua)) return 'Android-Phone';
-    return 'Android-Tablet';
-  }
-  // Windows
-  if (/Windows NT 10/i.test(ua)) return 'Windows-10';
-  if (/Windows NT 6\.3/i.test(ua)) return 'Windows-8.1';
-  if (/Windows NT 6\.2/i.test(ua)) return 'Windows-8';
-  if (/Windows NT 6\.1/i.test(ua)) return 'Windows-7';
-  // Mac
-  if (/Mac OS X/i.test(ua)) return 'Mac';
-  // Linux
-  if (/Linux/i.test(ua)) return 'Linux';
-  // Browser
-  if (/Edg/i.test(ua)) return 'Edge';
-  if (/Chrome/i.test(ua)) return 'Chrome';
-  if (/Firefox/i.test(ua)) return 'Firefox';
-  if (/Safari/i.test(ua)) return 'Safari';
-  return 'Unknown';
-}
-
 module.exports = async (req, res) => {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const body = req.body || {};
     const type = body.type;
-    if (!ALLOWED_TYPES.includes(type)) {
-      return res.status(400).json({ error: 'Invalid event type', allowed: ALLOWED_TYPES });
-    }
+    if (!ALLOWED_TYPES.includes(type)) return res.status(400).json({ error: 'Invalid type' });
 
-    // Get user identifier — server-side validation
-    let userId = 'anon';
-    let username = null;
-    
-    // 1. Mini App: validate initData server-side (trusted)
-    if (body.initData) {
-      const botToken = process.env.TG_BOT_TOKEN;
-      const validatedUser = validateAndExtractUser(body.initData, botToken);
-      if (validatedUser) {
-        userId = String(validatedUser.id);  // Bot API user ID (trusted)
-        username = validatedUser.username || '';
-        console.log('[track] Mini App validated user:', userId, username);
-      }
-    }
-
-    // Capture client IP for per-user stats
     const ip = getClientIp(req);
+    let telegramId = null;
+    let username = null;
 
-    // Fallback for browser users
-    if (userId === 'anon') {
-      if (body.userId) {
-        userId = String(body.userId);
-      }
-      // Use username from body (localStorage) if available
-      if (body.username) {
-        username = body.username;
-      } else if (body.userId && typeof body.userId === 'string' && body.userId.startsWith('web_')) {
-        const ua = req.headers['user-agent'] || 'unknown';
-        username = getDeviceName(ua) + ' (браузер)';
+    // 1. Mini App: validate initData → get Bot API user.id
+    if (body.initData) {
+      const validatedUser = validateInitData(body.initData, process.env.TG_BOT_TOKEN);
+      if (validatedUser) {
+        telegramId = String(validatedUser.id);
+        username = validatedUser.username || '';
       }
     }
 
-    // LINKING: If this user has a username, try to find a Bot API user
-    // (short numeric ID) with the same username. Use that ID instead.
-    // This links browser (OIDC/web_) and Mini App (Bot API) profiles.
-    const linkUsername = username || body.username || '';
-    if (userId !== 'anon' && linkUsername) {
-      try {
-        const stats = await readStats();
-        for (const [uid, u] of Object.entries(stats.users || {})) {
-          if (!u || uid === userId) continue;
-          // Only link to Bot API users (short numeric IDs, not web_ or OIDC sub)
-          if (/^\d{1,12}$/.test(uid)) {
-            if (u.username === linkUsername || u.username === '@' + linkUsername ||
-                '@' + u.username === linkUsername) {
-              console.log('[track] Linked to Bot API ID:', userId, '→', uid, 'via username:', linkUsername);
-              userId = uid;
-              if (!username) username = u.username;
-              break;
-            }
-          }
-        }
-      } catch (_) {}
+    // 2. Browser OIDC: userId is OIDC sub, but we have username
+    //    → find Bot API user by username → use that telegramId
+    if (!telegramId && body.userId && body.username) {
+      const existingUser = await getUserByUsername(body.username);
+      if (existingUser) {
+        telegramId = existingUser.telegram_id;
+        console.log('[track] Linked by username:', body.username, '→', telegramId);
+      }
     }
 
-    // If no match found and still not Bot API ID, use body.username for display
-    if (userId !== 'anon' && !username && body.username) {
-      username = body.username;
+    // 3. If still no telegramId, use body.userId as-is (web_ or OIDC sub)
+    if (!telegramId && body.userId) {
+      telegramId = String(body.userId);
+      if (body.username) username = body.username;
     }
 
-    const payload = {
-      userId,
-      username,
-      ...(ip ? { ip } : {}),
-      ...(body.query ? { query: String(body.query).slice(0, 100) } : {}),
-      ...(body.title ? { title: String(body.title).slice(0, 100) } : {}),
-      ...(body.filmId ? { filmId: String(body.filmId).slice(0, 20) } : {}),
-      ...(body.category ? { category: String(body.category).slice(0, 20) } : {})
-    };
+    if (!telegramId) return res.status(200).json({ ok: true }); // skip if no ID
 
-    await recordEvent(type, payload);
+    // Record event in Supabase
+    await recordEvent(telegramId, type, {
+      username: username || undefined,
+      ip: ip || undefined,
+      filmId: body.filmId || undefined,
+      title: body.title || undefined,
+      query: body.query || undefined,
+      category: body.category || undefined,
+      path: body.path || undefined
+    });
 
     return res.status(200).json({ ok: true });
   } catch (e) {
-    console.error('Track error:', e);
+    console.error('[track] error:', e);
     return res.status(500).json({ error: e.message });
   }
 };

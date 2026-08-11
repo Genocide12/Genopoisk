@@ -92,6 +92,9 @@ module.exports = async (req, res) => {
     // Decode JWT payload (id_token)
     const telegramUser = decodeJwtPayload(tokens.id_token);
 
+    // Log ALL fields from JWT for debugging
+    console.log('[auth] Full JWT payload:', JSON.stringify(telegramUser));
+
     // Verify JWT claims
     if (telegramUser.iss !== 'https://oauth.telegram.org') {
       return res.redirect(302, '/?telegram_login=error&message=invalid_issuer');
@@ -106,9 +109,9 @@ module.exports = async (req, res) => {
     }
 
     // Extract user data
-    // IMPORTANT: Use telegramUser.id (Bot API user ID, same as Mini App)
-    // NOT telegramUser.sub (OIDC internal subject, different number)
-    const telegramId = String(telegramUser.id || telegramUser.sub);
+    // Try multiple fields to find the Bot API user ID (854765520)
+    // sub might be an OIDC internal ID (6611475080888633282), not Bot API ID
+    const telegramId = String(telegramUser.id || telegramUser.user_id || telegramUser.telegram_id || telegramUser.sub);
     const username = telegramUser.preferred_username || '';
     const name = telegramUser.name || '';
     const firstName = telegramUser.given_name || '';
@@ -118,6 +121,7 @@ module.exports = async (req, res) => {
     console.log('[auth] Telegram user authenticated:', {
       id: telegramId,
       sub: telegramUser.sub,
+      allKeys: Object.keys(telegramUser),
       username: username,
       name: name
     });

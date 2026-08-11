@@ -247,12 +247,11 @@
     const tgLoginBar = document.getElementById('tgLoginBar');
 
     function checkTgLoginBar() {
-      // In Mini App: tg exists and has initData → hide bar
-      // In browser with stored TG ID → hide bar
-      // In browser without TG ID → show bar
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
-      if (isInTelegram || storedTgId) {
+      const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
+      // Hide bar if: in Mini App, OR has stored TG ID, OR has stored username (OIDC logged in)
+      if (isInTelegram || storedTgId || storedTgUsername) {
         tgLoginBar.classList.remove('visible');
       } else {
         tgLoginBar.classList.add('visible');
@@ -295,17 +294,18 @@
     // --- Check if user still exists in stats (after "logout all devices") ---
     async function checkAuth() {
       const tgId = localStorage.getItem('genopoisk_tg_user_id');
-      if (!tgId) return;
+      const tgUsername = localStorage.getItem('genopoisk_tg_username');
+      if (!tgId && !tgUsername) return; // not logged in at all
       if (tg && tg.initData) return; // Mini App — always authenticated
       try {
         const res = await fetch('/api/user-check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: tgId, initData: getTgInitData() })
+          body: JSON.stringify({ userId: tgId, username: tgUsername, initData: getTgInitData() })
         });
         const data = await res.json();
         if (data.reauth) {
-          console.log('[auth] User not found in stats, clearing localStorage');
+          console.log('[auth] User not found, clearing localStorage');
           localStorage.removeItem('genopoisk_tg_user_id');
           localStorage.removeItem('genopoisk_tg_user_name');
           localStorage.removeItem('genopoisk_tg_username');

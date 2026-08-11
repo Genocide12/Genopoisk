@@ -8,21 +8,25 @@ module.exports = async (req, res) => {
   try {
     const body = req.body || {};
     const userId = body.userId;
+    const username = body.username;
     const hasInitData = !!body.initData;
 
-    if (!userId) return res.status(200).json({ reauth: false });
-    if (hasInitData) return res.status(200).json({ reauth: false }); // Mini App always auth'd
+    if (!userId && !username) return res.status(200).json({ reauth: false });
+    if (hasInitData) return res.status(200).json({ reauth: false });
 
-    // Try by telegram_id first
-    let user = await getUser(userId);
+    // Try by telegram_id
+    let user = null;
+    if (userId) user = await getUser(userId);
     
-    // Try by username if not found
-    if (!user && body.username) {
-      user = await getUserByUsername(body.username);
+    // Try by username
+    if (!user && username) user = await getUserByUsername(username);
+
+    // If user not found BUT has username → DON'T reauth (profile will be created on next track)
+    if (!user && username) {
+      return res.status(200).json({ reauth: false });
     }
 
     if (!user) {
-      console.log('[user-check] User not found, reauth required:', userId);
       return res.status(200).json({ reauth: true });
     }
 

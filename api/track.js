@@ -1,6 +1,6 @@
 // Tracking endpoint — Supabase, telegram_id as primary key
 // ONLY tracks authenticated users. No guest profiles.
-const { getUser, recordEvent, getUserByUsername } = require('./_lib/supabase');
+const { getUser, recordEvent, getUserByUsername, upsertUser } = require('./_lib/supabase');
 const crypto = require('crypto');
 
 const ALLOWED_TYPES = ['page_views', 'searches', 'movies_opened', 'categories_opened'];
@@ -57,21 +57,24 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 2. Browser user: try to find existing user by username
+    // 2. Browser user with username: find existing user by username
     if (!telegramId && body.username) {
       const existingUser = await getUserByUsername(body.username);
       if (existingUser) {
+        // Found existing user (Mini App created it) → use their telegram_id
         telegramId = existingUser.telegram_id;
         console.log('[track] Linked by username:', body.username, '→', telegramId);
+      } else if (body.userId) {
+        // No existing user → CREATE one with body.userId as telegram_id
+        // This handles browser-first users (OIDC login before Mini App)
+        telegramId = String(body.userId);
+        username = body.username;
+        console.log('[track] Creating new user:', telegramId, 'username:', username);
       }
-      // If not found → SKIP. Don't create a profile with OIDC sub or web_ ID.
-      // The user will be created when they open Mini App (with initData).
     }
 
-    // 3. If still no telegramId → SKIP event entirely.
-    // No guest profiles, no web_ profiles, no OIDC sub profiles.
+    // 3. If still no telegramId → SKIP (guest, no username, no userId)
     if (!telegramId) {
-      console.log('[track] Skipping event — no authenticated user. userId:', body.userId, 'username:', body.username);
       return res.status(200).json({ ok: true, skipped: true });
     }
 

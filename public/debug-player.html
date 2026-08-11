@@ -4,35 +4,83 @@
 <!-- ====== DEBUG BUILD: vConsole injected (auto-generated, do not edit) ====== -->
 <script src="/vendor/vconsole.min.js"></script>
 <script>
-  // Wait for vConsole to be available (script loaded synchronously above),
-  // then initialize. We use a small retry loop in case the script load
-  // happened out of order or window.VConsole isn't ready yet.
-  (function initVConsole(retries) {
-    if (typeof window.VConsole === 'function') {
-      try {
-        window.__vConsole = new window.VConsole({
-          defaultPlugins: ['system','network','element','storage']
-        });
-        console.log('[debug] vConsole ready');
-        // Force the vConsole switch button to be on top of EVERYTHING.
-        // vConsole uses #__vconsole as its root container with default
-        // z-index 10000 — but iframes and player overlays can cover it.
-        // We bump it to 2147483647 (max int32) to be safe.
-        var style = document.createElement('style');
-        style.textContent =
-          '#__vconsole, #__vconsole * { z-index: 2147483647 !important; }' +
-          '#__vconsole .vc-switch { z-index: 2147483647 !important; opacity: 1 !important; visibility: visible !important; }';
-        document.head.appendChild(style);
-      } catch (e) {
-        console.warn('[debug] vConsole init failed', e);
+  // Inject the z-index override CSS IMMEDIATELY (before vConsole inits),
+  // so the rules are in place by the time vConsole creates its DOM.
+  (function() {
+    var style = document.createElement('style');
+    style.textContent =
+      // The #__vconsole root must be the topmost element on the page.
+      // position:fixed + max int32 z-index + pointer-events:none (children
+      // re-enable pointer events) ensures it floats above EVERYTHING,
+      // including the player's full-viewport iframe which otherwise creates
+      // its own stacking context and covers parent fixed elements.
+      '#__vconsole { z-index: 2147483647 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 0 !important; height: 0 !important; overflow: visible !important; pointer-events: none !important; }' +
+      '#__vconsole > * { pointer-events: auto !important; }' +
+      '#__vconsole .vc-switch { z-index: 2147483647 !important; position: fixed !important; right: 10px !important; bottom: 10px !important; opacity: 1 !important; visibility: visible !important; display: block !important; pointer-events: auto !important; }' +
+      '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }';
+    (document.head || document.documentElement).appendChild(style);
+  })();
+
+  // Initialize vConsole. The script tag above loads vconsole.min.js
+  // synchronously, so window.VConsole should be available immediately.
+  // We still use a retry loop as a safety net for slow parser edge cases.
+  function initVConsoleSafe() {
+    try {
+      if (window.__vConsole) return true; // already inited
+      if (typeof window.VConsole !== 'function') return false;
+      window.__vConsole = new window.VConsole({
+        defaultPlugins: ['system','network','element','storage']
+      });
+      console.log('[debug] vConsole ready at', (performance.now() / 1000).toFixed(2) + 's');
+
+      // Re-parent to <body> directly AND make sure it's the LAST child.
+      // On the player page, <body> contains: .player-header, .player-main
+      // (which holds the iframe), then nothing. The iframe creates its own
+      // stacking context, and even with high z-index, a later DOM sibling
+      // can be visually placed above an earlier one in some browsers when
+      // both are positioned. Forcing #__vconsole to be the LAST child of
+      // <body> ensures it paints on top of the iframe stack.
+      var vc = document.getElementById('__vconsole');
+      if (vc) {
+        if (vc.parentNode !== document.body) {
+          document.body.appendChild(vc);
+        }
+        // Move to end of body (last child = painted last = on top)
+        if (document.body.lastChild !== vc) {
+          document.body.appendChild(vc);
+        }
       }
-    } else if (retries > 0) {
-      // Retry every 50ms up to 10 times (500ms total)
-      setTimeout(function() { initVConsole(retries - 1); }, 50);
-    } else {
-      console.warn('[debug] vConsole failed to load after 10 retries');
+
+      // MutationObserver: if anything removes #__vconsole from <body>, OR
+      // if any new sibling is added after it (pushing it out of last
+      // position), re-append it to the end. This keeps vConsole on top.
+      if (window.MutationObserver && vc) {
+        var savedVc = vc;
+        new MutationObserver(function() {
+          if (!document.body) return;
+          var current = document.getElementById('__vconsole');
+          if (!current) {
+            document.body.appendChild(savedVc);
+          } else if (document.body.lastChild !== current) {
+            document.body.appendChild(current);
+          }
+        }).observe(document.body, { childList: true, subtree: false });
+      }
+      return true;
+    } catch (e) {
+      console.warn('[debug] vConsole init failed', e);
+      return true; // don't keep retrying on actual error
     }
-  })(10);
+  }
+
+  (function tryInitVConsole(retries) {
+    if (initVConsoleSafe()) return;
+    if (retries > 0) {
+      setTimeout(function() { tryInitVConsole(retries - 1); }, 50);
+    } else {
+      console.warn('[debug] vConsole failed to load after 20 retries (1s)');
+    }
+  })(20);
 </script>
 <!-- ====== END vConsole injection ====== -->
 

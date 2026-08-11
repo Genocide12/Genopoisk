@@ -2,23 +2,37 @@
 <html lang="ru">
 <head>
 <!-- ====== DEBUG BUILD: vConsole injected (auto-generated, do not edit) ====== -->
+<script src="/vendor/vconsole.min.js"></script>
 <script>
-  // Load vConsole from CDN. If CDN is blocked, we still run the page —
-  // the worst case is just "no debug panel", not "page broken".
-  (function() {
-    var s = document.createElement('script');
-    s.src = 'https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js';
-    s.onload = function() {
+  // Wait for vConsole to be available (script loaded synchronously above),
+  // then initialize. We use a small retry loop in case the script load
+  // happened out of order or window.VConsole isn't ready yet.
+  (function initVConsole(retries) {
+    if (typeof window.VConsole === 'function') {
       try {
-        window.__vConsole = new window.VConsole({ defaultPlugins: ['system','network','element','storage'] });
+        window.__vConsole = new window.VConsole({
+          defaultPlugins: ['system','network','element','storage']
+        });
         console.log('[debug] vConsole ready');
-      } catch (e) { console.warn('[debug] vConsole init failed', e); }
-    };
-    s.onerror = function() { console.warn('[debug] vConsole CDN load failed'); };
-    // Insert synchronously into <head> BEFORE other scripts run, so we
-    // capture early console.log output.
-    (document.head || document.documentElement).appendChild(s);
-  })();
+        // Force the vConsole switch button to be on top of EVERYTHING.
+        // vConsole uses #__vconsole as its root container with default
+        // z-index 10000 — but iframes and player overlays can cover it.
+        // We bump it to 2147483647 (max int32) to be safe.
+        var style = document.createElement('style');
+        style.textContent =
+          '#__vconsole, #__vconsole * { z-index: 2147483647 !important; }' +
+          '#__vconsole .vc-switch { z-index: 2147483647 !important; opacity: 1 !important; visibility: visible !important; }';
+        document.head.appendChild(style);
+      } catch (e) {
+        console.warn('[debug] vConsole init failed', e);
+      }
+    } else if (retries > 0) {
+      // Retry every 50ms up to 10 times (500ms total)
+      setTimeout(function() { initVConsole(retries - 1); }, 50);
+    } else {
+      console.warn('[debug] vConsole failed to load after 10 retries');
+    }
+  })(10);
 </script>
 <!-- ====== END vConsole injection ====== -->
 

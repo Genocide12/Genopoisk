@@ -226,7 +226,22 @@
       }
       return id;
     }
-    const browserUserId = getBrowserUserId();
+    // DYNAMIC userId — re-reads localStorage EVERY TIME (not a const!)
+    // This fixes the core bug: telegram-web-app.js loads async and stores
+    // TG user ID in localStorage AFTER getBrowserUserId() was first called.
+    // With a const, all subsequent trackEvent calls used the old web_ ID.
+    function getUserId() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) return tgId;
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
+    }
 
     // --- Telegram OIDC Login ---
     const tgLoginBar = document.getElementById('tgLoginBar');
@@ -286,7 +301,7 @@
         const res = await fetch('/api/user-check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: tgId, initData: tgInitData })
+          body: JSON.stringify({ userId: tgId, initData: getTgInitData() })
         });
         const data = await res.json();
         if (data.reauth) {
@@ -321,6 +336,12 @@
     }
 
     // --- Tracking ---
+    // tgInitData is read DYNAMICALLY each time (not cached)
+    function getTgInitData() {
+      const t = window.Telegram && window.Telegram.WebApp;
+      return (t && t.initData) || '';
+    }
+
     async function trackEvent(type, payload = {}) {
       try {
         const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
@@ -329,9 +350,9 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type,
-            initData: tgInitData,
-            userId: browserUserId, // fallback for browser users
-            username: tgUsername, // for OIDC-to-BotAPI linking
+            initData: getTgInitData(),
+            userId: getUserId(),
+            username: tgUsername,
             ...payload
           })
         });
@@ -356,8 +377,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            initData: tgInitData,
-            userId: browserUserId // fallback for browser users
+            initData: getTgInitData(),
+            userId: getUserId() // fallback for browser users
           })
         });
         if (!res.ok) return;
@@ -399,8 +420,8 @@
         const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
         const payload = JSON.stringify({
           type: 'movies_opened',
-          initData: tgInitData,
-          userId: browserUserId,
+          initData: getTgInitData(),
+          userId: getUserId(),
           username: tgUsername,
           filmId: resumeFilm.filmId,
           title: resumeFilm.title
@@ -589,8 +610,8 @@
       const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
       const payload = JSON.stringify({
         type: 'movies_opened',
-        initData: tgInitData,
-        userId: browserUserId,
+        initData: getTgInitData(),
+        userId: getUserId(),
         username: tgUsername,
         filmId: filmId,
         title: title

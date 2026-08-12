@@ -147,6 +147,44 @@ async function cmdStart(chatId, user, text) {
     return;
   }
 
+  // /start app — user clicked "Открыть в Telegram" on the website.
+  // This is the welcome-message trigger: if the user has NEVER been seen
+  // by the bot before (no record in Supabase with their telegram_id), we
+  // send them a welcome message. Otherwise we just show the regular menu.
+  if (startParam === 'app' || startParam === 'from_site') {
+    const existingUser = await getUser(String(user.id));
+    const displayName = user.first_name
+      ? (user.first_name + (user.last_name ? ' ' + user.last_name : ''))
+      : ('@' + (user.username || 'Telegram'));
+
+    if (!existingUser) {
+      // FIRST-TIME USER — send welcome message
+      console.log('[bot] First-time user from website:', user.id, user.username);
+      const welcomeText = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\n` +
+        `Привет, ${displayName}! Вы перешли с сайта — отлично, что заглянули в бота.\n\n` +
+        `<b>Что умеет бот:</b>\n` +
+        `🎬 <b>Открыть Genopoisk</b> — запустить приложение прямо в Telegram\n` +
+        `🎬 <b>Мои фильмы</b> — история просмотренных фильмов + оценки ⭐\n` +
+        `❤️ <b>Избранное</b> — фильмы, которые вы сохранили в плеере\n` +
+        `❓ <b>Помощь</b> — подробная справка по сайту, боту и приложению\n\n` +
+        `Ваш профиль единый для всех устройств — сайт, бот, установленное приложение.\n` +
+        `Позиция просмотра синхронизируется автоматически.\n\n` +
+        `👇 Используйте кнопки ниже:`;
+      await sendMessage(chatId, welcomeText, { reply_markup: userMenuKeyboard() });
+      return;
+    }
+
+    // RETURNING USER — just show their menu (no welcome spam)
+    if (isAdmin(user.id)) {
+      const welcome = `🎬 <b>С возвращением!</b>\n\n🛠 <b>Админ-панель:</b>`;
+      await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard() });
+    } else {
+      const welcome = `🎬 <b>С возвращением в Genopoisk!</b>\n\n👇 Используйте кнопки ниже:`;
+      await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard() });
+    }
+    return;
+  }
+
   if (isAdmin(user.id)) {
     // ADMIN: welcome + full admin control panel
     const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.`;

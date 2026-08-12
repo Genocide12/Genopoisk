@@ -246,7 +246,6 @@ module.exports = async (req, res) => {
     }
 
     // 5) Final: upsert (create if new, update if existing)
-    let isNewUser = false;
     if (existingUser) {
       // Update existing record with oidc_sub + fresh IP/last_seen
       await updateUser(existingUser.telegram_id, {
@@ -257,10 +256,7 @@ module.exports = async (req, res) => {
       });
       console.log('[auth] Updated existing user:', existingUser.telegram_id);
     } else {
-      // Brand new user — this is the FIRST time they're logging in via the
-      // website. We'll send them a welcome message via the bot after we
-      // finish creating their record.
-      isNewUser = true;
+      // Brand new user
       await upsertUser(telegramId, {
         oidc_sub: oidcSub,
         username: username || null,
@@ -296,45 +292,11 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 7) Welcome message for first-time users.
-    //    If this is the user's first-ever login via the website, send them
-    //    a welcome message from the bot. This way, even if they never
-    //    opened @Genopoiskbot directly, they'll see there's a bot too.
-    //    We use the Bot API sendMessage directly with the user's telegram_id.
-    if (isNewUser) {
-      try {
-        const { sendMessage } = require('../../_lib/telegram');
-        const welcomeText = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\n` +
-          `Привет, ${displayName}! Вы впервые вошли на сайт через Telegram.\n\n` +
-          `<b>Что умеет бот:</b>\n` +
-          `🎬 <b>Открыть Genopoisk</b> — запустить приложение прямо в Telegram\n` +
-          `🎬 <b>Мои фильмы</b> — история просмотренных фильмов + оценки ⭐\n` +
-          `❤️ <b>Избранное</b> — фильмы, которые вы сохранили в плеере\n` +
-          `❓ <b>Помощь</b> — подробная справка по сайту, боту и приложению\n\n` +
-          `Ваш профиль единый для всех устройств — сайт, бот, установленное приложение.\n` +
-          `Позиция просмотра синхронизируется автоматически.\n\n` +
-          `👇 Используйте кнопки ниже:`;
-        const userMenuKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎬 Открыть Genopoisk', web_app: { url: process.env.SITE_URL || 'https://genopoisk.vercel.app' } }],
-            [
-              { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
-              { text: '❤️ Избранное', callback_data: 'menu_favorites' }
-            ],
-            [{ text: '❓ Помощь', callback_data: 'menu_help' }]
-          ]
-        };
-        await sendMessage(Number(telegramId), welcomeText, { reply_markup: userMenuKeyboard });
-        console.log('[auth] Welcome message sent to new user:', telegramId);
-      } catch (e) {
-        // Non-fatal — user may have blocked the bot, or never started it.
-        // Telegram returns 400 "chat not found" if user never pressed Start
-        // on @Genopoiskbot. We can't force-start a chat from server side —
-        // the user needs to press /start in the bot first. So we silently
-        // skip the welcome message in that case.
-        console.warn('[auth] Welcome message failed (user may not have started bot yet):', e.message);
-      }
-    }
+    // Note: welcome message is NOT sent here. It's sent when the user
+    // clicks 'Открыть в Telegram' on the website and lands in the bot
+    // with /start app (handled in api/bot/webhook.js cmdStart).
+    // This avoids the issue where we couldn't message users who hadn't
+    // pressed /start in the bot yet.
 
     // Redirect to site — pass telegramId (Bot API ID, same as Mini App uses)
     const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(telegramId)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;

@@ -112,14 +112,21 @@
 <body>
   <div class="container">
     <div class="tg-login-bar" id="tgLoginBar">
-      <a href="/api/auth/telegram/login" id="tgLoginBtn" style="background:#229ED9;color:#fff;padding:12px 28px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
-        Войти через Telegram
-      </a>
-      <a href="https://t.me/Genopoiskbot?start=from_site" target="_blank" rel="noopener" style="background:linear-gradient(135deg,#229ED9 0%,#2AABEE 100%);color:#fff;padding:12px 20px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;margin-left:8px;border:1px solid rgba(255,255,255,0.2);">
-        <span style="font-size:18px;">🤖</span>
-        Открыть бота
-      </a>
+      <!-- State A: not logged in — show only login button -->
+      <div class="tg-login-state" id="tgLoginStateLoggedOut">
+        <a href="/api/auth/telegram/login" id="tgLoginBtn" style="background:#229ED9;color:#fff;padding:12px 28px;border-radius:10px;font-size:16px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+          Войти через Telegram
+        </a>
+      </div>
+      <!-- State B: logged in — show "Open in Telegram" with close ✕ -->
+      <div class="tg-login-state" id="tgLoginStateLoggedIn" style="display:none;align-items:center;gap:10px;">
+        <a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener" style="background:linear-gradient(135deg,#229ED9 0%,#2AABEE 100%);color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,0.2);">
+          <span style="font-size:16px;">🤖</span>
+          Открыть в Telegram
+        </a>
+        <button id="tgLoginBarClose" title="Скрыть" style="background:rgba(255,255,255,0.15);border:none;color:var(--text-primary);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;-webkit-tap-highlight-color:transparent;">✕</button>
+      </div>
     </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
@@ -259,19 +266,54 @@
       return id;
     }
 
-    // --- Telegram OIDC Login ---
+    // --- Telegram OIDC Login bar ---
+    // Two states:
+    //   A) Not logged in → show "Войти через Telegram" (login button)
+    //   B) Logged in → show "Открыть в Telegram" (link to bot) + ✕ close button
+    // User can dismiss state B with ✕ — it remembers the dismissal in
+    // sessionStorage so it stays hidden during the browsing session.
+    // In Mini App (running inside Telegram already) the bar is hidden entirely.
     const tgLoginBar = document.getElementById('tgLoginBar');
+    const tgLoginStateLoggedOut = document.getElementById('tgLoginStateLoggedOut');
+    const tgLoginStateLoggedIn = document.getElementById('tgLoginStateLoggedIn');
+    const tgLoginBarCloseBtn = document.getElementById('tgLoginBarClose');
 
     function checkTgLoginBar() {
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
       const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
-      // Hide bar if: in Mini App, OR has stored TG ID, OR has stored username (OIDC logged in)
-      if (isInTelegram || storedTgId || storedTgUsername) {
+      const isLoggedIn = !!(storedTgId || storedTgUsername);
+
+      // In Mini App — hide entire bar (user is already in Telegram)
+      if (isInTelegram) {
+        tgLoginBar.classList.remove('visible');
+        return;
+      }
+
+      // Check if user dismissed the "Open in Telegram" bar this session
+      const dismissed = sessionStorage.getItem('genopoisk_tg_bar_dismissed') === '1';
+
+      if (!isLoggedIn) {
+        // State A: show login button
+        tgLoginStateLoggedOut.style.display = '';
+        tgLoginStateLoggedIn.style.display = 'none';
+        tgLoginBar.classList.add('visible');
+      } else if (dismissed) {
+        // User closed the bar this session — keep it hidden
         tgLoginBar.classList.remove('visible');
       } else {
+        // State B: show "Open in Telegram" + close button
+        tgLoginStateLoggedOut.style.display = 'none';
+        tgLoginStateLoggedIn.style.display = 'flex';
         tgLoginBar.classList.add('visible');
       }
+    }
+
+    if (tgLoginBarCloseBtn) {
+      tgLoginBarCloseBtn.addEventListener('click', function() {
+        sessionStorage.setItem('genopoisk_tg_bar_dismissed', '1');
+        tgLoginBar.classList.remove('visible');
+      });
     }
     // DON'T call checkTgLoginBar yet — wait for telegram-web-app.js to load
     // (it's async, so tg might be null on first run even in Mini App)

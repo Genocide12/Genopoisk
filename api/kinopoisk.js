@@ -83,8 +83,18 @@ function markKeyExhausted(key) {
 function isExhaustionStatus(status) {
   // 429 = Too Many Requests (rate limit)
   // 402 = Payment Required (subscription expired / quota exceeded)
-  // 403 = Forbidden (sometimes returned when key is invalid or quota hit)
-  return status === 429 || status === 402 || status === 403;
+  // NOTE: 403 is NOT treated as exhaustion anymore — Kinopoisk returns 403
+  // for two very different reasons:
+  //   1. Invalid/expired API key (should mark as exhausted)
+  //   2. Blocked IP (VPN, proxy, hosting provider) — the key is FINE, the
+  //      request just came from a blocked IP. Marking the key as exhausted
+  //      here would waste all our keys on a single VPN-user request.
+  // Since we can't reliably tell (1) from (2) from the status alone, we
+  // treat 403 as a transient error: return to client with a clear message,
+  // do NOT mark the key as exhausted. If the key is truly invalid, the
+  // same key will keep failing and the user will see repeated errors —
+  // that's a problem the admin needs to investigate manually.
+  return status === 429 || status === 402;
 }
 
 module.exports = async (req, res) => {
@@ -160,9 +170,23 @@ module.exports = async (req, res) => {
       }
 
       if (!upstream.ok) {
-        // Other errors (404, 500, etc.) — return to client, don't mark key
+        // Other errors (403, 404, 500, etc.) — return to client, don't mark key
         const text = await upstream.text();
         console.error(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
+
+        // For 403 specifically, return a clear user-facing message.
+        // 403 from Kinopoisk usually means the requester's IP is blocked
+        // (VPN, proxy, hosting provider on their blocklist) — the API key
+        // is fine, but Kinopoisk refuses to serve that IP.
+        if (upstream.status === 403) {
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          return res.status(403).json({
+            error: 'Kinopoisk API 403',
+            message: 'Кинопоиск заблокировал ваш IP. Отключите VPN и попробуйте снова.',
+            hint: 'disable_vpn'
+          });
+        }
+
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         return res.status(upstream.status).json({
           error: `Kinopoisk API ${upstream.status}`,

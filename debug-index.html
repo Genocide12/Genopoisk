@@ -300,6 +300,10 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
         Войти через Telegram
       </a>
+      <a href="https://t.me/Genopoiskbot?start=from_site" target="_blank" rel="noopener" style="background:linear-gradient(135deg,#229ED9 0%,#2AABEE 100%);color:#fff;padding:12px 20px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px;margin-left:8px;border:1px solid rgba(255,255,255,0.2);">
+        <span style="font-size:18px;">🤖</span>
+        Открыть бота
+      </a>
     </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
@@ -898,7 +902,16 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         const res = await fetch(url, {
           headers: { 'Content-Type': 'application/json' }
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        if (!res.ok) {
+          // Try to parse JSON error response — our backend returns helpful
+          // messages for known errors (e.g. 403 = VPN blocked).
+          let errData = null;
+          try { errData = await res.json(); } catch (_) {}
+          if (errData && errData.message) {
+            throw new Error(errData.message);
+          }
+          throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        }
         return await res.json();
       } catch (e) {
         console.error('API Error:', e);

@@ -46,7 +46,7 @@ function mainMenuKeyboard() {
         { text: '👥 Пользователи', callback_data: 'menu_users' }
       ],
       [
-        { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
+        { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
         { text: '🚀 Деплой', callback_data: 'menu_deploy' }
       ],
       [
@@ -119,9 +119,9 @@ function userProfileKeyboard(targetId, hasLastFilm) {
 function userMenuKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🎬 Открыть Genopoisk', web_app: { url: SITE_URL } }],
+      [{ text: '🎞️ Открыть Genopoisk', web_app: { url: SITE_URL } }],
       [
-        { text: '🎬 Мои фильмы', callback_data: 'menu_myfilms' },
+        { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
         { text: '❤️ Избранное', callback_data: 'menu_favorites' }
       ],
       [{ text: '❓ Помощь', callback_data: 'menu_help' }]
@@ -163,8 +163,8 @@ async function cmdStart(chatId, user, text) {
       const welcomeText = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\n` +
         `Привет, ${displayName}! Вы перешли с сайта — отлично, что заглянули в бота.\n\n` +
         `<b>Что умеет бот:</b>\n` +
-        `🎬 <b>Открыть Genopoisk</b> — запустить приложение прямо в Telegram\n` +
-        `🎬 <b>Мои фильмы</b> — история просмотренных фильмов + оценки ⭐\n` +
+        `🎞️ <b>Открыть Genopoisk</b> — запустить приложение прямо в Telegram\n` +
+        `📀 <b>Мои фильмы</b> — история просмотренных фильмов + оценки ⭐\n` +
         `❤️ <b>Избранное</b> — фильмы, которые вы сохранили в плеере\n` +
         `❓ <b>Помощь</b> — подробная справка по сайту, боту и приложению\n\n` +
         `Ваш профиль единый для всех устройств — сайт, бот, установленное приложение.\n` +
@@ -202,8 +202,8 @@ async function cmdStart(chatId, user, text) {
 function buildUserHelpText() {
   return `<b>❓ Помощь по Genopoisk</b>
 
-<b>🎬 Как смотреть фильмы</b>
-1. Нажмите «🎬 Открыть Genopoisk» — откроется приложение прямо в Telegram.
+<b>🎞️ Как смотреть фильмы</b>
+1. Нажмите «🎞️ Открыть Genopoisk» — откроется приложение прямо в Telegram.
 2. На главной введите название фильма в поиске или выберите категорию (Популярные, Топ 250, Новинки, Случайный).
 3. Нажмите на постер фильма — откроется плеер.
 4. В плеере используйте кнопки управления: пауза, перемотка, полноэкранный режим.
@@ -220,8 +220,8 @@ function buildUserHelpText() {
 <b>❤️ Избранное</b>
 В плеере нажмите ❤️ (или ☆ в шапке) — фильм добавится в избранное. Список избранных фильмов доступен в боте (кнопка «❤️ Избранное») и на сайте (карточка «❤️ Избранное» на главной).
 
-<b>🎬 Мои фильмы</b>
-История всех просмотренных фильмов. Откройте бота → «🎬 Мои фильмы». Можно оценить фильм звёздами ⭐ (от 1 до 5) и снова открыть плеер.
+<b>📀 Мои фильмы</b>
+История всех просмотренных фильмов. Откройте бота → «📀 Мои фильмы». Можно оценить фильм звёздами ⭐ (от 1 до 5) и снова открыть плеер.
 
 <b>🔐 Аккаунт</b>
 Вы входите автоматически через Telegram — никаких отдельных логинов и паролей. Ваш профиль единый для всех устройств: Mini App в Telegram, браузер, установленное приложение.
@@ -426,18 +426,18 @@ async function buildMyFilmsText(targetUserId) {
 
   if (!u) {
     // User hasn't done anything yet — no profile in Supabase.
-    return { text: `🎬 <b>Мои фильмы</b>\n\nИстория ещё не создана. Откройте фильм, чтобы он появился здесь.`, films: [] };
+    return { text: `📀 <b>Мои фильмы</b>\n\nИстория ещё не создана. Откройте фильм, чтобы он появился здесь.`, films: [] };
   }
   const films = u.watched_films || (u.last_film ? [u.last_film] : []);
   if (films.length === 0) {
-    return { text: `🎬 <b>Мои фильмы</b>\n\nВы ещё не смотрели фильмы.`, films: [] };
+    return { text: `📀 <b>Мои фильмы</b>\n\nВы ещё не смотрели фильмы.`, films: [] };
   }
   var lines = films.slice(0, 20).map(function(f, i) {
     var rating = f.rating ? ' ⭐' + f.rating : '';
     return (i + 1) + '. «' + escapeHtml(f.title) + '»' + rating;
   }).join('\n');
   return {
-    text: '🎬 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    text: '📀 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
     films: films
   };
 }
@@ -452,7 +452,7 @@ function myFilmsKeyboard(films, page) {
   // Use index in callback_data (short, ASCII-safe). Film titles are cached.
   var buttons = entries.map(function(f, i) {
     var idx = startIdx + i;
-    return [{ text: '🎬 ' + f.title.slice(0, 40), callback_data: 'myfilm_' + idx }];
+    return [{ text: '📀 ' + f.title.slice(0, 40), callback_data: 'myfilm_' + idx }];
   });
 
   var navRow = [];
@@ -742,7 +742,7 @@ async function handleCallback(update) {
         await edit(text, mainMenuKeyboard());
       } else {
         // Regular user — show their menu
-        const text = `🎬 <b>Genopoisk</b>\n\nВыберите раздел:`;
+        const text = `🎞️ <b>Genopoisk</b>\n\nВыберите раздел:`;
         await edit(text, userMenuKeyboard());
       }
       return;
@@ -1013,7 +1013,7 @@ async function handleCallback(update) {
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
       // EDIT existing message instead of sending new
-      await edit('🎬 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
+      await edit('📀 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         inline_keyboard: [
           [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
           starButtons,
@@ -1054,7 +1054,7 @@ async function handleCallback(update) {
       // Edit the last message (the one with film card)
       if (messageId) {
         try {
-          await editMessage(chatId, messageId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars + '\n\nНажмите "Смотреть", чтобы открыть плеер, или измените оценку:', {
+          await editMessage(chatId, messageId, '📀 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars + '\n\nНажмите "Смотреть", чтобы открыть плеер, или измените оценку:', {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
@@ -1065,7 +1065,7 @@ async function handleCallback(update) {
           });
         } catch (_) {
           // If edit fails (message not found), send new
-          await sendMessage(chatId, '🎬 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars, {
+          await sendMessage(chatId, '📀 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars, {
             reply_markup: {
               inline_keyboard: [
                 [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],

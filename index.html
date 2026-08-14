@@ -52,18 +52,6 @@
     /* Make room for the clear button when visible */
     .search-input{padding-right:44px;}
     .search-input:not(:placeholder-shown) ~ .search-clear{display:flex;}
-    /* Live search suggestions dropdown */
-    .search-suggest{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-secondary);border:1px solid var(--separator);border-radius:14px;max-height:380px;overflow-y:auto;z-index:100;display:none;box-shadow:0 12px 40px rgba(0,0,0,0.4);}
-    .search-suggest.visible{display:block;}
-    .suggest-item{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background 0.15s;border-bottom:1px solid var(--separator);}
-    .suggest-item:last-child{border-bottom:none;}
-    .suggest-item:hover,.suggest-item.active{background:var(--bg-tertiary);}
-    .suggest-poster{width:40px;height:56px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg-tertiary);}
-    .suggest-info{flex:1;min-width:0;}
-    .suggest-title{font-size:14px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .suggest-meta{font-size:12px;color:var(--text-secondary);margin-top:2px;}
-    .suggest-rating{font-size:13px;font-weight:700;color:#FFD60A;flex-shrink:0;}
-    .suggest-empty{padding:16px;text-align:center;color:var(--text-secondary);font-size:14px;}
     .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
     .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
     .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
@@ -158,7 +146,6 @@
         <span class="search-icon">🔍</span>
         <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" enterkeyhint="done" inputmode="search" />
         <button class="search-clear" id="searchClear" type="button" title="Очистить">✕</button>
-        <div class="search-suggest" id="searchSuggest"></div>
       </div>
     </div>
     <div class="actions">
@@ -994,9 +981,25 @@
       return null;
     }
 
+    // In-flight search request — if user types another character while the
+    // previous search is still loading, we abort it and start a new one.
+    // This prevents stale results from overwriting newer ones, and avoids
+    // wasting bandwidth on requests the user no longer cares about.
+    let currentSearchController = null;
+
     async function searchFilms(query) {
+      // Abort previous in-flight search
+      if (currentSearchController) {
+        try { currentSearchController.abort(); } catch (_) {}
+      }
+      currentSearchController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
-      return extractFilms(await apiGet(url));
+      try {
+        const data = await apiGet(url);
+        return extractFilms(data);
+      } finally {
+        currentSearchController = null;
+      }
     }
 
     function showLoader() {
@@ -1040,9 +1043,14 @@
         const poster = film.posterUrlPreview || film.posterUrl || '';
         const card = document.createElement('div');
         card.className = 'film-card';
-        card.style.animationDelay = `${index * 0.05}s`;
+        // Stagger animation delay only for first 10 cards (avoid huge delays
+        // on infinite scroll loads)
+        if (index < 10) card.style.animationDelay = `${index * 0.04}s`;
+        // Use loading="lazy" for off-screen posters — browser loads them
+        // only when scrolled into view, speeding up initial render.
+        // decoding="async" prevents poster decoding from blocking main thread.
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" onerror="this.style.opacity='0.3'">
+          <img src="${poster}" class="film-poster" alt="${title}" loading="lazy" decoding="async" onerror="this.style.opacity='0.3';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>'">
           <div class="film-info">
             <div class="film-title">${title}</div>
             <div class="film-meta">
@@ -1195,113 +1203,20 @@
       }
     }
 
-    // --- Live search suggestions (autocomplete dropdown) ---
-    // As the user types, fetch film suggestions and show them in a dropdown
-    // below the search input. Clicking a suggestion opens the player directly.
-    // This is SEPARATE from the full search (which fills the film grid) —
-    // suggestions appear instantly (300ms debounce) while the full search
-    // waits 500ms and replaces the grid.
-    const searchSuggestEl = document.getElementById('searchSuggest');
-    let suggestTimeout = null;
-    let suggestActiveIndex = -1;
-    let suggestCurrentItems = [];
+    // --- Search behavior ---
+    // When user types, search results REPLACE the category buttons (actions)
+    // instead of appearing in a separate dropdown. When search is cleared,
+    // categories reappear.
+    // 250ms debounce — fast enough to feel live, slow enough to avoid
+    // hammering the API on every keystroke.
+    const actionsEl = document.querySelector('.actions');
 
-    function showSuggestions(items) {
-      if (!searchSuggestEl) return;
-      suggestCurrentItems = items;
-      suggestActiveIndex = -1;
-      if (!items || items.length === 0) {
-        searchSuggestEl.innerHTML = '<div class="suggest-empty">Ничего не найдено</div>';
-        searchSuggestEl.classList.add('visible');
-        return;
-      }
-      searchSuggestEl.innerHTML = items.slice(0, 8).map(function(f, i) {
-        const title = escapeHtmlText(f.title || f.nameRu || f.nameEn || '?');
-        const year = f.year || '';
-        const rating = f.rating ? parseFloat(f.rating).toFixed(1) : '';
-        const poster = f.posterUrlPreview || f.posterUrl || '';
-        const meta = [year, f.genres ? f.genres.map(function(g){return g.genre;}).slice(0,2).join(', ') : ''].filter(Boolean).join(' · ');
-        return '<div class="suggest-item" data-idx="' + i + '" data-filmid="' + escapeHtmlText(String(f.filmId || f.kinopoiskId || '')) + '" data-title="' + title + '">' +
-                 (poster ? '<img class="suggest-poster" src="' + escapeHtmlText(poster) + '" loading="lazy" onerror="this.style.display=\'none\'">' : '<div class="suggest-poster"></div>') +
-                 '<div class="suggest-info"><div class="suggest-title">' + title + '</div>' +
-                 (meta ? '<div class="suggest-meta">' + escapeHtmlText(meta) + '</div>' : '') + '</div>' +
-                 (rating ? '<div class="suggest-rating">★ ' + rating + '</div>' : '') +
-               '</div>';
-      }).join('');
-      searchSuggestEl.classList.add('visible');
-      // Bind click on each suggestion
-      searchSuggestEl.querySelectorAll('.suggest-item').forEach(function(el) {
-        el.addEventListener('click', function() {
-          const fid = el.getAttribute('data-filmid');
-          const ft = el.getAttribute('data-title');
-          if (fid) {
-            trackEvent('movies_opened', { filmId: fid, title: ft });
-            window.location.href = 'player.html?id=' + encodeURIComponent(fid) + '&title=' + encodeURIComponent(ft);
-          }
-        });
-      });
+    function hideCategories() {
+      if (actionsEl) actionsEl.style.display = 'none';
     }
-
-    function hideSuggestions() {
-      if (!searchSuggestEl) return;
-      searchSuggestEl.classList.remove('visible');
-      searchSuggestEl.innerHTML = '';
-      suggestCurrentItems = [];
-      suggestActiveIndex = -1;
+    function showCategories() {
+      if (actionsEl) actionsEl.style.display = '';
     }
-
-    function escapeHtmlText(str) {
-      if (!str) return '';
-      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    }
-
-    // Fetch suggestions from Kinopoisk search-by-keyword API
-    async function fetchSuggestions(query) {
-      try {
-        const url = API_BASE + '/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(query) + '&page=1';
-        const data = await apiGet(url);
-        const films = extractFilms(data);
-        showSuggestions(films);
-      } catch (e) {
-        console.warn('[suggest] fetch failed:', e);
-        hideSuggestions();
-      }
-    }
-
-    // Keyboard navigation within suggestions (arrow up/down, Enter, Escape)
-    if (searchInput) {
-      searchInput.addEventListener('keydown', function(e) {
-        if (!searchSuggestEl || !searchSuggestEl.classList.contains('visible')) return;
-        const items = searchSuggestEl.querySelectorAll('.suggest-item');
-        if (items.length === 0) return;
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          suggestActiveIndex = Math.min(suggestActiveIndex + 1, items.length - 1);
-          items.forEach(function(el, i) { el.classList.toggle('active', i === suggestActiveIndex); });
-          items[suggestActiveIndex].scrollIntoView({ block: 'nearest' });
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          suggestActiveIndex = Math.max(suggestActiveIndex - 1, 0);
-          items.forEach(function(el, i) { el.classList.toggle('active', i === suggestActiveIndex); });
-          items[suggestActiveIndex].scrollIntoView({ block: 'nearest' });
-        } else if (e.key === 'Enter' && suggestActiveIndex >= 0) {
-          e.preventDefault();
-          const sel = items[suggestActiveIndex];
-          if (sel) sel.click();
-        } else if (e.key === 'Escape') {
-          hideSuggestions();
-          searchInput.blur();
-        }
-      });
-    }
-
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!searchSuggestEl) return;
-      if (!e.target.closest('.search-container')) {
-        hideSuggestions();
-      }
-    });
 
     let searchTimeout;
     // Clear button: clears the field AND dismisses the keyboard on mobile
@@ -1312,7 +1227,7 @@
       searchClearBtn.addEventListener('click', function() {
         searchInput.value = '';
         searchInput.blur(); // dismiss keyboard
-        hideSuggestions();
+        showCategories();
         if (currentCategory) {
           loadCategory(currentCategory);
         } else {
@@ -1330,21 +1245,19 @@
     });
     searchInput.addEventListener('input', function(e) {
       clearTimeout(searchTimeout);
-      clearTimeout(suggestTimeout);
       const val = e.target.value.trim();
       if (!val || val.length < 2) {
-        hideSuggestions();
+        // Too short — show categories again, hide grid
+        showCategories();
         if (!currentCategory) {
           content.classList.add('hidden');
           clearFilms();
         }
         return;
       }
-      // Live suggestions — 300ms debounce (faster than full search)
-      suggestTimeout = setTimeout(function() {
-        fetchSuggestions(val);
-      }, 300);
-      // Full grid search — 500ms debounce (slower, replaces grid)
+      // Search results replace the category buttons
+      hideCategories();
+      // 250ms debounce — fast live search feel
       searchTimeout = setTimeout(async () => {
         currentCategory = null;
         currentPage = 1;
@@ -1358,7 +1271,7 @@
         } catch (e) {
           showEmptyState('Ошибка поиска: ' + e.message);
         }
-      }, 500);
+      }, 250);
     });
 
     let scrollTimeout;

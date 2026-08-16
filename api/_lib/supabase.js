@@ -257,6 +257,44 @@ async function recordEvent(telegramId, eventType, data) {
     return;
   }
 
+  // rate — user rates a film 1-5 stars (from player.html end-of-film overlay
+  // or from the bot's 'Мои фильмы' star buttons). Updates watched_films[].rating
+  // and rated_films[] array. Does NOT increment events_count (rating is a
+  // one-time action, not a tracking event).
+  if (eventType === 'rate') {
+    const user = await getUser(telegramId);
+    if (!user) return;
+    if (!data.filmId) return;
+    const rating = Math.max(1, Math.min(5, parseInt(data.rating, 10) || 0));
+    if (rating < 1) return;
+
+    // Update watched_films — set rating on the matching film
+    const watched = (user.watched_films || []).map(f => {
+      if (String(f.filmId) === String(data.filmId)) {
+        return { ...f, rating: rating };
+      }
+      return f;
+    });
+
+    // Update rated_films — dedupe by filmId
+    const rated = (user.rated_films || []).filter(r => String(r.filmId) !== String(data.filmId));
+    rated.unshift({
+      filmId: String(data.filmId),
+      title: data.title || '',
+      rating: rating,
+      ts: nowIso
+    });
+    if (rated.length > 50) rated.pop();
+
+    await updateUser(telegramId, {
+      watched_films: watched,
+      rated_films: rated,
+      last_seen: nowIso
+    });
+    console.log('[supabase] Rating saved:', telegramId, '→ film', data.filmId, '→', rating, '⭐');
+    return;
+  }
+
   // favorite_added / favorite_removed
   if (eventType === 'favorite_added' || eventType === 'favorite_removed') {
     const user = await getUser(telegramId);

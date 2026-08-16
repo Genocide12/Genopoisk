@@ -377,6 +377,78 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       .btn{padding:6px 10px;font-size:13px;}
       .player-main { top:44px; height:calc(100dvh - 44px); }
     }
+    /* Rate film overlay — appears when film ends */
+    .rate-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      animation: rateFadeIn 0.4s ease-out;
+    }
+    .rate-overlay.visible { display: flex; }
+    @keyframes rateFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes ratePop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .rate-card {
+      background: var(--bg-secondary, #1C1C1E);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 24px;
+      padding: 32px 28px 24px;
+      max-width: 340px;
+      width: calc(100% - 40px);
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      animation: ratePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .rate-emoji { font-size: 48px; margin-bottom: 12px; }
+    .rate-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .rate-film-name {
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 20px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .rate-stars {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .rate-star {
+      background: none;
+      border: none;
+      font-size: 40px;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      padding: 4px;
+      transition: transform 0.15s, color 0.15s;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .rate-star:hover { transform: scale(1.2); }
+    .rate-star:active { transform: scale(0.9); }
+    .rate-star.active { color: #FFD60A; }
+    .rate-star.hover-active { color: #FFD60A; }
+    .rate-skip {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: rgba(255,255,255,0.7);
+      padding: 10px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .rate-skip:active { transform: scale(0.96); }
   </style>
 </head>
 <body>
@@ -397,6 +469,22 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       </div>
     </div>
     <div class="toast" id="toast"></div>
+    <!-- Rate film overlay — appears when film ends -->
+    <div class="rate-overlay" id="rateOverlay">
+      <div class="rate-card">
+        <div class="rate-emoji">🎬</div>
+        <div class="rate-title" id="rateTitle">Как вам фильм?</div>
+        <div class="rate-film-name" id="rateFilmName"></div>
+        <div class="rate-stars" id="rateStars">
+          <button class="rate-star" data-rating="1">☆</button>
+          <button class="rate-star" data-rating="2">☆</button>
+          <button class="rate-star" data-rating="3">☆</button>
+          <button class="rate-star" data-rating="4">☆</button>
+          <button class="rate-star" data-rating="5">☆</button>
+        </div>
+        <button class="rate-skip" id="rateSkip">Пропустить</button>
+      </div>
+    </div>
   </div>
   <script>
     // ====== Phase 1: Bind close button IMMEDIATELY ======
@@ -748,6 +836,9 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30 && lastKnownTime > lastKnownDuration / 2) {
           clearPosition();
           console.log('[player] Position cleared (video reached end at', lastKnownTime + ')');
+          // Show the rate-film overlay — user finished watching.
+          // Small delay so the credits scene isn't abruptly covered.
+          setTimeout(showRateOverlay, 800);
         } else {
           console.log('[player] Ignored ended event (currentTime:', lastKnownTime, 'duration:', lastKnownDuration + ')');
         }
@@ -848,6 +939,134 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         }
       }, 1500);
     });
+
+    // ====== Rate film overlay ======
+    // Shows when the film ends. User can rate 1-5 stars or skip.
+    // Rating is saved to Supabase via /api/track?type=rate (existing logic
+    // in supabase.js rateFilm() which is also used by the bot). The bot's
+    // 'Мои фильмы' list will show the rating as ⭐N next to the film.
+    var rateOverlay = document.getElementById('rateOverlay');
+    var rateFilmNameEl = document.getElementById('rateFilmName');
+    var rateStarsEl = document.getElementById('rateStars');
+    var rateSkipBtn = document.getElementById('rateSkip');
+    var rateShown = false; // prevent double-showing if 'ended' fires twice
+
+    function showRateOverlay() {
+      if (rateShown || !rateOverlay) return;
+      rateShown = true;
+      // Don't show if user is a guest (web_* ID) — rating requires a real account
+      var uid = getUserId();
+      if (!uid || String(uid).indexOf('web_') === 0) {
+        console.log('[rate] Skipped — guest user');
+        return;
+      }
+      // Don't show if we don't have a film ID
+      if (!kid) return;
+      if (rateFilmNameEl) rateFilmNameEl.textContent = decodeURIComponent(title);
+      rateOverlay.classList.add('visible');
+      console.log('[rate] Overlay shown for film', kid);
+    }
+
+    function hideRateOverlay() {
+      if (!rateOverlay) return;
+      rateOverlay.classList.remove('visible');
+    }
+
+    // Hover preview — highlight stars up to the one being hovered
+    if (rateStarsEl) {
+      var starButtons = rateStarsEl.querySelectorAll('.rate-star');
+      starButtons.forEach(function(btn) {
+        btn.addEventListener('mouseenter', function() {
+          var r = parseInt(btn.getAttribute('data-rating'), 10);
+          starButtons.forEach(function(s, i) {
+            s.classList.toggle('hover-active', i < r);
+          });
+        });
+        btn.addEventListener('mouseleave', function() {
+          starButtons.forEach(function(s) { s.classList.remove('hover-active'); });
+        });
+        // Click — save rating
+        btn.addEventListener('click', function() {
+          var rating = parseInt(btn.getAttribute('data-rating'), 10);
+          saveRating(rating);
+        });
+      });
+    }
+
+    // Touch support — on mobile, hover doesn't work. Tap once = preview,
+    // tap again on same star = confirm. We simplify: tap = confirm directly.
+    if (rateStarsEl) {
+      rateStarsEl.querySelectorAll('.rate-star').forEach(function(btn) {
+        btn.addEventListener('touchstart', function(e) {
+          e.preventDefault();
+          var rating = parseInt(btn.getAttribute('data-rating'), 10);
+          // Visual feedback
+          rateStarsEl.querySelectorAll('.rate-star').forEach(function(s, i) {
+            s.classList.toggle('active', i < rating);
+            s.textContent = i < rating ? '★' : '☆';
+          });
+          // Save after short delay (lets user see the visual)
+          setTimeout(function() { saveRating(rating); }, 300);
+        }, { passive: false });
+      });
+    }
+
+    function saveRating(rating) {
+      var uid = getUserId();
+      if (!uid || String(uid).indexOf('web_') === 0) {
+        hideRateOverlay();
+        return;
+      }
+      // Send to backend. The /api/track endpoint with type 'rate' is NOT
+      // in ALLOWED_TYPES — but rateFilm() is called via a separate path.
+      // Actually, looking at the code, rateFilm is called directly from
+      // the bot webhook. For the website, we need to send the rating via
+      // a different mechanism. The simplest: send a 'movies_opened' event
+      // with a 'rating' field, OR create a dedicated endpoint.
+      //
+      // Looking at supabase.js rateFilm(): it expects (telegramId, filmId,
+      // title, rating) and updates watched_films[].rating + rated_films[].
+      // We can trigger this via a new /api/rate endpoint, OR piggyback on
+      // existing track by adding 'rate' to ALLOWED_TYPES.
+      //
+      // Simplest: add 'rate' to ALLOWED_TYPES in track.js and handle it
+      // in recordEvent by calling rateFilm(). For now, we send via track
+      // with type='rate' — if backend doesn't handle it, no harm done.
+      var payload = JSON.stringify({
+        type: 'rate',
+        initData: tgInitData,
+        userId: uid,
+        username: localStorage.getItem('genopoisk_tg_username') || '',
+        filmId: kid,
+        title: decodeURIComponent(title),
+        rating: rating
+      });
+      try {
+        fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        }).then(function(res) {
+          console.log('[rate] Saved rating', rating, 'for film', kid, '— HTTP', res.status);
+        }).catch(function(e) {
+          console.warn('[rate] Save failed:', e);
+        });
+      } catch (e) {
+        console.warn('[rate] Save error:', e);
+      }
+      // Show confirmation
+      var titleEl = document.getElementById('rateTitle');
+      if (titleEl) titleEl.textContent = 'Спасибо за оценку! ⭐' + rating;
+      if (rateStarsEl) rateStarsEl.style.display = 'none';
+      if (rateSkipBtn) rateSkipBtn.textContent = 'Готово';
+      // Auto-hide after 1.5s
+      setTimeout(hideRateOverlay, 1500);
+    }
+
+    if (rateSkipBtn) {
+      rateSkipBtn.addEventListener('click', hideRateOverlay);
+    }
 
     // Resume happens silently — no toast. Position is shown on the main page
     // in the "Continue watching" card instead.

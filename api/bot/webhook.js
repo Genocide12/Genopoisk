@@ -1,5 +1,5 @@
 // Telegram bot webhook handler
-const { isAdmin, sendMessage, editMessage, answerCallback, tg } = require('../_lib/telegram');
+const { isAdmin, sendMessage, editMessage, answerCallback, tg, deleteMessage, sendPhoto, editMessageCaption } = require('../_lib/telegram');
 const { getAllUsers, getUser, deleteUser, deleteAllUsers, recordEvent, rateFilm, parseUserAgent } = require('../_lib/supabase');
 const {
   getProjectInfo,
@@ -78,7 +78,7 @@ function deployMenuKeyboard() {
       [
         { text: '🔄 Redeploy', callback_data: 'deploy_redeploy' }
       ],
-      [{ text: '⬅️ Назад', callback_data: 'menu_main' }]
+      [{ text: '🏠 На главную', callback_data: 'menu_main' }]
     ]
   };
 }
@@ -105,7 +105,7 @@ function usersListKeyboard(users, page) {
   navRow.push({ text: `${curPage + 1}/${totalPages}`, callback_data: 'noop' });
   if (curPage < totalPages - 1) navRow.push({ text: '➡️', callback_data: `users_${curPage + 1}` });
   buttons.push(navRow);
-  buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
+  buttons.push([{ text: '🏠 На главную', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
 }
 
@@ -113,7 +113,7 @@ function userProfileKeyboard(targetId, hasLastFilm) {
   const buttons = [];
   buttons.push([
     { text: '🗑 Удалить профиль', callback_data: 'delprompt_' + targetId },
-    { text: '⬅️ К списку', callback_data: 'menu_users' }
+    { text: '👥 К списку', callback_data: 'menu_users' }
   ]);
   buttons.push([{ text: '🏠 Главная', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
@@ -139,6 +139,62 @@ async function notifyAdminNewUser(user, source) {
     console.log('[bot] Admin notified about new bot user:', user.id);
   } catch (e) {
     console.warn('[bot] Admin notification failed:', e.message);
+  }
+}
+
+// ---- Film card helper — shows poster + title + rating + share buttons ----
+// Sends a NEW photo message (deletes the old text message first).
+// Used by both 'Мои фильмы' and 'Избранное' film cards.
+async function showFilmCard(chatId, messageId, film, currentRating, context) {
+  // context = 'myfilms' or 'favorites' — determines "back" button label
+  var playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
+  var posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + encodeURIComponent(film.filmId) + '&size=medium';
+
+  // Share URL — opens Telegram chat picker with film title
+  var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
+  var shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
+  var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink) + '&text=' + encodeURIComponent(shareText);
+
+  // Star rating buttons
+  var starButtons = [];
+  for (var s = 1; s <= 5; s++) {
+    var star = s <= currentRating ? '⭐' : '☆';
+    starButtons.push({ text: star + s, callback_data: 'rate_' + film.filmId + '_' + s });
+  }
+
+  // Back button depends on context
+  var backBtn = context === 'favorites'
+    ? { text: '❤️ К избранному', callback_data: 'menu_favorites' }
+    : { text: '📀 К списку', callback_data: 'menu_myfilms' };
+
+  var keyboard = {
+    inline_keyboard: [
+      starButtons,
+      [
+        { text: '▶ Смотреть', web_app: { url: playerUrl } },
+        { text: '📤 Поделиться', url: shareUrl }
+      ],
+      [
+        backBtn,
+        { text: '🏠 На главную', callback_data: 'menu_main' }
+      ]
+    ]
+  };
+
+  var caption = '🎬 <b>' + escapeHtml(film.title) + '</b>\n\n' +
+    'Здесь вы можете оценить фильм, а также порекомендовать другу';
+
+  // Delete old message, send new photo message
+  try {
+    if (messageId) await deleteMessage(chatId, messageId);
+  } catch (_) {} // old message may not exist
+
+  try {
+    await sendPhoto(chatId, posterUrl, caption, { reply_markup: keyboard });
+  } catch (e) {
+    // Poster failed — fallback to text-only message
+    console.warn('[filmcard] sendPhoto failed, using text fallback:', e.message);
+    await sendMessage(chatId, caption, { reply_markup: keyboard });
   }
 }
 
@@ -186,24 +242,45 @@ async function cmdStart(chatId, user, text) {
   if (startParam.indexOf('film_') === 0) {
     const filmId = startParam.slice(5);
     if (filmId && /^\d+$/.test(filmId)) {
-      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId;
-      // Track this as a movies_opened event so it shows up in user's history
+      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId + '&title=' + encodeURIComponent('Поделённый фильм');
+      const posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + filmId + '&size=medium';
+
+      // Try to fetch film title from Kinopoisk API for the message + poster
+      var filmTitle = 'Поделённый фильм';
+      try {
+        const kinopoiskRes = await fetch(SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.2/films/' + filmId);
+        if (kinopoiskRes.ok) {
+          const filmData = await kinopoiskRes.json();
+          filmTitle = filmData.nameRu || filmData.nameEn || filmTitle;
+        }
+      } catch (_) {}
+
+      // Track this as a movies_opened event
       try {
         const { recordEvent } = require('../_lib/supabase');
         await recordEvent(String(user.id), 'movies_opened', {
           filmId: filmId,
-          title: 'Поделённый фильм',
+          title: filmTitle,
           ip: null
         });
       } catch (_) {}
-      await sendMessage(chatId, '🎬 <b>Вам поделились фильмом!</b>\n\nНажмите кнопку ниже, чтобы открыть плеер:', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-            [{ text: '🏠 На главную', callback_data: 'menu_main' }]
-          ]
-        }
-      });
+
+      // Update player URL with real title
+      const playerUrlTitled = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId + '&title=' + encodeURIComponent(filmTitle);
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '▶ Смотреть', web_app: { url: playerUrlTitled } }],
+          [{ text: '🏠 На главную', callback_data: 'menu_main' }]
+        ]
+      };
+      const caption = '🎬 <b>Вам поделились фильмом!</b>\n\n🎞️ <b>' + escapeHtml(filmTitle) + '</b>\n\nНажмите «Смотреть», чтобы открыть плеер:';
+
+      // Send photo with poster if available, fallback to text
+      try {
+        await sendPhoto(chatId, posterUrl, caption, { reply_markup: keyboard });
+      } catch (e) {
+        await sendMessage(chatId, caption, { reply_markup: keyboard });
+      }
       return;
     }
   }
@@ -526,7 +603,7 @@ function myFilmsKeyboard(films, page) {
   navRow.push({ text: (curPage + 1) + '/' + totalPages, callback_data: 'noop' });
   if (curPage < totalPages - 1) navRow.push({ text: '➡️', callback_data: 'myfilms_' + (curPage + 1) });
   buttons.push(navRow);
-  buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
+  buttons.push([{ text: '🏠 На главную', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
 }
 
@@ -558,7 +635,7 @@ function favoritesKeyboard(films, page) {
 
   var buttons = entries.map(function(f, i) {
     var idx = startIdx + i;
-    return [{ text: '⭐ ' + f.title.slice(0, 40), callback_data: 'favfilm_' + idx }];
+    return [{ text: '❤️ ' + f.title.slice(0, 40), callback_data: 'favfilm_' + idx }];
   });
 
   var navRow = [];
@@ -566,7 +643,7 @@ function favoritesKeyboard(films, page) {
   navRow.push({ text: (curPage + 1) + '/' + totalPages, callback_data: 'noop' });
   if (curPage < totalPages - 1) navRow.push({ text: '➡️', callback_data: 'favs_' + (curPage + 1) });
   buttons.push(navRow);
-  buttons.push([{ text: '⬅️ Назад', callback_data: 'menu_main' }]);
+  buttons.push([{ text: '🏠 На главную', callback_data: 'menu_main' }]);
   return { inline_keyboard: buttons };
 }
 
@@ -848,18 +925,21 @@ async function handleCallback(update) {
       }
       // Send invoice with Telegram Stars as currency
       try {
-        await tg('sendInvoice', {
+        const invoiceParams = {
           chat_id: chatId,
           title: '👑 Genopoisk Premium',
           description: 'Поддержка проекта + бейдж 👑 в шапке сайта.\n\nPremium — это знак вашей поддержки. Спасибо!',
           payload: JSON.stringify({ type: 'premium', user_id: String(fromId) }),
           prices: [{ label: 'Premium подписка', amount: 5 }],
-          currency: 'XTR', // Telegram Stars
-          provider_token: '' // empty for Stars (in-bot currency)
-        });
+          currency: 'XTR'
+          // provider_token is OMITTED for Telegram Stars (XTR) payments
+        };
+        console.log('[premium] Sending invoice:', JSON.stringify(invoiceParams));
+        await tg('sendInvoice', invoiceParams);
+        console.log('[premium] Invoice sent successfully to:', chatId);
         await answerCallback(cq.id, 'Счёт отправлен ⭐');
       } catch (e) {
-        console.error('[premium] sendInvoice error:', e.message);
+        console.error('[premium] sendInvoice error:', e.message, e.stack);
         await answerCallback(cq.id, 'Ошибка: ' + e.message);
       }
       return;
@@ -910,24 +990,8 @@ async function handleCallback(update) {
         await answerCallback(cq.id, 'Фильм не найден. Обновите список.');
         return;
       }
-      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
-      // Share via Telegram's native share dialog — opens chat picker, sends
-      // a message with film title + deep link. Recipient sees the title
-      // BEFORE clicking, and clicking opens the bot with the film ready.
-      const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
-      const shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
-      const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink) + '&text=' + encodeURIComponent(shareText);
       await answerCallback(cq.id, '');
-      await edit('❤️ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или "Убрать", чтобы удалить из избранного:', {
-        inline_keyboard: [
-          [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-          [
-            { text: '📤 Поделиться', url: shareUrl },
-            { text: '🗑 Убрать', callback_data: 'favremove_' + idx }
-          ],
-          [{ text: '⬅️ К избранному', callback_data: 'menu_favorites' }]
-        ]
-      });
+      await showFilmCard(chatId, messageId, film, film.rating || 0, 'favorites');
       return;
     }
 
@@ -990,7 +1054,7 @@ async function handleCallback(update) {
         inline_keyboard: [
           [{ text: '🚪 Выйти со всех устройств', callback_data: 'clear_sessions' }],
           [{ text: '🧹 Очистить всю статистику', callback_data: 'clear_stats_prompt' }],
-          [{ text: '⬅️ Назад', callback_data: 'menu_main' }]
+          [{ text: '🏠 На главную', callback_data: 'menu_main' }]
         ]
       });
       return;
@@ -1116,39 +1180,23 @@ async function handleCallback(update) {
         await answerCallback(cq.id, 'Фильм не найден. Обновите список.');
         return;
       }
-      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
       await answerCallback(cq.id, '');
-      var currentRating = film.rating || 0;
-      var starButtons = [];
-      for (var s = 1; s <= 5; s++) {
-        var star = s <= currentRating ? '⭐' : '☆';
-        starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
-      }
-      // EDIT existing message instead of sending new
-      // Share via Telegram's native share dialog — recipient sees film title
-      const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
-      const shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
-      var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink) + '&text=' + encodeURIComponent(shareText);
-      await edit('📀 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
-        inline_keyboard: [
-          [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-          starButtons,
-          [
-            { text: '📤 Поделиться', url: shareUrl },
-            { text: '⬅️ К списку', callback_data: 'menu_myfilms' }
-          ]
-        ]
-      });
+      await showFilmCard(chatId, messageId, film, film.rating || 0, 'myfilms');
       return;
     }
 
     // ---- Rate film ----
     const rateMatch = data.match(/^rate_(\d+)_(\d+)$/);
     if (rateMatch) {
-      const idx = parseInt(rateMatch[1], 10);
+      const filmId = rateMatch[1]; // now filmId, not index
       const rating = parseInt(rateMatch[2], 10);
-      const films = getCachedMyFilms(fromId);
-      const film = films[idx];
+      // Find film in cache (try both myfilms and favorites cache)
+      var films = getCachedMyFilms(fromId);
+      var film = films.find(function(f) { return String(f.filmId) === filmId; });
+      if (!film) {
+        films = getCachedMyFilms('fav_' + fromId);
+        film = films.find(function(f) { return String(f.filmId) === filmId; });
+      }
       if (!film) {
         await answerCallback(cq.id, 'Фильм не найден');
         return;
@@ -1157,42 +1205,46 @@ async function handleCallback(update) {
       try {
         await rateFilm(String(fromId), film.filmId, film.title, rating);
         film.rating = rating;
-        cacheMyFilms(fromId, films);
       } catch (e) { console.error('Rate error:', e); }
-      // Update the message with new rating
+      // Update the photo message's caption + keyboard
       var stars = '';
       for (var ss = 1; ss <= 5; ss++) { stars += ss <= rating ? '⭐' : '☆'; }
       await answerCallback(cq.id, 'Оценка: ' + rating + ' ⭐');
-      // Re-show film card with updated rating
-      var playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
-      var starButtons2 = [];
-      for (var s2 = 1; s2 <= 5; s2++) {
-        var star2 = s2 <= rating ? '⭐' : '☆';
-        starButtons2.push({ text: star2 + s2, callback_data: 'rate_' + idx + '_' + s2 });
+
+      // Build updated keyboard with new star state
+      var playerUrl2 = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
+      var filmDeepLink2 = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
+      var shareText2 = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
+      var shareUrl2 = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink2) + '&text=' + encodeURIComponent(shareText2);
+      var starButtons3 = [];
+      for (var s3 = 1; s3 <= 5; s3++) {
+        var star3 = s3 <= rating ? '⭐' : '☆';
+        starButtons3.push({ text: star3 + s3, callback_data: 'rate_' + filmId + '_' + s3 });
       }
-      // Edit the last message (the one with film card)
+      var updatedCaption = '🎬 <b>' + escapeHtml(film.title) + '</b>\n\n' +
+        'Ваша оценка: ' + stars + '\n\n' +
+        'Здесь вы можете оценить фильм, а также порекомендовать другу';
+      var updatedKeyboard = {
+        inline_keyboard: [
+          starButtons3,
+          [
+            { text: '▶ Смотреть', web_app: { url: playerUrl2 } },
+            { text: '📤 Поделиться', url: shareUrl2 }
+          ],
+          [
+            { text: '🏠 На главную', callback_data: 'menu_main' }
+          ]
+        ]
+      };
+      // Try editing caption (works for photo messages)
       if (messageId) {
         try {
-          await editMessage(chatId, messageId, '📀 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars + '\n\nНажмите "Смотреть", чтобы открыть плеер, или измените оценку:', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-                starButtons2,
-                [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
-              ]
-            }
-          });
-        } catch (_) {
-          // If edit fails (message not found), send new
-          await sendMessage(chatId, '📀 <b>' + escapeHtml(film.title) + '</b>\n\nВаша оценка: ' + stars, {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
-                starButtons2,
-                [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
-              ]
-            }
-          });
+          await editMessageCaption(chatId, messageId, updatedCaption, { reply_markup: updatedKeyboard });
+        } catch (e) {
+          // If edit fails, try text edit (fallback for text-only messages)
+          try {
+            await editMessage(chatId, messageId, updatedCaption, { reply_markup: updatedKeyboard });
+          } catch (_) {}
         }
       }
       return;
@@ -1301,45 +1353,77 @@ module.exports = async (req, res) => {
 
 // Handle successful Telegram Stars payment — mark user as premium in Supabase
 async function handleSuccessfulPayment(msg) {
+  const payment = msg.successful_payment;
+  console.log('[premium] === successful_payment received ===');
+  console.log('[premium] from:', msg.from?.id, 'chat:', msg.chat?.id);
+  console.log('[premium] amount:', payment?.total_amount, payment?.currency);
+  console.log('[premium] payload:', payment?.invoice_payload);
+
+  let payload = {};
   try {
-    const payment = msg.successful_payment;
-    const payload = JSON.parse(payment.invoice_payload || '{}');
-    const userId = payload.user_id || String(msg.from.id);
-    console.log('[premium] Successful payment from user:', userId, '— amount:', payment.total_amount, payment.currency);
+    payload = JSON.parse(payment.invoice_payload || '{}');
+  } catch (e) {
+    console.error('[premium] Failed to parse payload:', e.message);
+  }
 
-    if (payload.type === 'premium') {
-      // Mark user as premium in Supabase
-      const { updateUser } = require('../_lib/supabase');
-      await updateUser(userId, {
-        is_premium: true,
-        premium_since: new Date().toISOString()
-      });
-      console.log('[premium] User', userId, 'marked as premium');
+  const userId = payload.user_id || String(msg.from.id);
+  console.log('[premium] User ID:', userId, 'type:', payload.type);
 
-      // Send thank-you message
-      const userObj = await getUser(userId);
-      await sendMessage(msg.chat.id,
-        '👑 <b>Спасибо за поддержку!</b>\n\n' +
-        'Ваш Premium активирован.\n' +
-        'Бейдж 👑 теперь отображается в шапке сайта.\n\n' +
-        'Если бейдж не появился — обновите страницу (pull-to-refresh).',
-        { reply_markup: userMenuKeyboard(userObj) }
-      );
+  if (payload.type !== 'premium') {
+    console.log('[premium] Not a premium payment, ignoring');
+    return;
+  }
 
-      // Notify admin about new premium user
-      const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-      for (const adminId of adminIds) {
-        try {
-          await sendMessage(Number(adminId),
-            '👑 <b>Новый Premium-пользователь!</b>\n\n' +
-            'ID: <code>' + userId + '</code>\n' +
-            'Username: ' + (userObj && userObj.username ? '@' + userObj.username : '—') + '\n' +
-            'Сумма: ' + payment.total_amount + ' ' + payment.currency
-          );
-        } catch (_) {}
-      }
+  // 1) Send thank-you message IMMEDIATELY (before any Supabase calls)
+  //    so user gets feedback even if DB update fails.
+  try {
+    await sendMessage(msg.chat.id,
+      '👑 <b>Спасибо за поддержку!</b>\n\n' +
+      'Ваш Premium активирован.\n' +
+      'Бейдж 👑 теперь отображается в шапке сайта.\n\n' +
+      'Если бейдж не появился — обновите страницу (pull-to-refresh).'
+    );
+    console.log('[premium] Thank-you message sent to:', msg.chat.id);
+  } catch (e) {
+    console.error('[premium] Failed to send thank-you message:', e.message);
+  }
+
+  // 2) Try to mark user as premium in Supabase
+  let premiumSaved = false;
+  try {
+    const { updateUser } = require('../_lib/supabase');
+    const result = await updateUser(userId, {
+      is_premium: true,
+      premium_since: new Date().toISOString()
+    });
+    if (result) {
+      premiumSaved = true;
+      console.log('[premium] User', userId, 'marked as premium in Supabase');
+    } else {
+      console.warn('[premium] updateUser returned null — column may not exist');
     }
   } catch (e) {
-    console.error('[premium] handleSuccessfulPayment error:', e);
+    console.error('[premium] Supabase update failed:', e.message);
+  }
+
+  // 3) Send user their updated menu
+  try {
+    const userObj = await getUser(userId);
+    await sendMessage(msg.chat.id, '👇 Ваше меню:', { reply_markup: userMenuKeyboard(userObj) });
+  } catch (_) {}
+
+  // 4) Notify admin
+  const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+  for (const adminId of adminIds) {
+    try {
+      const userObj = await getUser(userId);
+      await sendMessage(Number(adminId),
+        '👑 <b>Новый Premium-пользователь!</b>\n\n' +
+        'ID: <code>' + userId + '</code>\n' +
+        'Username: ' + (userObj && userObj.username ? '@' + userObj.username : '—') + '\n' +
+        'Сумма: ' + payment.total_amount + ' ' + payment.currency + '\n' +
+        'Сохранено в БД: ' + (premiumSaved ? '✅' : '❌ (нужна SQL миграция: ALTER TABLE users ADD COLUMN is_premium boolean DEFAULT false)')
+      );
+    } catch (_) {}
   }
 }

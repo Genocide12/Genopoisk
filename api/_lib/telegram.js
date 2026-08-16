@@ -54,4 +54,28 @@ async function answerCallback(callbackId, text) {
   return tg('answerCallbackQuery', { callback_query_id: callbackId, text });
 }
 
-module.exports = { tg, isAdmin, sendMessage, editMessage, answerCallback };
+async function deleteMessage(chatId, messageId) {
+  return tg('deleteMessage', { chat_id: chatId, message_id: messageId });
+}
+
+async function sendPhoto(chatId, photo, caption, extra = {}) {
+  return tg('sendPhoto', {
+    chat_id: chatId,
+    photo,
+    caption,
+    parse_mode: 'HTML',
+    ...extra
+  });
+}
+
+async function editMessageCaption(chatId, messageId, caption, extra = {}) {
+  return tg('editMessageCaption', {
+    chat_id: chatId,
+    message_id: messageId,
+    caption,
+    parse_mode: 'HTML',
+    ...extra
+  });
+}
+
+module.exports = { tg, isAdmin, sendMessage, editMessage, answerCallback, deleteMessage, sendPhoto, editMessageCaption };

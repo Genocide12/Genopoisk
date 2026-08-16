@@ -1289,6 +1289,21 @@ async function registerBotCommands() {
       ]
     });
     console.log('[bot] Commands registered: /start, /help');
+
+    // Also ensure webhook has ALL allowed_updates enabled.
+    // Without this, Telegram silently drops inline_query and pre_checkout_query
+    // updates (the webhook was originally registered with only message+callback_query).
+    // We call setWebhook with the full list to fix this.
+    try {
+      await tg('setWebhook', {
+        url: process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') + '/api/bot/webhook' : 'https://genopoisk.vercel.app/api/bot/webhook',
+        allowed_updates: ['message', 'callback_query', 'inline_query', 'pre_checkout_query', 'web_app_data', 'chosen_inline_result'],
+        max_connections: 40
+      });
+      console.log('[bot] Webhook updated with full allowed_updates');
+    } catch (e) {
+      console.warn('[bot] setWebhook failed:', e.message);
+    }
   } catch (e) {
     console.warn('[bot] setMyCommands failed (will retry next request):', e.message);
     commandsRegistered = false; // allow retry

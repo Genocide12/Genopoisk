@@ -164,7 +164,7 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
 
   // Back button depends on context
   var backBtn = context === 'favorites'
-    ? { text: '❤️ К коллекцииу', callback_data: 'menu_favorites' }
+    ? { text: '❤️ В коллекцию', callback_data: 'menu_favorites' }
     : { text: '📀 К списку', callback_data: 'menu_myfilms' };
 
   var keyboard = {
@@ -1410,7 +1410,6 @@ async function handleInlineQuery(iq) {
       const title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
       const year = film.year || '';
       const rating = film.rating || film.ratingKinopoisk || '';
-      const poster = film.posterUrlPreview || film.posterUrl || '';
 
       // Build description: "2024 · 8.5 ★"
       var descParts = [];
@@ -1426,10 +1425,10 @@ async function handleInlineQuery(iq) {
 
       // Deep link to bot — opens film in player
       const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
-      // Poster via our proxy for reliability
-      const posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + filmId + '&size=medium';
-      // Small thumbnail via proxy
-      const thumbUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + filmId + '&size=small';
+      // Thumbnail — use Kinopoisk's direct poster URL. Telegram can load
+      // these (it follows redirects for thumb_url). Our /api/poster proxy
+      // is too slow on first load (~2.5s) which causes Telegram to timeout.
+      const thumbUrl = film.posterUrlPreview || film.posterUrl || '';
 
       // Message sent when user clicks the result
       const messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n' +
@@ -1442,7 +1441,7 @@ async function handleInlineQuery(iq) {
         id: 'film_' + filmId + '_' + i,
         title: title,
         description: description,
-        thumb_url: poster ? poster : undefined,
+        thumb_url: thumbUrl || undefined,
         thumb_width: 100,
         thumb_height: 150,
         input_message_content: {

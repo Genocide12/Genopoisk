@@ -261,6 +261,22 @@ async function recordEvent(telegramId, eventType, data) {
     return;
   }
 
+  // premium_refund — stars were refunded, remove premium status
+  if (eventType === 'premium_refund') {
+    const user = await getUser(telegramId);
+    if (!user) return;
+    var ebt2 = user.events_by_type || {};
+    delete ebt2.premium;
+    await updateUser(telegramId, {
+      events_by_type: ebt2,
+      is_premium: false,
+      premium_since: null,
+      last_seen: nowIso
+    });
+    console.log('[supabase] Premium removed for user', telegramId, '(refund)');
+    return { isNewUser: false };
+  }
+
   // rate — user rates a film 1-5 stars (from player.html end-of-film overlay
   // or from the bot's 'Мои фильмы' star buttons). Updates watched_films[].rating
   // and rated_films[] array. Does NOT increment events_count (rating is a

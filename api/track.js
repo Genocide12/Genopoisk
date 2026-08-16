@@ -20,10 +20,11 @@ const ALLOWED_TYPES = [
   'searches',
   'movies_opened',
   'categories_opened',
-  'position_update', // saves video position to last_film for cross-device resume
+  'position_update',
   'favorite_added',
   'favorite_removed',
-  'rate' // user rates a film 1-5 stars (from player.html end-of-film overlay)
+  'rate',
+  'premium_refund'
 ];
 
 function getClientIp(req) {

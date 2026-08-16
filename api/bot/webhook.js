@@ -810,7 +810,7 @@ async function cmdRedeploy(chatId, user) {
     const result = await triggerRedeploy();
     const deployId = result.id || result.uid;
     const deployUrl = result.url || '...';
-    await sendMessage(chatId, `✅ <b>Деплой запущен</b>\n\nID: <code>${deployId}</code>\nURL: https://${deployUrl}`, { reply_markup: deployMenuKeyboard() });
+    await sendMessage(chatId, `✅ <b>Деплой запущен</b>\n\nID: <code>${deployId}</code>\n🌐 <a href="https://${deployUrl}">${deployUrl}</a>\n🔗 <a href="https://vercel.com/genocide12s-projects/genopoisk/${deployId}">Vercel Dashboard</a>`, { reply_markup: deployMenuKeyboard() });
     // Poll for completion and notify admin
     notifyDeployStatus(String(user.id), deployId, deployUrl);
   } catch (e) {
@@ -1397,7 +1397,7 @@ async function handleCallback(update) {
         const result = await triggerRedeploy();
         const deployId = result.id || result.uid;
         const deployUrl = result.url || '...';
-        const text = `✅ <b>Деплой запущен</b>\n\nID: <code>${deployId}</code>\nURL: https://${deployUrl}`;
+        const text = `✅ <b>Деплой запущен</b>\n\nID: <code>${deployId}</code>\n🌐 <a href="https://${deployUrl}">${deployUrl}</a>\n🔗 <a href="https://vercel.com/genocide12s-projects/genopoisk/${deployId}">Vercel Dashboard</a>`;
         await edit(text, deployMenuKeyboard());
 
         // Poll deployment status and notify admin when ready or error
@@ -1593,22 +1593,31 @@ async function checkPendingDeployStatus() {
       if (state === 'READY') {
         var commitMsg = (data.meta && data.meta.githubCommitMessage) ? data.meta.githubCommitMessage.split('\n')[0] : '—';
         var commitSha = (data.meta && data.meta.githubCommitSha) ? data.meta.githubCommitSha.slice(0, 7) : '—';
-        await sendMessage(Number(adminId),
-          '✅ <b>Деплой завершён!</b>\n\n' +
+        var fullSha = (data.meta && data.meta.githubCommitSha) ? data.meta.githubCommitSha : '';
+        var ghOrg = (data.meta && data.meta.githubCommitOrg) || 'Genocide12';
+        var ghRepo = (data.meta && data.meta.githubCommitRepo) || 'Genopoisk';
+        var ghCommitLink = fullSha ? 'https://github.com/' + ghOrg + '/' + ghRepo + '/commit/' + fullSha : '';
+        var vercelLink = 'https://vercel.com/genocide12s-projects/genopoisk/' + info.deployId;
+        var deployLink = 'https://' + (data.url || info.deployUrl);
+        var msg = '✅ <b>Деплой завершён!</b>\n\n' +
           'Статус: <b>READY</b>\n' +
           'ID: <code>' + info.deployId + '</code>\n' +
-          'Commit: <code>' + commitSha + '</code>\n' +
-          'Сообщение: ' + commitMsg + '\n' +
-          'URL: https://' + (data.url || info.deployUrl),
+          'Commit: <code>' + commitSha + '</code>';
+        if (ghCommitLink) msg += '\n🐙 <a href="' + ghCommitLink + '">GitHub</a>';
+        msg += '\n🔗 <a href="' + vercelLink + '">Vercel</a>';
+        msg += '\n🌐 <a href="' + deployLink + '">' + (data.url || info.deployUrl) + '</a>';
+        msg += '\n\n📝 ' + commitMsg;
+        await sendMessage(Number(adminId), msg,
           { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
         );
         pendingDeployCheck.delete(adminId);
       } else if (state === 'ERROR' || state === 'CANCELED') {
+        var errVercelLink = 'https://vercel.com/genocide12s-projects/genopoisk/' + info.deployId;
         await sendMessage(Number(adminId),
           '❌ <b>Деплой не удался</b>\n\n' +
           'Статус: <b>' + state + '</b>\n' +
           'ID: <code>' + info.deployId + '</code>\n' +
-          'Проверьте логи: https://vercel.com/' + (TEAM_ID || '') + '/genopoisk/' + info.deployId,
+          '🔗 <a href="' + errVercelLink + '">Логи Vercel</a>',
           { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
         );
         pendingDeployCheck.delete(adminId);

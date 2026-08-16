@@ -115,14 +115,33 @@ function formatDeployment(d) {
   const state = d.readyState || d.state || '?';
   const emoji = state === 'READY' ? '✅' : state === 'ERROR' ? '❌' : state === 'BUILDING' ? '🔨' : '⏳';
   const meta = d.meta || {};
-  // Escape HTML in commit message — it may contain <meta>, <script>, etc.
-  // Telegram HTML parser will fail with "Unsupported start tag" if not escaped.
   const commitMsg = escapeHtml(meta.githubCommitMessage || '(no commit)').slice(0, 200);
   const commitSha = (meta.githubCommitSha || '').slice(0, 7);
   const branch = escapeHtml(meta.githubCommitRef || 'main');
   const created = new Date(d.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
   const url = d.url ? `https://${d.url}` : '';
-  return `${emoji} <b>${state}</b> • ${created}\n   📝 ${commitMsg}\n   🔀 #${branch} @${commitSha}\n   🔗 ${url}`;
+
+  // Build clickable links
+  const githubOrg = meta.githubCommitOrg || meta.githubOrg || 'Genocide12';
+  const githubRepo = meta.githubCommitRepo || meta.githubRepo || 'Genopoisk';
+  const githubBranch = meta.githubCommitRef || 'main';
+  const githubCommitUrl = commitSha ? `https://github.com/${githubOrg}/${githubRepo}/commit/${meta.githubCommitSha}` : '';
+  const githubBranchUrl = `https://github.com/${githubOrg}/${githubRepo}/tree/${githubBranch}`;
+  const vercelDeployUrl = d.uid ? `https://vercel.com/genocide12s-projects/genopoisk/${d.uid}` : '';
+
+  var lines = [`${emoji} <b>${state}</b> • ${created}`];
+  lines.push(`   📝 ${commitMsg}`);
+  if (commitSha) {
+    if (githubCommitUrl) {
+      lines.push(`   🔀 <a href="${githubCommitUrl}">#${branch} @${commitSha}</a>`);
+    } else {
+      lines.push(`   🔀 #${branch} @${commitSha}`);
+    }
+  }
+  if (url) lines.push(`   🌐 <a href="${url}">${url}</a>`);
+  if (vercelDeployUrl) lines.push(`   🔗 <a href="${vercelDeployUrl}">Vercel</a>`);
+  if (githubBranchUrl) lines.push(`   🐙 <a href="${githubBranchUrl}">GitHub</a>`);
+  return lines.join('\n');
 }
 
 module.exports = {

@@ -190,6 +190,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
   <meta name="referrer" content="origin">
   <link rel="icon" type="image/png" href="/icon-192.png">
   <link rel="shortcut icon" type="image/png" href="/icon-192.png">
+  <script src="/i18n.js"></script>
   <title>[DEBUG] Плеер</title>
   <script>
     // ====== Performance & error logging ======
@@ -464,7 +465,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
       <div class="loading-text">
-        <div class="loading-title" id="loadingTitle">Загрузка плеера...</div>
+        <div class="loading-title" id="loadingTitle"></div>
         <div class="loading-subtitle" id="loadingSubtitle"></div>
       </div>
     </div>
@@ -473,7 +474,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     <div class="rate-overlay" id="rateOverlay">
       <div class="rate-card">
         <div class="rate-emoji">🎬</div>
-        <div class="rate-title" id="rateTitle">Как вам фильм?</div>
+        <div class="rate-title" id="rateTitle"></div>
         <div class="rate-film-name" id="rateFilmName"></div>
         <div class="rate-stars" id="rateStars">
           <button class="rate-star" data-rating="1">☆</button>
@@ -482,7 +483,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
           <button class="rate-star" data-rating="4">☆</button>
           <button class="rate-star" data-rating="5">☆</button>
         </div>
-        <button class="rate-skip" id="rateSkip">Пропустить</button>
+        <button class="rate-skip" id="rateSkip"></button>
       </div>
     </div>
   </div>
@@ -526,9 +527,9 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     if (loadingSubtitle) {
       var startSec = parseInt(startTime, 10) || 0;
       if (startSec > 5) {
-        loadingSubtitle.textContent = '▶ Продолжить с ' + formatTime(startSec);
+        loadingSubtitle.textContent = (typeof t === 'function' ? t('playerResume') : 'Продолжить с') + ' ' + formatTime(startSec);
       } else {
-        loadingSubtitle.textContent = 'Загрузка видео...';
+        loadingSubtitle.textContent = typeof t === 'function' ? t('playerLoading') : 'Загрузка плеера...';
       }
     }
 
@@ -957,6 +958,14 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     // Rating is saved to Supabase via /api/track?type=rate (existing logic
     // in supabase.js rateFilm() which is also used by the bot). The bot's
     // 'Мои фильмы' list will show the rating as ⭐N next to the film.
+    // Apply translations to rate overlay
+    (function applyPlayerTranslations() {
+      var rt = document.getElementById('rateTitle');
+      if (rt && typeof t === 'function') rt.textContent = t('rateTitle');
+      var rs = document.getElementById('rateSkip');
+      if (rs && typeof t === 'function') rs.textContent = t('rateSkip');
+    })();
+
     var rateOverlay = document.getElementById('rateOverlay');
     var rateFilmNameEl = document.getElementById('rateFilmName');
     var rateStarsEl = document.getElementById('rateStars');

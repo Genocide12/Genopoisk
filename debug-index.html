@@ -198,6 +198,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
   <link rel="shortcut icon" type="image/png" href="/icon-192.png">
   <link rel="preconnect" href="https://genopoisk.vercel.app">
   <link rel="dns-prefetch" href="https://genopoisk.vercel.app">
+  <script src="/i18n.js"></script>
   <title>[DEBUG] Genopoisk</title>
   <script>
     // ====== Performance & error logging ======
@@ -326,8 +327,8 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       </div>
     </div>
     <div class="hero">
-      <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто"><span id="premiumBadge" style="display:none;margin-right:8px;">👑</span>Genopoisk</h1>
-      <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
+      <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто"><span id="premiumBadge" style="display:none;margin-right:6px;font-size:0.7em;vertical-align:middle;filter:none !important;">🎉</span>Genopoisk</h1>
+      <p class="hero-subtitle" id="heroSubtitle">Кинотеатр в твоем кармане</p>
     </div>
     <div class="resume-card" id="resumeCard">
       <span class="resume-icon">▶️</span>
@@ -1183,7 +1184,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       localStorage.setItem('theme_mode', next);
       applyCurrentTheme();
       // Show a brief toast so user knows which mode they're on
-      var labels = { dark: '🌙 Тёмная', light: '☀️ Светлая', night: '🌌 Ночная', auto: '🔄 Авто (по времени)' };
+      var labels = window.__themeLabels || { dark: '🌙 Тёмная', light: '☀️ Светлая', night: '🌌 Ночная', auto: '🔄 Авто (по времени)' };
       if (typeof showToast === 'function') {
         showToast(labels[next] || next, 1500);
       } else {
@@ -1193,6 +1194,65 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
 
     // Apply theme on load
     applyCurrentTheme();
+
+    // Apply translations based on detected language
+    function applyTranslations() {
+      var lang = window.__genopoiskLang || 'ru';
+      console.log('[i18n] Language:', lang);
+      // Hero subtitle
+      var hs = document.getElementById('heroSubtitle');
+      if (hs) hs.textContent = t('heroSubtitle');
+      // Search input placeholder
+      var si = document.getElementById('searchInput');
+      if (si) si.placeholder = t('searchPlaceholder');
+      // Search clear button title
+      var sc = document.getElementById('searchClear');
+      if (sc) sc.title = t('searchClear');
+      // Category cards
+      var cards = document.querySelectorAll('.action-card .action-title');
+      if (cards.length >= 5) {
+        cards[0].textContent = t('catPopular');
+        cards[1].textContent = t('catTop250');
+        cards[2].textContent = t('catNew');
+        cards[3].textContent = t('catRandom');
+        cards[4].textContent = t('catFavorites');
+      }
+      // Resume label
+      var rl = document.querySelector('.resume-label');
+      if (rl) rl.textContent = t('resumeLabel');
+      // Loader text
+      var lt = document.querySelector('.loader-text');
+      if (lt) lt.textContent = t('loading');
+      // Login buttons
+      var loginBtn = document.getElementById('tgLoginBtn');
+      if (loginBtn) {
+        // Find text node inside (after SVG)
+        var textNode = null;
+        loginBtn.childNodes.forEach(function(n) {
+          if (n.nodeType === 3 && n.textContent.trim()) textNode = n;
+        });
+        if (textNode) textNode.textContent = ' ' + t('loginTelegram') + ' ';
+      }
+      var openBtn = document.querySelector('#tgLoginStateLoggedIn a');
+      if (openBtn) {
+        var span = openBtn.querySelector('span:last-child');
+        if (span) span.textContent = t('openInTelegram');
+      }
+      // Theme toggle labels
+      window.__themeLabels = {
+        dark: t('themeDark'),
+        light: t('themeLight'),
+        night: t('themeNight'),
+        auto: t('themeAuto')
+      };
+      // Hero title tooltip
+      var ht = document.querySelector('.hero-title');
+      if (ht) {
+        if (lang === 'en') ht.title = 'Cycle: dark → light → night → auto';
+        else ht.title = 'Цикл: тёмная → светлая → ночная → авто';
+      }
+    }
+    applyTranslations();
 
     // Check premium status and show crown badge if premium
     async function checkPremiumStatus() {

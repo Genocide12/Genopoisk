@@ -78,4 +78,15 @@ async function editMessageCaption(chatId, messageId, caption, extra = {}) {
   });
 }
 
-module.exports = { tg, isAdmin, sendMessage, editMessage, answerCallback, deleteMessage, sendPhoto, editMessageCaption };
+async function answerInlineQuery(inlineQueryId, results, extra = {}) {
+  return tg('answerInlineQuery', {
+    inline_query_id: inlineQueryId,
+    results,
+    cache_time: extra.cache_time || 30,
+    is_personal: extra.is_personal || false,
+    next_offset: extra.next_offset || '',
+    ...extra
+  });
+}
+
+module.exports = { tg, isAdmin, sendMessage, editMessage, answerCallback, deleteMessage, sendPhoto, editMessageCaption, answerInlineQuery };

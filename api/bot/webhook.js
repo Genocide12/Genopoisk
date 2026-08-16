@@ -1,5 +1,5 @@
 // Telegram bot webhook handler
-const { isAdmin, sendMessage, editMessage, answerCallback, tg, deleteMessage, sendPhoto, editMessageCaption } = require('../_lib/telegram');
+const { isAdmin, sendMessage, editMessage, answerCallback, tg, deleteMessage, sendPhoto, editMessageCaption, answerInlineQuery } = require('../_lib/telegram');
 const { getAllUsers, getUser, deleteUser, deleteAllUsers, recordEvent, rateFilm, parseUserAgent } = require('../_lib/supabase');
 const {
   getProjectInfo,
@@ -1323,6 +1323,10 @@ module.exports = async (req, res) => {
       } else {
         await handleMessage(update);
       }
+    } else if (update.inline_query) {
+      // Inline mode — user types @Genopoiskbot <query> in any chat.
+      // We search Kinopoisk and return film results with posters.
+      await handleInlineQuery(update.inline_query);
     } else if (update.pre_checkout_query) {
       // Telegram asks us to confirm the invoice is still valid.
       // We must answer within 10 seconds, otherwise the payment is cancelled.
@@ -1347,6 +1351,120 @@ module.exports = async (req, res) => {
 
   res.status(200).json({ ok: true });
 };
+
+// Handle inline query — user types @Genopoiskbot <query> in any chat.
+// Returns up to 20 film results with poster, title, year, rating.
+// Each result is an InlineQueryResultArticle with thumbnail.
+// When clicked, sends a message with the film deep link + poster.
+async function handleInlineQuery(iq) {
+  const query = (iq.query || '').trim();
+  const userId = iq.from?.id;
+
+  // If query is empty — show a helpful "start typing" message
+  if (!query || query.length < 2) {
+    await answerInlineQuery(iq.id, [{
+      type: 'article',
+      id: 'help',
+      title: '🎬 Поиск фильмов',
+      description: 'Начните вводить название фильма (минимум 2 символа)',
+      input_message_content: {
+        message_text: '🎬 Поиск фильмов в Genopoisk\n\nВведите @Genopoiskbot <название фильма> в любом чате для поиска.',
+        parse_mode: 'HTML'
+      },
+      thumb_url: SITE_URL.replace(/\/$/, '') + '/icon-192.png',
+      thumb_width: 192,
+      thumb_height: 192
+    }], { cache_time: 0 });
+    return;
+  }
+
+  try {
+    // Search Kinopoisk API
+    const searchUrl = SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.1/films/search-by-keyword&keyword=' + encodeURIComponent(query) + '&page=1';
+    const res = await fetch(searchUrl);
+    if (!res.ok) {
+      console.error('[inline] Kinopoisk search failed:', res.status);
+      await answerInlineQuery(iq.id, [], { cache_time: 0 });
+      return;
+    }
+    const data = await res.json();
+    const films = data.films || [];
+
+    if (films.length === 0) {
+      await answerInlineQuery(iq.id, [{
+        type: 'article',
+        id: 'no_results',
+        title: '🔍 Ничего не найдено',
+        description: 'Попробуйте другой запрос',
+        input_message_content: {
+          message_text: '🔍 По запросу «' + escapeHtml(query) + '» ничего не найдено.',
+          parse_mode: 'HTML'
+        }
+      }], { cache_time: 10 });
+      return;
+    }
+
+    // Build inline results — up to 20 films
+    const results = films.slice(0, 20).map(function(film, i) {
+      const filmId = film.filmId || film.kinopoiskId;
+      const title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
+      const year = film.year || '';
+      const rating = film.rating || film.ratingKinopoisk || '';
+      const poster = film.posterUrlPreview || film.posterUrl || '';
+
+      // Build description: "2024 · 8.5 ★"
+      var descParts = [];
+      if (year) descParts.push(year);
+      if (rating && rating !== 'null' && rating !== '0') {
+        descParts.push('★ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating));
+      }
+      if (film.genres && film.genres.length > 0) {
+        var genres = film.genres.slice(0, 2).map(function(g) { return g.genre; }).join(', ');
+        descParts.push(genres);
+      }
+      const description = descParts.join(' · ') || 'Нажмите чтобы открыть';
+
+      // Deep link to bot — opens film in player
+      const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
+      // Poster via our proxy for reliability
+      const posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + filmId + '&size=medium';
+      // Small thumbnail via proxy
+      const thumbUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + filmId + '&size=small';
+
+      // Message sent when user clicks the result
+      const messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n' +
+        (year ? '📅 ' + year + '\n' : '') +
+        (rating && rating !== 'null' && rating !== '0' ? '⭐ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating) + '\n' : '') +
+        '\n<a href="' + filmDeepLink + '">▶ Открыть в Genopoisk</a>';
+
+      return {
+        type: 'article',
+        id: 'film_' + filmId + '_' + i,
+        title: title,
+        description: description,
+        thumb_url: poster ? poster : undefined,
+        thumb_width: 100,
+        thumb_height: 150,
+        input_message_content: {
+          message_text: messageText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: false
+        },
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '▶ Смотреть', url: filmDeepLink }
+          ]]
+        }
+      };
+    });
+
+    await answerInlineQuery(iq.id, results, { cache_time: 60 });
+    console.log('[inline] Returned', results.length, 'results for query:', query);
+  } catch (e) {
+    console.error('[inline] Error:', e.message);
+    try { await answerInlineQuery(iq.id, [], { cache_time: 0 }); } catch (_) {}
+  }
+}
 
 // Handle successful Telegram Stars payment — mark user as premium in Supabase
 async function handleSuccessfulPayment(msg) {

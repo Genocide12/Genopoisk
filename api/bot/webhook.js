@@ -247,13 +247,23 @@ async function cmdStart(chatId, user, text) {
       const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId + '&title=' + encodeURIComponent('Поделённый фильм');
       const posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + filmId + '&size=medium';
 
-      // Try to fetch film title from Kinopoisk API for the message + poster
+      // Try to fetch film details from Kinopoisk API
       var filmTitle = 'Поделённый фильм';
+      var filmYear = '';
+      var filmRating = '';
+      var filmDescription = '';
+      var filmGenres = '';
       try {
         const kinopoiskRes = await fetch(SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.2/films/' + filmId);
         if (kinopoiskRes.ok) {
           const filmData = await kinopoiskRes.json();
           filmTitle = filmData.nameRu || filmData.nameEn || filmTitle;
+          filmYear = filmData.year || '';
+          filmRating = filmData.ratingKinopoisk || filmData.ratingImdb || '';
+          filmDescription = (filmData.shortDescription || filmData.description || '').slice(0, 200);
+          if (filmData.genres && filmData.genres.length > 0) {
+            filmGenres = filmData.genres.slice(0, 3).map(function(g) { return g.genre; }).join(', ');
+          }
         }
       } catch (_) {}
 
@@ -275,7 +285,18 @@ async function cmdStart(chatId, user, text) {
           [{ text: '🏠 На главную', callback_data: 'menu_main' }]
         ]
       };
-      const caption = '🎬 <b>Вам поделились фильмом!</b>\n\n🎞️ <b>' + escapeHtml(filmTitle) + '</b>\n\nНажмите «Смотреть», чтобы открыть плеер:';
+
+      // Build caption: title + year + rating + genres + description
+      var captionParts = ['🎞️ <b>' + escapeHtml(filmTitle) + '</b>'];
+      var metaParts = [];
+      if (filmYear) metaParts.push('📅 ' + filmYear);
+      if (filmRating && filmRating !== 'null' && filmRating !== '0') {
+        metaParts.push('⭐ ' + filmRating + ' (Кинопоиск)');
+      }
+      if (filmGenres) metaParts.push('🎭 ' + filmGenres);
+      if (metaParts.length > 0) captionParts.push(metaParts.join(' · '));
+      if (filmDescription) captionParts.push('\n' + escapeHtml(filmDescription));
+      var caption = captionParts.join('\n');
 
       // Send photo with poster if available, fallback to text
       try {

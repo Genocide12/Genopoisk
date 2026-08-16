@@ -132,7 +132,8 @@ async function notifyAdminNewUser(user, source) {
           'ID: <code>' + user.id + '</code>\n' +
           'Имя: ' + name + '\n' +
           'Username: ' + username + '\n' +
-          'Источник: ' + (source || '—')
+          'Источник: ' + (source || '—'),
+          { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
         );
       } catch (_) {}
     }
@@ -711,7 +712,11 @@ async function cmdBroadcast(chatId, user, text) {
   await sendMessage(chatId, `📢 Рассылка ${allUsers.length} пользователям...`);
   for (const u of allUsers) {
     try {
-      await sendMessage(Number(u.telegram_id), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
+      await sendMessage(Number(u.telegram_id), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]]
+        }
+      });
       sent++;
     } catch (e) {
       failed++;
@@ -768,7 +773,11 @@ async function handleMessage(update) {
     await sendMessage(chatId, `📢 Рассылка ${allUsers.length} пользователям...`);
     for (const u of allUsers) {
       try {
-        await sendMessage(Number(u.telegram_id), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`);
+        await sendMessage(Number(u.telegram_id), `📢 <b>Сообщение от Genopoisk</b>\n\n${message}`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]]
+        }
+      });
         sent++;
       } catch (e) { failed++; }
       await new Promise(r => setTimeout(r, 50));
@@ -1052,7 +1061,9 @@ async function handleCallback(update) {
           } catch (_) {}
           // Notify user
           try {
-            await sendMessage(Number(refundUserId), '✅ <b>Звёзды возвращены</b>\n\nВаши звёзды зачислены обратно на аккаунт. Premium отключён.');
+            await sendMessage(Number(refundUserId), '✅ <b>Звёзды возвращены</b>\n\nВаши звёзды зачислены обратно на аккаунт. Premium отключён.', {
+              reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+            });
           } catch (_) {}
           // Update admin message
           await edit('✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.');
@@ -1079,7 +1090,9 @@ async function handleCallback(update) {
       await edit('❌ <b>Запрос отклонён</b>\n\nВозврат звёзд отклонён для пользователя <code>' + denyUserId + '</code>.');
       // Notify user
       try {
-        await sendMessage(Number(denyUserId), '❌ <b>Запрос на возврат звёзд отклонён</b>\n\nАдминистратор отклонил ваш запрос. Premium остаётся активным.');
+        await sendMessage(Number(denyUserId), '❌ <b>Запрос на возврат звёзд отклонён</b>\n\nАдминистратор отклонил ваш запрос. Premium остаётся активным.', {
+          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+        });
       } catch (_) {}
       console.log('[refund] Denied for user', denyUserId);
       return;
@@ -1496,13 +1509,17 @@ module.exports = async (req, res) => {
       await handleCallback(update);
     } else if (update.web_app_data) {
       const msg = update.web_app_data;
-      await sendMessage(msg.from?.id || update.message?.chat?.id, `Получены данные из Mini App: ${msg.data}`);
+      await sendMessage(msg.from?.id || update.message?.chat?.id, `Получены данные из Mini App: ${msg.data}`, {
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+      });
     }
   } catch (e) {
     console.error('Handler error:', e);
     try {
       const chatId = update.message?.chat?.id || update.callback_query?.from?.id;
-      if (chatId) await sendMessage(chatId, `⚠️ Ошибка: ${e.message}`);
+      if (chatId) await sendMessage(chatId, `⚠️ Ошибка: ${e.message}`, {
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+      });
     } catch (_) {}
   }
 
@@ -1705,7 +1722,8 @@ async function handleSuccessfulPayment(msg) {
         '🔥 <b>Новый Premium-пользователь!</b>\n\n' +
         'ID: <code>' + userId + '</code>\n' +
         'Username: ' + (userObj && userObj.username ? '@' + userObj.username : '—') + '\n' +
-        'Сумма: ' + payment.total_amount + ' ' + payment.currency
+        'Сумма: ' + payment.total_amount + ' ' + payment.currency,
+        { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
       );
     } catch (_) {}
   }

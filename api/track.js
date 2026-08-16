@@ -151,7 +151,8 @@ module.exports = async (req, res) => {
               'Username: ' + usernameStr + '\n' +
               'Платформа: ' + platformLabel + ' — ' + device + '\n' +
               'IP: <code>' + ipStr + '</code>\n' +
-              'Первое действие: ' + eventLabel
+              'Первое действие: ' + eventLabel,
+              { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
             );
           } catch (_) {}
         }

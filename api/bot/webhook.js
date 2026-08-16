@@ -53,6 +53,7 @@ function mainMenuKeyboard(user) {
       { text: '❤️ Коллекция', callback_data: 'menu_favorites' },
       { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
     ],
+    [{ text: '🔍 Найти фильм', switch_inline_query_current_chat: '' }],
     [
       { text: '🧹 Очистить статистику', callback_data: 'menu_clear' },
       { text: '❓ Помощь', callback_data: 'menu_help' }
@@ -211,7 +212,8 @@ function userMenuKeyboard(user) {
     [
       { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
       { text: '❤️ Коллекция', callback_data: 'menu_favorites' }
-    ]
+    ],
+    [{ text: '🔍 Найти фильм', switch_inline_query_current_chat: '' }]
   ];
   if (isPremium) {
     keyboard.push([{ text: '🔥 Premium активен', callback_data: 'menu_premium_status' }]);

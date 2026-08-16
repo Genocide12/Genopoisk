@@ -34,7 +34,7 @@ const API_KEYS = loadApiKeys();
 
 // In-memory cache (per-instance, lasts for warm function lifetime)
 const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes — reduces Kinopoisk API calls
 
 // Track which keys are currently exhausted (rate-limited). Maps key →
 // timestamp when it can be retried. We use a cooldown of 5 minutes — after
@@ -142,21 +142,23 @@ module.exports = async (req, res) => {
   }
 
   // Try each available key until one works or all are exhausted.
-  // We try at most API_KEYS.length times (each key once per request).
+  // For 403 errors, we retry up to 3 times PER KEY with a 200ms delay —
+  // Vercel may route the retry to a different serverless instance with
+  // a different IP that Kinopoisk hasn't blocked.
   const triedKeys = new Set();
   let lastError = null;
+  const MAX_RETRIES_PER_KEY = 3;
 
-  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
+  for (let attempt = 0; attempt < API_KEYS.length * MAX_RETRIES_PER_KEY; attempt++) {
     const apiKey = pickNextAvailableKey();
-    if (!apiKey || triedKeys.has(apiKey)) continue;
-    triedKeys.add(apiKey);
+    if (!apiKey) break;
 
     try {
       const upstream = await fetch(targetUrl, {
         headers: {
           'X-API-KEY': apiKey,
           'Content-Type': 'application/json',
-          'User-Agent': 'Genopoisk/1.0 (Vercel serverless)'
+          'User-Agent': 'Mozilla/5.0 (compatible; GenopoiskBot/1.0)'
         }
       });
 
@@ -174,13 +176,16 @@ module.exports = async (req, res) => {
         console.error(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
 
         // 403 — Kinopoisk blocks the IP (VPN, proxy, or rate-limit).
-        // Try the next API key — different keys may route through different
-        // Kinopoisk backend nodes, one of them might accept the request.
-        // Only return 403 to client if ALL keys fail.
+        // Don't mark key as exhausted (key is fine, IP is the problem).
+        // Wait 200ms and retry — Vercel may route to a different instance
+        // with a different IP that Kinopoisk hasn't blocked.
         if (upstream.status === 403) {
-          markKeyExhausted(apiKey);
+          console.warn(`[kinopoisk] 403 from Kinopoisk (IP blocked), attempt ${attempt + 1}`);
           lastError = { status: 403, message: 'Kinopoisk API 403 (IP blocked or rate-limited)' };
-          continue; // try next key
+          // Don't mark key as exhausted — it's an IP issue, not a key issue
+          // Wait 200ms before retry (allows Vercel to route to different IP)
+          await new Promise(r => setTimeout(r, 200));
+          continue;
         }
 
         // Other errors (404, 500, etc.) — return to client, don't try other keys

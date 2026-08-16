@@ -156,6 +156,26 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   var playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
   var posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + encodeURIComponent(film.filmId) + '&size=medium';
 
+  // Fetch film details from Kinopoisk API (year, rating, description, genres)
+  var filmYear = '';
+  var filmRating = '';
+  var filmDescription = '';
+  var filmGenres = '';
+  try {
+    var kpRes = await fetch(SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(film.filmId));
+    if (kpRes.ok) {
+      var kpData = await kpRes.json();
+      filmYear = kpData.year || '';
+      filmRating = kpData.ratingKinopoisk || kpData.ratingImdb || '';
+      filmDescription = (kpData.shortDescription || kpData.description || '').slice(0, 300);
+      if (kpData.genres && kpData.genres.length > 0) {
+        filmGenres = kpData.genres.slice(0, 3).map(function(g) { return g.genre; }).join(', ');
+      }
+    }
+  } catch (e) {
+    console.warn('[filmcard] Kinopoisk details fetch failed:', e.message);
+  }
+
   // Share URL — opens Telegram chat picker with film title
   var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
   var shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
@@ -187,16 +207,24 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
     ]
   };
 
-  var caption = '🎬 <b>' + escapeHtml(film.title) + '</b>\n\n' +
-    'Здесь вы можете оценить фильм, а также порекомендовать другу';
+  // Build caption: title + year + rating + genres + description
+  var captionParts = ['🎬 <b>' + escapeHtml(film.title) + '</b>'];
+  var metaParts = [];
+  if (filmYear) metaParts.push('📅 ' + filmYear);
+  if (filmRating && filmRating !== 'null' && filmRating !== '0') {
+    metaParts.push('⭐ ' + filmRating + ' (Кинопоиск)');
+  }
+  if (filmGenres) metaParts.push('🎭 ' + filmGenres);
+  if (metaParts.length > 0) captionParts.push(metaParts.join(' · '));
+  if (filmDescription) captionParts.push('\n' + escapeHtml(filmDescription));
+  // Always add the call-to-action
+  captionParts.push('\nЗдесь вы можете оценить фильм, а также порекомендовать другу');
+  var caption = captionParts.join('\n');
 
-  // Send NEW photo message with film card — do NOT delete the list message.
-  // User asked to keep the list visible so they can go back to it.
-  // The film card appears as a new message below the list.
+  // Send NEW photo message with film card
   try {
     await sendPhoto(chatId, posterUrl, caption, { reply_markup: keyboard });
   } catch (e) {
-    // Poster failed — fallback to text-only message
     console.warn('[filmcard] sendPhoto failed, using text fallback:', e.message);
     await sendMessage(chatId, caption, { reply_markup: keyboard });
   }

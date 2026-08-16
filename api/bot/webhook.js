@@ -821,9 +821,10 @@ const USER_ALLOWED_CALLBACKS = new Set([
   'menu_help',
   'menu_buy_premium',
   'menu_premium_status',
+  'refund_request',
   'noop'
 ]);
-// Pagination/film navigation callbacks (regex prefixes) allowed for users.
+// Regex callbacks allowed for users
 const USER_ALLOWED_REGEX = [
   /^myfilms_\d+$/,
   /^myfilm_\d+$/,
@@ -944,11 +945,143 @@ async function handleCallback(update) {
     // Premium status — show info for users who already have premium
     if (data === 'menu_premium_status') {
       const userObj = await getUser(String(fromId));
-      if (userObj && userObj.is_premium) {
-        await edit('🔥 <b>Premium активен</b>\n\nСпасибо за поддержку проекта Genopoisk!\n\nВаш бейдж 🔥 отображается в шапке сайта.', userMenuKeyboard(userObj));
+      const isPrem = (userObj && userObj.is_premium) || (userObj && userObj.events_by_type && userObj.events_by_type.premium);
+      if (isPrem) {
+        // Premium active — show status + refund button
+        var premKeyboard = {
+          inline_keyboard: [
+            [{ text: '💸 Вернуть звёзды', callback_data: 'refund_request' }],
+            [
+              { text: '🏠 На главную', callback_data: 'menu_main' }
+            ]
+          ]
+        };
+        await edit('🔥 <b>Premium активен</b>\n\nСпасибо за поддержку проекта Genopoisk!\n\nВаш бейдж 🔥 отображается в шапке сайта.\n\nЕсли вы хотите вернуть звёзды — нажмите кнопку ниже. Запрос будет отправлен администратору на подтверждение.', premKeyboard);
       } else {
         await edit('У вас нет Premium.\n\nНажмите «⭐ Купить Premium» чтобы поддержать проект.', userMenuKeyboard(userObj));
       }
+      return;
+    }
+    // User requests a star refund — notify admin for approval
+    if (data === 'refund_request') {
+      // Confirm the user has premium
+      const userObj = await getUser(String(fromId));
+      const isPrem = (userObj && userObj.is_premium) || (userObj && userObj.events_by_type && userObj.events_by_type.premium);
+      if (!isPrem) {
+        await answerCallback(cq.id, 'У вас нет Premium');
+        return;
+      }
+      await answerCallback(cq.id, 'Запрос отправлен администратору ⏳');
+      await edit('⏳ <b>Запрос на возврат звёзд отправлен</b>\n\nАдминистратор рассмотрит ваш запрос. После подтверждения звёзды вернутся на ваш аккаунт, а Premium будет отключён.', {
+        inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]]
+      });
+      // Notify all admins
+      const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+      var userName = userObj && userObj.username ? '@' + userObj.username : '—';
+      var userIdStr = String(fromId);
+      for (const adminId of adminIds) {
+        try {
+          await sendMessage(Number(adminId),
+            '💸 <b>Запрос на возврат звёзд</b>\n\n' +
+            'Пользователь: ' + userName + '\n' +
+            'ID: <code>' + userIdStr + '</code>\n\n' +
+            'Подтвердить возврат? Premium будет отключён.',
+            {
+              reply_markup: {
+                inline_keyboard: [[
+                  { text: '✅ Вернуть звёзды', callback_data: 'refund_approve_' + userIdStr },
+                  { text: '❌ Отклонить', callback_data: 'refund_deny_' + userIdStr }
+                ]]
+              }
+            }
+          );
+        } catch (_) {}
+      }
+      console.log('[refund] Request from user', fromId, 'sent to', adminIds.length, 'admins');
+      return;
+    }
+    // Admin approves refund
+    var refundApproveMatch = data.match(/^refund_approve_(.+)$/);
+    if (refundApproveMatch) {
+      if (!isAdmin(fromId)) {
+        await answerCallback(cq.id, 'Только для администратора');
+        return;
+      }
+      var refundUserId = refundApproveMatch[1];
+      await answerCallback(cq.id, 'Возврат выполняется...');
+      // Find the user's Star transaction
+      try {
+        const txRes = await fetch('https://api.telegram.org/bot' + process.env.TG_BOT_TOKEN + '/getStarTransactions?limit=50');
+        const txData = await txRes.json();
+        const txns = (txData.result && txData.result.transactions) || [];
+        // Find the most recent incoming transaction from this user
+        var userTxn = null;
+        for (var i = 0; i < txns.length; i++) {
+          var t = txns[i];
+          var source = t.source;
+          if (source && source.user_id === refundUserId && t.amount > 0) {
+            userTxn = t;
+            break;
+          }
+        }
+        if (!userTxn) {
+          await edit('❌ Транзакция не найдена. Возможно, звёзды уже были возвращены.');
+          return;
+        }
+        // Call refundStarPayment
+        var refundRes = await fetch('https://api.telegram.org/bot' + process.env.TG_BOT_TOKEN + '/refundStarPayment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: Number(refundUserId),
+            telegram_payment_charge_id: userTxn.id
+          })
+        });
+        var refundData = await refundRes.json();
+        if (refundData.ok) {
+          // Remove premium from Supabase
+          try {
+            await fetch(SITE_URL.replace(/\/$/, '') + '/api/track', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'premium_refund',
+                userId: refundUserId
+              })
+            });
+          } catch (_) {}
+          // Notify user
+          try {
+            await sendMessage(Number(refundUserId), '✅ <b>Звёзды возвращены</b>\n\nВаши звёзды зачислены обратно на аккаунт. Premium отключён.');
+          } catch (_) {}
+          // Update admin message
+          await edit('✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.');
+          console.log('[refund] Approved for user', refundUserId, 'txn:', userTxn.id);
+        } else {
+          await edit('❌ Ошибка возврата: ' + (refundData.description || 'unknown'));
+          console.error('[refund] API error:', JSON.stringify(refundData));
+        }
+      } catch (e) {
+        await edit('❌ Ошибка: ' + e.message);
+        console.error('[refund] Error:', e);
+      }
+      return;
+    }
+    // Admin denies refund
+    var refundDenyMatch = data.match(/^refund_deny_(.+)$/);
+    if (refundDenyMatch) {
+      if (!isAdmin(fromId)) {
+        await answerCallback(cq.id, 'Только для администратора');
+        return;
+      }
+      var denyUserId = refundDenyMatch[1];
+      await answerCallback(cq.id, 'Запрос отклонён');
+      await edit('❌ <b>Запрос отклонён</b>\n\nВозврат звёзд отклонён для пользователя <code>' + denyUserId + '</code>.');
+      // Notify user
+      try {
+        await sendMessage(Number(denyUserId), '❌ <b>Запрос на возврат звёзд отклонён</b>\n\nАдминистратор отклонил ваш запрос. Premium остаётся активным.');
+      } catch (_) {}
+      console.log('[refund] Denied for user', denyUserId);
       return;
     }
     if (data === 'menu_stats') {

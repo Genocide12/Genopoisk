@@ -60,7 +60,7 @@ function mainMenuKeyboard(user) {
   ];
   // Premium button — for admin too (admin can support the project)
   if (isPremium) {
-    keyboard.push([{ text: '🎉 Premium активен', callback_data: 'menu_premium_status' }]);
+    keyboard.push([{ text: '🔥 Premium активен', callback_data: 'menu_premium_status' }]);
   } else {
     keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
   }
@@ -128,7 +128,7 @@ async function notifyAdminNewUser(user, source) {
     for (const adminId of adminIds) {
       try {
         await sendMessage(Number(adminId),
-          '🎉 <b>Новый пользователь в боте!</b>\n\n' +
+          '🔥 <b>Новый пользователь в боте!</b>\n\n' +
           'ID: <code>' + user.id + '</code>\n' +
           'Имя: ' + name + '\n' +
           'Username: ' + username + '\n' +
@@ -209,7 +209,7 @@ function userMenuKeyboard(user) {
     ]
   ];
   if (isPremium) {
-    keyboard.push([{ text: '🎉 Premium активен', callback_data: 'menu_premium_status' }]);
+    keyboard.push([{ text: '🔥 Premium активен', callback_data: 'menu_premium_status' }]);
   } else {
     keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
   }
@@ -916,16 +916,16 @@ async function handleCallback(update) {
     if (data === 'menu_buy_premium') {
       const userObj = await getUser(String(fromId));
       if (userObj && userObj.is_premium) {
-        await answerCallback(cq.id, 'У вас уже активен Premium 🎉');
-        await edit('🎉 <b>Premium активен</b>\n\nСпасибо за поддержку проекта!', userMenuKeyboard(userObj));
+        await answerCallback(cq.id, 'У вас уже активен Premium 🔥');
+        await edit('🔥 <b>Premium активен</b>\n\nСпасибо за поддержку проекта!', userMenuKeyboard(userObj));
         return;
       }
       // Send invoice with Telegram Stars as currency
       try {
         const invoiceParams = {
           chat_id: chatId,
-          title: '🎉 Genopoisk Premium',
-          description: 'Поддержка проекта + бейдж 🎉 в шапке сайта.\n\nPremium — это знак вашей поддержки. Спасибо!',
+          title: '🔥 Genopoisk Premium',
+          description: 'Поддержка проекта + бейдж 🔥 в шапке сайта.\n\nPremium — это знак вашей поддержки. Спасибо!',
           payload: JSON.stringify({ type: 'premium', user_id: String(fromId) }),
           prices: [{ label: 'Premium подписка', amount: 5 }],
           currency: 'XTR',
@@ -945,7 +945,7 @@ async function handleCallback(update) {
     if (data === 'menu_premium_status') {
       const userObj = await getUser(String(fromId));
       if (userObj && userObj.is_premium) {
-        await edit('🎉 <b>Premium активен</b>\n\nСпасибо за поддержку проекта Genopoisk!\n\nВаш бейдж 🎉 отображается в шапке сайта.', userMenuKeyboard(userObj));
+        await edit('🔥 <b>Premium активен</b>\n\nСпасибо за поддержку проекта Genopoisk!\n\nВаш бейдж 🔥 отображается в шапке сайта.', userMenuKeyboard(userObj));
       } else {
         await edit('У вас нет Premium.\n\nНажмите «⭐ Купить Premium» чтобы поддержать проект.', userMenuKeyboard(userObj));
       }
@@ -1238,12 +1238,21 @@ async function handleCallback(update) {
         try {
           await editMessageCaption(chatId, messageId, updatedCaption, { reply_markup: updatedKeyboard });
         } catch (e) {
-          // If edit fails, try text edit (fallback for text-only messages)
           try {
             await editMessage(chatId, messageId, updatedCaption, { reply_markup: updatedKeyboard });
           } catch (_) {}
         }
       }
+
+      // Also update the film list message so the new rating shows there.
+      // We search for the list by re-building it and sending as a new message.
+      // This way user sees: updated film card + fresh list with rating.
+      try {
+        var listResult = await buildMyFilmsText(String(fromId));
+        cacheMyFilms(fromId, listResult.films);
+        await sendMessage(chatId, listResult.text, { reply_markup: myFilmsKeyboard(listResult.films, 0) });
+      } catch (_) {}
+
       return;
     }
 
@@ -1506,9 +1515,9 @@ async function handleSuccessfulPayment(msg) {
   // 1) Send thank-you message IMMEDIATELY (before any Supabase calls)
   try {
     await sendMessage(msg.chat.id,
-      '🎉 <b>Спасибо за поддержку!</b>\n\n' +
+      '🔥 <b>Спасибо за поддержку!</b>\n\n' +
       'Ваш Premium активирован.\n' +
-      'Бейдж 🎉 теперь отображается в шапке сайта.\n\n' +
+      'Бейдж 🔥 теперь отображается в шапке сайта.\n\n' +
       'Если бейдж не появился — обновите страницу (pull-to-refresh).'
     );
     console.log('[premium] Thank-you message sent to:', msg.chat.id);
@@ -1560,7 +1569,7 @@ async function handleSuccessfulPayment(msg) {
     try {
       const userObj = await getUser(userId);
       await sendMessage(Number(adminId),
-        '🎉 <b>Новый Premium-пользователь!</b>\n\n' +
+        '🔥 <b>Новый Premium-пользователь!</b>\n\n' +
         'ID: <code>' + userId + '</code>\n' +
         'Username: ' + (userObj && userObj.username ? '@' + userObj.username : '—') + '\n' +
         'Сумма: ' + payment.total_amount + ' ' + payment.currency

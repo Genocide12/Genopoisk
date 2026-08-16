@@ -44,7 +44,7 @@ module.exports = async (req, res) => {
       search_history: user.search_history || [],
       user_id: telegramId,
       username: user.username,
-      is_premium: !!user.is_premium
+      is_premium: !!(user.is_premium || (user.events_by_type && user.events_by_type.premium))
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });

@@ -180,7 +180,7 @@
       </div>
       <div class="action-card" onclick="loadFavorites()">
         <span class="action-icon">❤️</span>
-        <div class="action-title">Избранное</div>
+        <div class="action-title">Коллекция</div>
       </div>
     </div>
     <div class="content hidden" id="content">
@@ -1265,7 +1265,7 @@
       searchInput.value = '';
       const uid = getUserId();
       if (!uid || uid.startsWith('web_')) {
-        showEmptyState('Войдите через Telegram, чтобы видеть избранное');
+        showEmptyState('Войдите через Telegram, чтобы видеть коллекцию');
         return;
       }
       try {

@@ -39,7 +39,7 @@ const broadcastPending = new Map(); // userId -> true
 // Track last admin message IDs for editMessage (prevents duplicate messages)
 const lastAdminMsg = new Map(); // chatId -> { messageId, type }
 function mainMenuKeyboard(user) {
-  var isPremium = user && user.is_premium;
+  var isPremium = (user && user.is_premium) || (user && user.events_by_type && user.events_by_type.premium);
   var keyboard = [
     [
       { text: '📊 Статистика', callback_data: 'menu_stats' },
@@ -50,7 +50,7 @@ function mainMenuKeyboard(user) {
       { text: '🚀 Деплой', callback_data: 'menu_deploy' }
     ],
     [
-      { text: '❤️ Избранное', callback_data: 'menu_favorites' },
+      { text: '❤️ Коллекция', callback_data: 'menu_favorites' },
       { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
     ],
     [
@@ -144,7 +144,7 @@ async function notifyAdminNewUser(user, source) {
 
 // ---- Film card helper — shows poster + title + rating + share buttons ----
 // Sends a NEW photo message (deletes the old text message first).
-// Used by both 'Мои фильмы' and 'Избранное' film cards.
+// Used by both 'Мои фильмы' and 'Коллекция' film cards.
 async function showFilmCard(chatId, messageId, film, currentRating, context) {
   // context = 'myfilms' or 'favorites' — determines "back" button label
   var playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
@@ -164,7 +164,7 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
 
   // Back button depends on context
   var backBtn = context === 'favorites'
-    ? { text: '❤️ К избранному', callback_data: 'menu_favorites' }
+    ? { text: '❤️ К коллекцииу', callback_data: 'menu_favorites' }
     : { text: '📀 К списку', callback_data: 'menu_myfilms' };
 
   var keyboard = {
@@ -184,20 +184,9 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   var caption = '🎬 <b>' + escapeHtml(film.title) + '</b>\n\n' +
     'Здесь вы можете оценить фильм, а также порекомендовать другу';
 
-  // Delete old message (the film list), then send new photo message.
-  // The deletion is important — otherwise the list stays in chat and
-  // clutters it. We log errors but don't fail the whole operation.
-  if (messageId) {
-    try {
-      await deleteMessage(chatId, messageId);
-      console.log('[filmcard] Deleted old message', messageId, 'in chat', chatId);
-    } catch (e) {
-      console.warn('[filmcard] deleteMessage failed:', e.message, '(chat:', chatId, 'msg:', messageId, ')');
-    }
-  } else {
-    console.warn('[filmcard] No messageId to delete — list will remain in chat');
-  }
-
+  // Send NEW photo message with film card — do NOT delete the list message.
+  // User asked to keep the list visible so they can go back to it.
+  // The film card appears as a new message below the list.
   try {
     await sendPhoto(chatId, posterUrl, caption, { reply_markup: keyboard });
   } catch (e) {
@@ -211,16 +200,15 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
 
 // Keyboard for regular (non-admin) users — limited to user-facing features only.
 function userMenuKeyboard(user) {
-  var isPremium = user && user.is_premium;
+  var isPremium = (user && user.is_premium) || (user && user.events_by_type && user.events_by_type.premium);
   var keyboard = [
     [{ text: '🎞️ Открыть Genopoisk', web_app: { url: SITE_URL } }],
     [
       { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
-      { text: '❤️ Избранное', callback_data: 'menu_favorites' }
+      { text: '❤️ Коллекция', callback_data: 'menu_favorites' }
     ]
   ];
   if (isPremium) {
-    // Premium user — show their status instead of buy button
     keyboard.push([{ text: '👑 Premium активен', callback_data: 'menu_premium_status' }]);
   } else {
     keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
@@ -312,7 +300,7 @@ async function cmdStart(chatId, user, text) {
         `<b>Что умеет бот:</b>\n` +
         `🎞️ <b>Открыть Genopoisk</b> — запустить приложение прямо в Telegram\n` +
         `📀 <b>Мои фильмы</b> — история просмотренных фильмов + оценки ⭐\n` +
-        `❤️ <b>Избранное</b> — фильмы, которые вы сохранили в плеере\n` +
+        `❤️ <b>Коллекция</b> — фильмы, которые вы сохранили в плеере\n` +
         `❓ <b>Помощь</b> — подробная справка по сайту, боту и приложению\n\n` +
         `Ваш профиль единый для всех устройств — сайт, бот, установленное приложение.\n` +
         `Позиция просмотра синхронизируется автоматически.\n\n` +
@@ -369,8 +357,8 @@ function buildUserHelpText() {
 <b>⏯ Продолжение просмотра</b>
 Если вы не досмотрели фильм, на главной появится карточка «Продолжить просмотр» с позицией, на которой вы остановились. Позиция синхронизируется между всеми устройствами — начните на телефоне, продолжите на компьютере.
 
-<b>❤️ Избранное</b>
-В плеере нажмите ❤️ (или ☆ в шапке) — фильм добавится в избранное. Список избранных фильмов доступен в боте (кнопка «❤️ Избранное») и на сайте (карточка «❤️ Избранное» на главной).
+<b>❤️ Коллекция</b>
+В плеере нажмите ❤️ (или ☆ в шапке) — фильм добавится в коллекцию. Список коллекции фильмов доступен в боте (кнопка «❤️ Коллекция») и на сайте (карточка «❤️ Коллекция» на главной).
 
 <b>📀 Мои фильмы</b>
 История всех просмотренных фильмов. Откройте бота → «📀 Мои фильмы». Можно оценить фильм звёздами ⭐ (от 1 до 5) и снова открыть плеер.
@@ -463,7 +451,7 @@ async function buildStatsText() {
    🔍 Поиски: <b>${totalSearches}</b>
    🎬 Фильмов открыто: <b>${totalMovies}</b>
    ⭐ Оценено фильмов: <b>${totalRatings}</b>
-   ⭐ В избранном: <b>${totalFavorites}</b>
+   ⭐ В коллекции: <b>${totalFavorites}</b>
 
 <b>Сегодня:</b>
    👥 Уникальных: ${todayUsers}
@@ -557,7 +545,7 @@ async function buildUserProfileText(targetId) {
     if (favorites.length > 10) favText += "\n   ... и ещё " + (favorites.length - 10);
   }
 
-  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В избранном: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Избранное (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В коллекции: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Коллекция (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
   return { text, hasLastFilm: !!u.last_film };
 }
 
@@ -620,17 +608,17 @@ function myFilmsKeyboard(films, page) {
 async function buildFavoritesText(targetUserId) {
   let u = await getUser(targetUserId);
   if (!u) {
-    return { text: `❤️ <b>Избранное</b>\n\nИстория ещё не создана.`, films: [] };
+    return { text: `❤️ <b>Коллекция</b>\n\nИстория ещё не создана.`, films: [] };
   }
   const films = u.favorite_films || [];
   if (films.length === 0) {
-    return { text: `❤️ <b>Избранное</b>\n\nВы ещё не добавляли фильмы в избранное. Нажмите ❤️ в плеере, чтобы добавить.`, films: [] };
+    return { text: `❤️ <b>Коллекция</b>\n\nВы ещё не добавляли фильмы в коллекцию. Нажмите ❤️ в плеере, чтобы добавить.`, films: [] };
   }
   var lines = films.slice(0, 20).map(function(f, i) {
     return (i + 1) + '. «' + escapeHtml(f.title) + '»';
   }).join('\n');
   return {
-    text: '❤️ <b>Избранное</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    text: '❤️ <b>Коллекция</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
     films: films
   };
 }
@@ -940,12 +928,12 @@ async function handleCallback(update) {
           description: 'Поддержка проекта + бейдж 👑 в шапке сайта.\n\nPremium — это знак вашей поддержки. Спасибо!',
           payload: JSON.stringify({ type: 'premium', user_id: String(fromId) }),
           prices: [{ label: 'Premium подписка', amount: 5 }],
-          currency: 'XTR'
-          // provider_token is OMITTED for Telegram Stars (XTR) payments
+          currency: 'XTR',
+          provider_token: ''
         };
         console.log('[premium] Sending invoice:', JSON.stringify(invoiceParams));
-        await tg('sendInvoice', invoiceParams);
-        console.log('[premium] Invoice sent successfully to:', chatId);
+        const invoiceResult = await tg('sendInvoice', invoiceParams);
+        console.log('[premium] Invoice sent successfully, message_id:', invoiceResult?.message_id);
         await answerCallback(cq.id, 'Счёт отправлен ⭐');
       } catch (e) {
         console.error('[premium] sendInvoice error:', e.message, e.stack);
@@ -1007,7 +995,7 @@ async function handleCallback(update) {
     // Remove film from favorites — sends favorite_removed event to /api/track,
     // which deletes the film from user.favorite_films in Supabase. This is
     // the SAME backend that the website reads, so the change is reflected
-    // everywhere (bot favorites list, website ❤️ Избранное section, player ☆
+    // everywhere (bot favorites list, website ❤️ Коллекция section, player ☆
     // button state) automatically.
     const favRemoveMatch = data.match(/^favremove_(\d+)$/);
     if (favRemoveMatch) {
@@ -1384,7 +1372,6 @@ async function handleSuccessfulPayment(msg) {
   }
 
   // 1) Send thank-you message IMMEDIATELY (before any Supabase calls)
-  //    so user gets feedback even if DB update fails.
   try {
     await sendMessage(msg.chat.id,
       '👑 <b>Спасибо за поддержку!</b>\n\n' +
@@ -1397,25 +1384,39 @@ async function handleSuccessfulPayment(msg) {
     console.error('[premium] Failed to send thank-you message:', e.message);
   }
 
-  // 2) Try to mark user as premium in Supabase
+  // 2) Mark user as premium — try is_premium column first, then fallback
+  //    to events_by_type.premium (which always exists)
   let premiumSaved = false;
   try {
-    const { updateUser } = require('../_lib/supabase');
+    const { updateUser, getUser } = require('../_lib/supabase');
+    // First try the dedicated is_premium column
     const result = await updateUser(userId, {
       is_premium: true,
       premium_since: new Date().toISOString()
     });
     if (result) {
       premiumSaved = true;
-      console.log('[premium] User', userId, 'marked as premium in Supabase');
-    } else {
-      console.warn('[premium] updateUser returned null — column may not exist');
+      console.log('[premium] User', userId, 'marked as premium via is_premium column');
     }
   } catch (e) {
-    console.error('[premium] Supabase update failed:', e.message);
+    console.error('[premium] is_premium column update failed:', e.message);
   }
 
-  // 3) Send user their updated menu
+  // Fallback: also set events_by_type.premium = 1 (this column always exists)
+  // This way userMenuKeyboard can check events_by_type.premium if is_premium fails
+  try {
+    const userObj = await getUser(userId);
+    if (userObj) {
+      var ebt = userObj.events_by_type || {};
+      ebt.premium = 1;
+      await updateUser(userId, { events_by_type: ebt });
+      console.log('[premium] events_by_type.premium set to 1 for user', userId);
+    }
+  } catch (e) {
+    console.error('[premium] events_by_type fallback failed:', e.message);
+  }
+
+  // 3) Send user their updated menu (reload user to get fresh is_premium)
   try {
     const userObj = await getUser(userId);
     await sendMessage(msg.chat.id, '👇 Ваше меню:', { reply_markup: userMenuKeyboard(userObj) });
@@ -1430,8 +1431,7 @@ async function handleSuccessfulPayment(msg) {
         '👑 <b>Новый Premium-пользователь!</b>\n\n' +
         'ID: <code>' + userId + '</code>\n' +
         'Username: ' + (userObj && userObj.username ? '@' + userObj.username : '—') + '\n' +
-        'Сумма: ' + payment.total_amount + ' ' + payment.currency + '\n' +
-        'Сохранено в БД: ' + (premiumSaved ? '✅' : '❌ (нужна SQL миграция: ALTER TABLE users ADD COLUMN is_premium boolean DEFAULT false)')
+        'Сумма: ' + payment.total_amount + ' ' + payment.currency
       );
     } catch (_) {}
   }

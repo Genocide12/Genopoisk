@@ -808,7 +808,11 @@ async function cmdRedeploy(chatId, user) {
   try {
     await sendMessage(chatId, '⏳ Запускаю пересборку...');
     const result = await triggerRedeploy();
-    await sendMessage(chatId, `✅ <b>Деплой запущен</b>\n\nID: <code>${result.id || result.uid}</code>\nURL: https://${result.url || '...'}`, { reply_markup: deployMenuKeyboard() });
+    const deployId = result.id || result.uid;
+    const deployUrl = result.url || '...';
+    await sendMessage(chatId, `✅ <b>Деплой запущен</b>\n\nID: <code>${deployId}</code>\nURL: https://${deployUrl}`, { reply_markup: deployMenuKeyboard() });
+    // Poll for completion and notify admin
+    notifyDeployStatus(String(user.id), deployId, deployUrl);
   } catch (e) {
     await sendMessage(chatId, `❌ Ошибка: ${e.message}`, { reply_markup: deployMenuKeyboard() });
   }
@@ -1391,8 +1395,14 @@ async function handleCallback(update) {
     if (data === 'deploy_redeploy') {
       try {
         const result = await triggerRedeploy();
-        const text = `✅ <b>Деплой запущен</b>\n\nID: <code>${result.id || result.uid}</code>\nURL: https://${result.url || '...'}`;
+        const deployId = result.id || result.uid;
+        const deployUrl = result.url || '...';
+        const text = `✅ <b>Деплой запущен</b>\n\nID: <code>${deployId}</code>\nURL: https://${deployUrl}`;
         await edit(text, deployMenuKeyboard());
+
+        // Poll deployment status and notify admin when ready or error
+        // Vercel builds take 10-60s typically
+        notifyDeployStatus(String(fromId), deployId, deployUrl);
       } catch (e) {
         await edit(`❌ Ошибка: ${e.message}`, deployMenuKeyboard());
       }
@@ -1543,6 +1553,72 @@ async function handleCallback(update) {
   }
 }
 
+// Track pending deploy status checks — when admin triggers a redeploy,
+// we store the deployId and check its status on the next webhook call.
+// Vercel serverless has a 10s timeout, so we can't poll inline.
+const pendingDeployCheck = new Map(); // adminId -> { deployId, deployUrl, startTime }
+
+function notifyDeployStatus(adminId, deployId, deployUrl) {
+  pendingDeployCheck.set(adminId, {
+    deployId: deployId,
+    deployUrl: deployUrl,
+    startTime: Date.now()
+  });
+  console.log('[deploy-poll] Tracking deploy', deployId, 'for admin', adminId);
+}
+
+// Check pending deploy status — called on every webhook invocation.
+// If deploy is READY or ERROR, send notification and clear the tracking.
+async function checkPendingDeployStatus() {
+  if (pendingDeployCheck.size === 0) return;
+  var VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+  var TEAM_ID = process.env.VERCEL_TEAM_ID;
+
+  for (var [adminId, info] of pendingDeployCheck.entries()) {
+    // Stop checking after 10 minutes
+    if (Date.now() - info.startTime > 10 * 60 * 1000) {
+      pendingDeployCheck.delete(adminId);
+      continue;
+    }
+    try {
+      var url = 'https://api.vercel.com/v13/deployments/' + info.deployId;
+      if (TEAM_ID) url += '?teamId=' + TEAM_ID;
+      var res = await fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + VERCEL_TOKEN }
+      });
+      if (!res.ok) continue;
+      var data = await res.json();
+      var state = data.readyState || data.state || 'UNKNOWN';
+
+      if (state === 'READY') {
+        var commitMsg = (data.meta && data.meta.githubCommitMessage) ? data.meta.githubCommitMessage.split('\n')[0] : '—';
+        var commitSha = (data.meta && data.meta.githubCommitSha) ? data.meta.githubCommitSha.slice(0, 7) : '—';
+        await sendMessage(Number(adminId),
+          '✅ <b>Деплой завершён!</b>\n\n' +
+          'Статус: <b>READY</b>\n' +
+          'ID: <code>' + info.deployId + '</code>\n' +
+          'Commit: <code>' + commitSha + '</code>\n' +
+          'Сообщение: ' + commitMsg + '\n' +
+          'URL: https://' + (data.url || info.deployUrl),
+          { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
+        );
+        pendingDeployCheck.delete(adminId);
+      } else if (state === 'ERROR' || state === 'CANCELED') {
+        await sendMessage(Number(adminId),
+          '❌ <b>Деплой не удался</b>\n\n' +
+          'Статус: <b>' + state + '</b>\n' +
+          'ID: <code>' + info.deployId + '</code>\n' +
+          'Проверьте логи: https://vercel.com/' + (TEAM_ID || '') + '/genopoisk/' + info.deployId,
+          { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
+        );
+        pendingDeployCheck.delete(adminId);
+      }
+    } catch (e) {
+      console.warn('[deploy-poll] Error checking status:', e.message);
+    }
+  }
+}
+
 // ---- Lambda entrypoint ----
 // One-time bot command registration. Sets the command list that users see
 // when they type '/' in the chat. Uses an in-memory flag so we only call
@@ -1605,6 +1681,8 @@ module.exports = async (req, res) => {
   // Admin-only commands are still handled if typed manually, they're just
   // not advertised in the autocomplete.
   await registerBotCommands();
+  // Check if any pending deploy has finished — notify admin
+  checkPendingDeployStatus();
 
   const update = req.body;
   console.log('TG update:', JSON.stringify(update).slice(0, 500));

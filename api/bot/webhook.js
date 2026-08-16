@@ -156,6 +156,22 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   var playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
   var posterUrl = SITE_URL.replace(/\/$/, '') + '/api/poster?id=' + encodeURIComponent(film.filmId) + '&size=medium';
 
+  // For favorites context, try to find the user's rating from watched_films
+  // (favorite_films doesn't store rating — only watched_films does)
+  if (context === 'favorites' && (!currentRating || currentRating === 0)) {
+    try {
+      var userObj = await getUser(String(chatId));
+      if (userObj && userObj.watched_films) {
+        var watchedFilm = userObj.watched_films.find(function(f) {
+          return String(f.filmId) === String(film.filmId);
+        });
+        if (watchedFilm && watchedFilm.rating) {
+          currentRating = watchedFilm.rating;
+        }
+      }
+    } catch (_) {}
+  }
+
   // Fetch film details from Kinopoisk API (year, rating, description, genres)
   var filmYear = '';
   var filmRating = '';
@@ -725,7 +741,7 @@ async function buildFavoritesText(targetUserId) {
     return (i + 1) + '. «' + escapeHtml(f.title) + '»';
   }).join('\n');
   return {
-    text: '❤️ <b>Коллекция</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    text: '❤️ <b>Коллекция</b> (всего ' + films.length + ')\n\n' + lines + '\n\nВыберите фильм, чтобы посмотреть детали:',
     films: films
   };
 }

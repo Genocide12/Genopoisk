@@ -321,18 +321,26 @@ async function recordEvent(telegramId, eventType, data) {
     if (!user) return;
     if (!data.filmId) return;
     let favs = user.favorite_films || [];
+    let watched = user.watched_films || [];
     if (eventType === 'favorite_added') {
-      // Add (dedupe)
+      // Add to favorites (dedupe)
       const exists = favs.some(f => String(f.filmId) === String(data.filmId));
       if (!exists) {
         favs.unshift({ filmId: String(data.filmId), title: data.title || '', ts: nowIso });
         if (favs.length > 100) favs.pop();
       }
+      // Also add to watched_films if not already there — this ensures the
+      // film appears in "Мои фильмы" even if user never opened the player
+      const watchedExists = watched.some(f => String(f.filmId) === String(data.filmId));
+      if (!watchedExists) {
+        watched.unshift({ filmId: String(data.filmId), title: data.title || '', ts: nowIso, position: 0, duration: 0 });
+        if (watched.length > 50) watched.pop();
+      }
     } else {
-      // Remove
+      // Remove from favorites only (keep in watched_films)
       favs = favs.filter(f => String(f.filmId) !== String(data.filmId));
     }
-    await updateUser(telegramId, { favorite_films: favs, last_seen: nowIso });
+    await updateUser(telegramId, { favorite_films: favs, watched_films: watched, last_seen: nowIso });
     return;
   }
 

@@ -1041,8 +1041,7 @@ async function handleCallback(update) {
         }
         if (!userTxn) {
           await edit('❌ Транзакция не найдена. Возможно, звёзды уже были возвращены.', {
-            reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-          });
+            inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] });
           return;
         }
         // Call refundStarPayment
@@ -1074,27 +1073,23 @@ async function handleCallback(update) {
           // Notify user
           try {
             await sendMessage(Number(refundUserId), '✅ <b>Звёзды возвращены</b>\n\nВаши звёзды зачислены обратно на аккаунт. Premium отключён.', {
-              reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-            });
+              reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } });
           } catch (_) {}
           // Update admin message
           var adminMsg = isAlreadyRefunded
             ? '✅ <b>Звёзды уже были возвращены ранее</b>\n\nPremium отключён для пользователя <code>' + refundUserId + '</code>.'
             : '✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.';
           await edit(adminMsg, {
-            reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-          });
+            inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] });
           console.log('[refund] Approved for user', refundUserId, 'txn:', userTxn.id, 'alreadyRefunded:', isAlreadyRefunded);
         } else {
           await edit('❌ Ошибка возврата: ' + (refundData.description || 'unknown'), {
-            reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-          });
+            inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] });
           console.error('[refund] API error:', JSON.stringify(refundData));
         }
       } catch (e) {
         await edit('❌ Ошибка: ' + e.message, {
-          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-        });
+          inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] });
         console.error('[refund] Error:', e);
       }
       return;
@@ -1109,13 +1104,11 @@ async function handleCallback(update) {
       var denyUserId = refundDenyMatch[1];
       await answerCallback(cq.id, 'Запрос отклонён');
       await edit('❌ <b>Запрос отклонён</b>\n\nВозврат звёзд отклонён для пользователя <code>' + denyUserId + '</code>.', {
-        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-      });
+        inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] });
       // Notify user
       try {
         await sendMessage(Number(denyUserId), '❌ <b>Запрос на возврат звёзд отклонён</b>\n\nАдминистратор отклонил ваш запрос. Premium остаётся активным.', {
-          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-        });
+          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } });
       } catch (_) {}
       console.log('[refund] Denied for user', denyUserId);
       return;
@@ -1533,16 +1526,14 @@ module.exports = async (req, res) => {
     } else if (update.web_app_data) {
       const msg = update.web_app_data;
       await sendMessage(msg.from?.id || update.message?.chat?.id, `Получены данные из Mini App: ${msg.data}`, {
-        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-      });
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } });
     }
   } catch (e) {
     console.error('Handler error:', e);
     try {
       const chatId = update.message?.chat?.id || update.callback_query?.from?.id;
       if (chatId) await sendMessage(chatId, `⚠️ Ошибка: ${e.message}`, {
-        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
-      });
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } });
     } catch (_) {}
   }
 

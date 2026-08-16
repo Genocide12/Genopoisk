@@ -181,11 +181,13 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   var shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
   var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink) + '&text=' + encodeURIComponent(shareText);
 
-  // Star rating buttons
+  // Star rating buttons — only for 'myfilms' context, NOT for 'favorites'
   var starButtons = [];
-  for (var s = 1; s <= 5; s++) {
-    var star = s <= currentRating ? '⭐' : '☆';
-    starButtons.push({ text: star + s, callback_data: 'rate_' + film.filmId + '_' + s });
+  if (context !== 'favorites') {
+    for (var s = 1; s <= 5; s++) {
+      var star = s <= currentRating ? '⭐' : '☆';
+      starButtons.push({ text: star + s, callback_data: 'rate_' + film.filmId + '_' + s });
+    }
   }
 
   // Back button depends on context
@@ -193,19 +195,19 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
     ? { text: '❤️ В коллекцию', callback_data: 'menu_favorites' }
     : { text: '📀 К списку', callback_data: 'menu_myfilms' };
 
-  var keyboard = {
-    inline_keyboard: [
-      starButtons,
-      [
-        { text: '▶ Смотреть', web_app: { url: playerUrl } },
-        { text: '📤 Поделиться', url: shareUrl }
-      ],
-      [
-        backBtn,
-        { text: '🏠 На главную', callback_data: 'menu_main' }
-      ]
-    ]
-  };
+  // Build keyboard — omit star row if in favorites context
+  var keyboardRows = [];
+  if (starButtons.length > 0) keyboardRows.push(starButtons);
+  keyboardRows.push([
+    { text: '▶ Смотреть', web_app: { url: playerUrl } },
+    { text: '📤 Поделиться', url: shareUrl }
+  ]);
+  keyboardRows.push([
+    backBtn,
+    { text: '🏠 На главную', callback_data: 'menu_main' }
+  ]);
+
+  var keyboard = { inline_keyboard: keyboardRows };
 
   // Build caption: title + year + rating + genres + description
   var captionParts = ['🎬 <b>' + escapeHtml(film.title) + '</b>'];
@@ -217,8 +219,12 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   if (filmGenres) metaParts.push('🎭 ' + filmGenres);
   if (metaParts.length > 0) captionParts.push(metaParts.join(' · '));
   if (filmDescription) captionParts.push('\n' + escapeHtml(filmDescription));
-  // Always add the call-to-action
-  captionParts.push('\nЗдесь вы можете оценить фильм, а также порекомендовать другу');
+  // Call-to-action — different text for favorites vs myfilms
+  if (context === 'favorites') {
+    captionParts.push('\nНажмите «Смотреть», чтобы открыть плеер, или поделитесь с другом');
+  } else {
+    captionParts.push('\nЗдесь вы можете оценить фильм, а также порекомендовать другу');
+  }
   var caption = captionParts.join('\n');
 
   // Send NEW photo message with film card

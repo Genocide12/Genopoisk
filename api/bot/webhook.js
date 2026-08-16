@@ -209,7 +209,7 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
 
   var keyboard = { inline_keyboard: keyboardRows };
 
-  // Build caption: title + year + rating + genres + description
+  // Build caption: title + year + rating + genres + user rating + description
   var captionParts = ['🎬 <b>' + escapeHtml(film.title) + '</b>'];
   var metaParts = [];
   if (filmYear) metaParts.push('📅 ' + filmYear);
@@ -218,6 +218,12 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   }
   if (filmGenres) metaParts.push('🎭 ' + filmGenres);
   if (metaParts.length > 0) captionParts.push(metaParts.join(' · '));
+  // User's own rating (if they rated this film before)
+  if (currentRating && currentRating > 0) {
+    var userStars = '';
+    for (var us = 1; us <= 5; us++) { userStars += us <= currentRating ? '⭐' : '☆'; }
+    captionParts.push('Ваша оценка: ' + userStars);
+  }
   if (filmDescription) captionParts.push('\n' + escapeHtml(filmDescription));
   // Call-to-action — different text for favorites vs myfilms
   if (context === 'favorites') {

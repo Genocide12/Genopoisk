@@ -1428,17 +1428,17 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
         const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-        // Use our /api/poster proxy instead of the raw kinopoisk URL.
-        // The proxy follows the 3-step redirect chain (kinopoiskapiunofficial
-        // → st.kp.yandex.net → avatars.mds.yandex.net) and caches the result
-        // with 1-year Cache-Control. First load ~2s, subsequent <50ms.
-        // We pass size=small for thumbnails (faster, smaller payload).
         const poster = filmId ? `/api/poster?id=${filmId}&size=small` : '';
+        // First 6 posters: high priority, no lazy loading (visible immediately)
+        // Rest: lazy + async (load when scrolled into view)
+        const isAboveFold = index < 6;
+        const loadingAttr = isAboveFold ? 'eager' : 'lazy';
+        const fetchPriority = isAboveFold ? 'fetchpriority="high"' : '';
         const card = document.createElement('div');
         card.className = 'film-card';
         if (index < 10) card.style.animationDelay = `${index * 0.04}s`;
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" loading="lazy" decoding="async" onerror="this.style.opacity='0.3';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>'">
+          <img src="${poster}" class="film-poster" alt="${title}" loading="${loadingAttr}" ${fetchPriority} decoding="async" onerror="this.style.opacity='0.3';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>'">
           <div class="film-info">
             <div class="film-title">${title}</div>
             <div class="film-meta">

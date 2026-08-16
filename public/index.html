@@ -36,6 +36,17 @@
     :root{--ios-blue:#007AFF;--ios-purple:#5856D6;--ios-pink:#FF2D55;}
     body{--bg-primary:#000;--bg-secondary:#1C1C1E;--bg-tertiary:#2C2C2E;--text-primary:#FFF;--text-secondary:#98989D;--separator:rgba(84,84,88,0.6);--fill:rgba(120,120,128,0.2);--fill-secondary:rgba(120,120,128,0.16);--fill-tertiary:rgba(118,118,128,0.12);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.5;min-height:100vh;overflow-x:hidden;transition:background 0.3s,color 0.3s;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;}
     body.light-theme{--bg-primary:#F2F2F7;--bg-secondary:#FFF;--bg-tertiary:#F2F2F7;--text-primary:#000;--text-secondary:#6E6E73;--separator:rgba(60,60,67,0.29);}
+    body.night-theme{--bg-primary:#050510;--bg-secondary:#0A0A1A;--bg-tertiary:#14142A;--text-primary:#E8E8F0;--text-secondary:#7878A0;--separator:rgba(120,120,160,0.2);--fill:rgba(80,80,120,0.15);--fill-secondary:rgba(80,80,120,0.1);--fill-tertiary:rgba(80,80,120,0.08);}
+    body.night-theme{background:#050510;}
+    body.night-theme .hero{background:linear-gradient(135deg,rgba(20,20,60,0.4) 0%,rgba(40,20,80,0.3) 50%,rgba(60,20,60,0.3) 100%);}
+    body.night-theme .film-card{background:#0A0A1A;}
+    body.night-theme .search-input{background:#0A0A1A;}
+    body.night-theme .action-card{background:rgba(80,80,120,0.12);}
+    body.night-theme .content{background:#0A0A1A;}
+    body.night-theme .tg-login-bar{background:rgba(80,80,120,0.15);}
+    /* Reduce blue light in night mode — warmer colors, less eye strain */
+    body.night-theme *{filter:saturate(0.85) hue-rotate(-8deg);}
+    body.night-theme img,body.night-theme video,body.night-template iframe{filter:none;}
     html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
     .container{max-width:1200px;margin:0 auto;padding:20px 16px;}
     .hero{text-align:center;padding:40px 20px;margin-bottom:32px;position:relative;overflow:hidden;border-radius:32px;background:linear-gradient(135deg,rgba(0,122,255,0.15) 0%,rgba(88,86,214,0.15) 50%,rgba(255,45,85,0.15) 100%);backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid var(--separator);box-shadow:0 8px 32px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.1);}
@@ -131,7 +142,7 @@
       </div>
     </div>
     <div class="hero">
-      <h1 class="hero-title" onclick="toggleTheme()" title="Нажмите для смены темы">Genopoisk</h1>
+      <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто">Genopoisk</h1>
       <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
     </div>
     <div class="resume-card" id="resumeCard">
@@ -693,7 +704,7 @@
         </div>
         <div class="ds-row">
           <span class="ds-label">Тема</span>
-          <button class="ds-btn" id="dsThemeBtn" style="width:auto;padding:6px 12px;margin:0;">🌙 / ☀️</button>
+          <button class="ds-btn" id="dsThemeBtn" style="width:auto;padding:6px 12px;margin:0;">🎨 Цикл</button>
         </div>
         <button class="ds-btn" id="dsResetBtn">Сбросить настройки</button>
       `;
@@ -911,21 +922,111 @@
     const filmGrid = document.getElementById('filmGrid');
     const searchInput = document.getElementById('searchInput');
 
-    function toggleTheme() {
-      const body = document.body;
-      const isLight = body.classList.contains('light-theme');
-      body.classList.toggle('light-theme');
-      localStorage.setItem('theme', isLight ? 'dark' : 'light');
-      const metaTheme = document.querySelector('meta[name="theme-color"]');
-      if (metaTheme) metaTheme.content = isLight ? '#000000' : '#F2F2F7';
+    // ====== Theme system ======
+    // Four modes: 'dark' (default), 'light', 'night' (extra dark, low blue),
+    // 'auto' (chooses based on time of day + system preference).
+    // Click on the 'Genopoisk' title cycles: dark → light → night → auto.
+    //
+    // Auto mode logic:
+    //   - 07:00–19:00 → light (daytime)
+    //   - 19:00–22:00 → dark (evening)
+    //   - 22:00–07:00 → night (night, low blue light for eye comfort)
+    //   - If system prefers-color-scheme is dark, shift one step darker
+    //     (day→dark, evening→night, night stays night)
+    //
+    // Auto mode re-evaluates every 30 minutes (covers sun changing position
+    // while the page is open).
+
+    function applyTheme(theme) {
+      var body = document.body;
+      body.classList.remove('light-theme', 'night-theme');
+      if (theme === 'light') {
+        body.classList.add('light-theme');
+      } else if (theme === 'night') {
+        body.classList.add('night-theme');
+      }
+      // 'dark' = no extra class (default body styles)
+      var metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) {
+        metaTheme.content = theme === 'light' ? '#F2F2F7' : (theme === 'night' ? '#050510' : '#000000');
+      }
     }
 
-    // Load saved theme
-    if (localStorage.getItem('theme') === 'light') {
-      document.body.classList.add('light-theme');
-      const metaTheme = document.querySelector('meta[name="theme-color"]');
-      if (metaTheme) metaTheme.content = '#F2F2F7';
+    function getAutoTheme() {
+      var hour = new Date().getHours();
+      var prefersDark = false;
+      try {
+        prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch (_) {}
+      var theme;
+      if (hour >= 7 && hour < 19) {
+        theme = prefersDark ? 'dark' : 'light';
+      } else if (hour >= 19 && hour < 22) {
+        theme = prefersDark ? 'night' : 'dark';
+      } else {
+        theme = 'night';
+      }
+      return theme;
     }
+
+    function getCurrentThemeMode() {
+      return localStorage.getItem('theme_mode') || 'dark';
+    }
+
+    function resolveTheme() {
+      var mode = getCurrentThemeMode();
+      if (mode === 'auto') {
+        return getAutoTheme();
+      }
+      return mode; // 'dark', 'light', or 'night'
+    }
+
+    function applyCurrentTheme() {
+      applyTheme(resolveTheme());
+    }
+
+    function toggleTheme() {
+      // Cycle: dark → light → night → auto → dark
+      var modes = ['dark', 'light', 'night', 'auto'];
+      var current = getCurrentThemeMode();
+      var idx = modes.indexOf(current);
+      if (idx === -1) idx = 0;
+      var next = modes[(idx + 1) % modes.length];
+      localStorage.setItem('theme_mode', next);
+      applyCurrentTheme();
+      // Show a brief toast so user knows which mode they're on
+      var labels = { dark: '🌙 Тёмная', light: '☀️ Светлая', night: '🌌 Ночная', auto: '🔄 Авто (по времени)' };
+      if (typeof showToast === 'function') {
+        showToast(labels[next] || next, 1500);
+      } else {
+        console.log('[theme] Switched to:', next);
+      }
+    }
+
+    // Apply theme on load
+    applyCurrentTheme();
+
+    // In auto mode, re-evaluate every 30 minutes
+    setInterval(function() {
+      if (getCurrentThemeMode() === 'auto') {
+        applyCurrentTheme();
+      }
+    }, 30 * 60 * 1000);
+
+    // Also re-evaluate when system color scheme changes (e.g. user toggles
+    // OS dark mode while page is open)
+    try {
+      var mql = window.matchMedia('(prefers-color-scheme: dark)');
+      if (mql && typeof mql.addEventListener === 'function') {
+        mql.addEventListener('change', function() {
+          if (getCurrentThemeMode() === 'auto') applyCurrentTheme();
+        });
+      } else if (mql && typeof mql.addListener === 'function') {
+        mql.addListener(function() {
+          if (getCurrentThemeMode() === 'auto') applyCurrentTheme();
+        });
+      }
+    } catch (_) {}
 
     async function apiGet(url) {
       try {

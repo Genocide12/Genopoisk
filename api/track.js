@@ -121,6 +121,7 @@ module.exports = async (req, res) => {
       title: body.title || undefined,
       position: body.position || undefined, // for position_update
       duration: body.duration || undefined, // for position_update
+      rating: body.rating || undefined, // for 'rate' event (1-5 stars)
       query: body.query || undefined,
       category: body.category || undefined,
       path: body.path || undefined

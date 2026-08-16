@@ -1017,21 +1017,10 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         hideRateOverlay();
         return;
       }
-      // Send to backend. The /api/track endpoint with type 'rate' is NOT
-      // in ALLOWED_TYPES — but rateFilm() is called via a separate path.
-      // Actually, looking at the code, rateFilm is called directly from
-      // the bot webhook. For the website, we need to send the rating via
-      // a different mechanism. The simplest: send a 'movies_opened' event
-      // with a 'rating' field, OR create a dedicated endpoint.
-      //
-      // Looking at supabase.js rateFilm(): it expects (telegramId, filmId,
-      // title, rating) and updates watched_films[].rating + rated_films[].
-      // We can trigger this via a new /api/rate endpoint, OR piggyback on
-      // existing track by adding 'rate' to ALLOWED_TYPES.
-      //
-      // Simplest: add 'rate' to ALLOWED_TYPES in track.js and handle it
-      // in recordEvent by calling rateFilm(). For now, we send via track
-      // with type='rate' — if backend doesn't handle it, no harm done.
+      // Send rating to backend via /api/track with type='rate'.
+      // Backend (supabase.js recordEvent) updates watched_films[].rating
+      // and rated_films[] array. The bot reads these fields to show ⭐N
+      // next to films in 'Мои фильмы'.
       var payload = JSON.stringify({
         type: 'rate',
         initData: tgInitData,

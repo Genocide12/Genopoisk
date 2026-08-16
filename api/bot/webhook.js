@@ -38,28 +38,34 @@ const broadcastPending = new Map(); // userId -> true
 
 // Track last admin message IDs for editMessage (prevents duplicate messages)
 const lastAdminMsg = new Map(); // chatId -> { messageId, type }
-function mainMenuKeyboard() {
-  return {
-    inline_keyboard: [
-      [
-        { text: '📊 Статистика', callback_data: 'menu_stats' },
-        { text: '👥 Пользователи', callback_data: 'menu_users' }
-      ],
-      [
-        { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
-        { text: '🚀 Деплой', callback_data: 'menu_deploy' }
-      ],
-      [
-        { text: '⭐ Избранное', callback_data: 'menu_favorites' },
-        { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
-      ],
-      [
-        { text: '🧹 Очистить статистику', callback_data: 'menu_clear' },
-        { text: '❓ Помощь', callback_data: 'menu_help' }
-      ],
-      [{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]
+function mainMenuKeyboard(user) {
+  var isPremium = user && user.is_premium;
+  var keyboard = [
+    [
+      { text: '📊 Статистика', callback_data: 'menu_stats' },
+      { text: '👥 Пользователи', callback_data: 'menu_users' }
+    ],
+    [
+      { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
+      { text: '🚀 Деплой', callback_data: 'menu_deploy' }
+    ],
+    [
+      { text: '❤️ Избранное', callback_data: 'menu_favorites' },
+      { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
+    ],
+    [
+      { text: '🧹 Очистить статистику', callback_data: 'menu_clear' },
+      { text: '❓ Помощь', callback_data: 'menu_help' }
     ]
-  };
+  ];
+  // Premium button — for admin too (admin can support the project)
+  if (isPremium) {
+    keyboard.push([{ text: '👑 Premium активен', callback_data: 'menu_premium_status' }]);
+  } else {
+    keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
+  }
+  keyboard.push([{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]);
+  return { inline_keyboard: keyboard };
 }
 
 function deployMenuKeyboard() {
@@ -232,7 +238,7 @@ async function cmdStart(chatId, user, text) {
     // RETURNING USER — just show their menu (no welcome spam)
     if (isAdmin(user.id)) {
       const welcome = `🎬 <b>С возвращением!</b>\n\n🛠 <b>Админ-панель:</b>`;
-      await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard() });
+      await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     } else {
       const welcome = `🎬 <b>С возвращением в Genopoisk!</b>\n\n👇 Используйте кнопки ниже:`;
       await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
@@ -243,7 +249,7 @@ async function cmdStart(chatId, user, text) {
   if (isAdmin(user.id)) {
     // ADMIN: welcome + full admin control panel
     const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.`;
-    await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard() });
+    await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     return;
   }
 
@@ -309,7 +315,7 @@ async function cmdHelp(chatId, user) {
 <i>Ниже — справка, которую видят обычные пользователи при нажатии «❓ Помощь»:</i>
 
 ` + buildUserHelpText();
-    await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard() });
+    await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     return;
   }
   // Regular user — show full feature guide
@@ -638,7 +644,7 @@ async function cmdBroadcast(chatId, user, text) {
     }
     await new Promise(r => setTimeout(r, 50));
   }
-  await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard() });
+  await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
 }
 
 async function cmdClear(chatId, user) {
@@ -647,7 +653,7 @@ async function cmdClear(chatId, user) {
     return;
   }
       await deleteAllUsers();
-  await sendMessage(chatId, '🧹 Статистика сброшена.', { reply_markup: mainMenuKeyboard() });
+  await sendMessage(chatId, '🧹 Статистика сброшена.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
 }
 
 async function cmdUser(chatId, user, text) {
@@ -658,7 +664,7 @@ async function cmdUser(chatId, user, text) {
   const parts = (text || '').split(/\s+/);
   const targetId = parts[1];
   if (!targetId) {
-    await sendMessage(chatId, 'Использование: <code>/user &lt;telegram_id&gt;</code>\n\nСписок ID через /users', { reply_markup: mainMenuKeyboard() });
+    await sendMessage(chatId, 'Использование: <code>/user &lt;telegram_id&gt;</code>\n\nСписок ID через /users', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     return;
   }
   const result = await buildUserProfileText(String(targetId).trim());
@@ -681,7 +687,7 @@ async function handleMessage(update) {
     const message = text;
     const allUsers = await getAllUsers();
     if (allUsers.length === 0) {
-      await sendMessage(chatId, 'Нет пользователей для рассылки.', { reply_markup: mainMenuKeyboard() });
+      await sendMessage(chatId, 'Нет пользователей для рассылки.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
       return;
     }
     let sent = 0, failed = 0;
@@ -693,7 +699,7 @@ async function handleMessage(update) {
       } catch (e) { failed++; }
       await new Promise(r => setTimeout(r, 50));
     }
-    await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard() });
+    await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     return;
   }
 
@@ -702,7 +708,7 @@ async function handleMessage(update) {
 
   // Admin-only commands (no menu for regular users)
   if (isAdmin(user.id)) {
-    if (text.startsWith('/stats')) return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard() });
+    if (text.startsWith('/stats')) return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     if (text.startsWith('/users')) {
       const allUsers = await getAllUsers();
       return sendMessage(chatId, await buildUsersListText(), { reply_markup: usersListKeyboard(allUsers || [], 0) });
@@ -716,14 +722,14 @@ async function handleMessage(update) {
 
   if (text.startsWith('/')) {
     if (isAdmin(user.id)) {
-      await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard() });
+      await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     } else {
       // Regular user — show their menu
       await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
     }
   } else {
     if (isAdmin(user.id)) {
-      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: mainMenuKeyboard() });
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     } else {
       await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
     }
@@ -801,7 +807,7 @@ async function handleCallback(update) {
     if (data === 'menu_main') {
       if (isAdmin(fromId)) {
         const text = `<b>🛠 Админ-панель Genopoisk</b>\n\nВыберите раздел:`;
-        await edit(text, mainMenuKeyboard());
+        await edit(text, mainMenuKeyboard(await getUser(String(fromId))));
       } else {
         // Regular user — show their menu
         const text = `🎞️ <b>Genopoisk</b>\n\nВыберите раздел:`;
@@ -824,7 +830,7 @@ async function handleCallback(update) {
 <i>Ниже — справка, которую видят обычные пользователи при нажатии «❓ Помощь»:</i>
 
 ` + buildUserHelpText();
-        await edit(adminHelp, mainMenuKeyboard());
+        await edit(adminHelp, mainMenuKeyboard(await getUser(String(fromId))));
       } else {
         // Regular user — full feature guide
         const userObj = await getUser(String(fromId));
@@ -869,7 +875,7 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'menu_stats') {
-      await edit(await buildStatsText(), mainMenuKeyboard());
+      await edit(await buildStatsText(), mainMenuKeyboard(await getUser(String(fromId))));
       return;
     }
     if (data === 'menu_myfilms') {
@@ -905,7 +911,12 @@ async function handleCallback(update) {
         return;
       }
       const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
-      const shareUrl = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
+      // Share via Telegram's native share dialog — opens chat picker, sends
+      // a message with film title + deep link. Recipient sees the title
+      // BEFORE clicking, and clicking opens the bot with the film ready.
+      const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
+      const shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
+      const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink) + '&text=' + encodeURIComponent(shareText);
       await answerCallback(cq.id, '');
       await edit('❤️ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или "Убрать", чтобы удалить из избранного:', {
         inline_keyboard: [
@@ -1000,7 +1011,7 @@ async function handleCallback(update) {
 
       // Keep totals but clear all users
       await deleteAllUsers();
-      await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard());
+      await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard(await getUser(String(fromId))));
       return;
     }
     if (data === 'clear_stats_prompt') {
@@ -1017,7 +1028,7 @@ async function handleCallback(update) {
     }
     if (data === 'clear_confirm') {
       await deleteAllUsers();
-      await edit('✅ <b>Статистика очищена.</b>\n\nВсе данные удалены.', mainMenuKeyboard());
+      await edit('✅ <b>Статистика очищена.</b>\n\nВсе данные удалены.', mainMenuKeyboard(await getUser(String(fromId))));
       return;
     }
     if (data === 'menu_broadcast') {
@@ -1081,7 +1092,7 @@ async function handleCallback(update) {
         const allUsers = await getAllUsers();
         await edit('✅ Профиль <code>' + escapeHtml(targetId) + '</code> удалён.', usersListKeyboard(allUsers || [], 0));
       } catch (e) {
-        await edit('❌ Ошибка: ' + escapeHtml(e.message), mainMenuKeyboard());
+        await edit('❌ Ошибка: ' + escapeHtml(e.message), mainMenuKeyboard(await getUser(String(fromId))));
       }
       return;
     }
@@ -1114,7 +1125,10 @@ async function handleCallback(update) {
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
       // EDIT existing message instead of sending new
-      var shareUrl = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
+      // Share via Telegram's native share dialog — recipient sees film title
+      const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
+      const shareText = '🎬 Смотри фильм «' + film.title + '» в Genopoisk!';
+      var shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(filmDeepLink) + '&text=' + encodeURIComponent(shareText);
       await edit('📀 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         inline_keyboard: [
           [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],

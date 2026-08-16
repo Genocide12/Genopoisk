@@ -95,10 +95,14 @@ function usersListKeyboard(users, page) {
   const curPage = Math.min(Math.max(0, page), totalPages - 1);
   const entries = sorted.slice(curPage * pageSize, (curPage + 1) * pageSize);
 
-  const buttons = entries.map((u) => [{
-    text: `👤 ${u.username ? '@' + u.username : (u.ip || u.telegram_id || '?')} →`,
-    callback_data: `user_${u.telegram_id || u.id}`
-  }]);
+  const buttons = entries.map((u) => {
+    const isPrem = (u.is_premium) || (u.events_by_type && u.events_by_type.premium);
+    const name = u.username ? '@' + u.username : (u.ip || u.telegram_id || '?');
+    return [{
+      text: (isPrem ? '🔥 ' : '👤 ') + name + ' →',
+      callback_data: `user_${u.telegram_id || u.id}`
+    }];
+  });
 
   const navRow = [];
   if (curPage > 0) navRow.push({ text: '⬅️', callback_data: `users_${curPage - 1}` });
@@ -546,7 +550,9 @@ async function buildUserProfileText(targetId) {
     if (favorites.length > 10) favText += "\n   ... и ещё " + (favorites.length - 10);
   }
 
-  const text = `👤 <b>Профиль пользователя</b>\n\n<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В коллекции: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Коллекция (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+  const isPrem = (u.is_premium) || (u.events_by_type && u.events_by_type.premium);
+  const premBadge = isPrem ? '🔥 <b>Premium активен</b>\n\n' : '';
+  const text = `👤 <b>Профиль пользователя</b>\n\n${premBadge}<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В коллекции: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Коллекция (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
   return { text, hasLastFilm: !!u.last_film };
 }
 
@@ -1049,7 +1055,11 @@ async function handleCallback(update) {
           })
         });
         var refundData = await refundRes.json();
-        if (refundData.ok) {
+        // CHARGE_ALREADY_REFUNDED means stars were already returned
+        // (e.g. via manual refund). Treat as success — still remove premium.
+        var isAlreadyRefunded = !refundData.ok && refundData.description &&
+          refundData.description.indexOf('CHARGE_ALREADY_REFUNDED') !== -1;
+        if (refundData.ok || isAlreadyRefunded) {
           // Remove premium from Supabase
           try {
             await fetch(SITE_URL.replace(/\/$/, '') + '/api/track', {
@@ -1068,10 +1078,13 @@ async function handleCallback(update) {
             });
           } catch (_) {}
           // Update admin message
-          await edit('✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.', {
+          var adminMsg = isAlreadyRefunded
+            ? '✅ <b>Звёзды уже были возвращены ранее</b>\n\nPremium отключён для пользователя <code>' + refundUserId + '</code>.'
+            : '✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.';
+          await edit(adminMsg, {
             reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
           });
-          console.log('[refund] Approved for user', refundUserId, 'txn:', userTxn.id);
+          console.log('[refund] Approved for user', refundUserId, 'txn:', userTxn.id, 'alreadyRefunded:', isAlreadyRefunded);
         } else {
           await edit('❌ Ошибка возврата: ' + (refundData.description || 'unknown'), {
             reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }

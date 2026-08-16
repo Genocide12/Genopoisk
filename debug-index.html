@@ -331,7 +331,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       <p class="hero-subtitle" id="heroSubtitle">Кинотеатр в твоем кармане</p>
     </div>
     <div class="resume-card" id="resumeCard">
-      <span class="resume-icon">▶️</span>
+      <img class="resume-poster" id="resumePoster" src="" alt="" style="width:48px;height:68px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--bg-tertiary);display:none;">
       <div class="resume-info">
         <div class="resume-label">Продолжить просмотр</div>
         <div class="resume-title" id="resumeTitle">—</div>
@@ -1029,6 +1029,13 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         } else {
           resumeTitle.textContent = data.film.title;
           resumeMeta.textContent = 'Продолжить просмотр';
+        }
+        // Set poster image from our proxy
+        var posterEl = document.getElementById('resumePoster');
+        if (posterEl) {
+          posterEl.src = '/api/poster?id=' + encodeURIComponent(data.film.filmId) + '&size=small';
+          posterEl.style.display = 'block';
+          posterEl.onerror = function() { this.style.display = 'none'; };
         }
         resumeCard.classList.add('visible');
       } catch (e) { console.warn('resume load error:', e); }

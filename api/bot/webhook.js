@@ -1023,18 +1023,20 @@ async function handleCallback(update) {
         const txRes = await fetch('https://api.telegram.org/bot' + process.env.TG_BOT_TOKEN + '/getStarTransactions?limit=50');
         const txData = await txRes.json();
         const txns = (txData.result && txData.result.transactions) || [];
-        // Find the most recent incoming transaction from this user
+        // Find the most recent INCOMING transaction (has 'source' with user)
+        // from this user. Transaction format: source.user.id (NOT source.user_id)
         var userTxn = null;
         for (var i = 0; i < txns.length; i++) {
           var t = txns[i];
-          var source = t.source;
-          if (source && source.user_id === refundUserId && t.amount > 0) {
+          if (t.source && t.source.user && String(t.source.user.id) === String(refundUserId) && t.amount > 0) {
             userTxn = t;
             break;
           }
         }
         if (!userTxn) {
-          await edit('❌ Транзакция не найдена. Возможно, звёзды уже были возвращены.');
+          await edit('❌ Транзакция не найдена. Возможно, звёзды уже были возвращены.', {
+            reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+          });
           return;
         }
         // Call refundStarPayment
@@ -1066,14 +1068,20 @@ async function handleCallback(update) {
             });
           } catch (_) {}
           // Update admin message
-          await edit('✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.');
+          await edit('✅ <b>Звёзды возвращены</b>\n\nПользователь <code>' + refundUserId + '</code> получил возврат. Premium отключён.', {
+            reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+          });
           console.log('[refund] Approved for user', refundUserId, 'txn:', userTxn.id);
         } else {
-          await edit('❌ Ошибка возврата: ' + (refundData.description || 'unknown'));
+          await edit('❌ Ошибка возврата: ' + (refundData.description || 'unknown'), {
+            reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+          });
           console.error('[refund] API error:', JSON.stringify(refundData));
         }
       } catch (e) {
-        await edit('❌ Ошибка: ' + e.message);
+        await edit('❌ Ошибка: ' + e.message, {
+          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+        });
         console.error('[refund] Error:', e);
       }
       return;
@@ -1087,7 +1095,9 @@ async function handleCallback(update) {
       }
       var denyUserId = refundDenyMatch[1];
       await answerCallback(cq.id, 'Запрос отклонён');
-      await edit('❌ <b>Запрос отклонён</b>\n\nВозврат звёзд отклонён для пользователя <code>' + denyUserId + '</code>.');
+      await edit('❌ <b>Запрос отклонён</b>\n\nВозврат звёзд отклонён для пользователя <code>' + denyUserId + '</code>.', {
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+      });
       // Notify user
       try {
         await sendMessage(Number(denyUserId), '❌ <b>Запрос на возврат звёзд отклонён</b>\n\nАдминистратор отклонил ваш запрос. Premium остаётся активным.', {
@@ -1668,7 +1678,8 @@ async function handleSuccessfulPayment(msg) {
       '🔥 <b>Спасибо за поддержку!</b>\n\n' +
       'Ваш Premium активирован.\n' +
       'Бейдж 🔥 теперь отображается в шапке сайта.\n\n' +
-      'Если бейдж не появился — обновите страницу (pull-to-refresh).'
+      'Если бейдж не появился — обновите страницу (pull-to-refresh).',
+      { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
     );
     console.log('[premium] Thank-you message sent to:', msg.chat.id);
   } catch (e) {

@@ -113,7 +113,7 @@ module.exports = async (req, res) => {
     }
 
     // Record event
-    await recordEvent(telegramId, type, {
+    const eventResult = await recordEvent(telegramId, type, {
       username: username || undefined,
       ip: ip || undefined,
       ua: ua || undefined,
@@ -126,6 +126,39 @@ module.exports = async (req, res) => {
       category: body.category || undefined,
       path: body.path || undefined
     });
+
+    // Notify admin about new users (first-ever event from this telegram_id)
+    if (eventResult && eventResult.isNewUser) {
+      try {
+        const { sendMessage } = require('./_lib/telegram');
+        const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+        const platformLabel = eventResult.platform === 'miniapp' ? '📱 Mini App' : '🌐 Браузер';
+        const device = eventResult.device || 'неизвестно';
+        const ipStr = eventResult.ip || '—';
+        const usernameStr = eventResult.username ? '@' + eventResult.username : '—';
+        const eventLabel = {
+          page_views: 'просмотр страницы',
+          searches: 'поиск фильма',
+          movies_opened: 'открыл фильм',
+          categories_opened: 'открыл категорию'
+        }[eventResult.eventType] || eventResult.eventType;
+        for (const adminId of adminIds) {
+          try {
+            await sendMessage(Number(adminId),
+              '🎉 <b>Новый пользователь!</b>\n\n' +
+              'ID: <code>' + telegramId + '</code>\n' +
+              'Username: ' + usernameStr + '\n' +
+              'Платформа: ' + platformLabel + ' — ' + device + '\n' +
+              'IP: <code>' + ipStr + '</code>\n' +
+              'Первое действие: ' + eventLabel
+            );
+          } catch (_) {}
+        }
+        console.log('[track] Admin notified about new user:', telegramId);
+      } catch (e) {
+        console.warn('[track] Admin notification failed:', e.message);
+      }
+    }
 
     return res.status(200).json({ ok: true });
   } catch (e) {

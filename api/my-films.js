@@ -43,7 +43,8 @@ module.exports = async (req, res) => {
       favorites: user.favorite_films || [],
       search_history: user.search_history || [],
       user_id: telegramId,
-      username: user.username
+      username: user.username,
+      is_premium: !!user.is_premium
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });

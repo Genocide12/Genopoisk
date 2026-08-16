@@ -113,20 +113,49 @@ function userProfileKeyboard(targetId, hasLastFilm) {
   return { inline_keyboard: buttons };
 }
 
+// Notify admin about a new user (first-ever /start in the bot)
+async function notifyAdminNewUser(user, source) {
+  try {
+    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const name = user.first_name ? (user.first_name + (user.last_name ? ' ' + user.last_name : '')) : '—';
+    const username = user.username ? '@' + user.username : '—';
+    for (const adminId of adminIds) {
+      try {
+        await sendMessage(Number(adminId),
+          '🎉 <b>Новый пользователь в боте!</b>\n\n' +
+          'ID: <code>' + user.id + '</code>\n' +
+          'Имя: ' + name + '\n' +
+          'Username: ' + username + '\n' +
+          'Источник: ' + (source || '—')
+        );
+      } catch (_) {}
+    }
+    console.log('[bot] Admin notified about new bot user:', user.id);
+  } catch (e) {
+    console.warn('[bot] Admin notification failed:', e.message);
+  }
+}
+
 // ---- Command handlers (each returns {text, keyboard} or sends a message) ----
 
 // Keyboard for regular (non-admin) users — limited to user-facing features only.
-function userMenuKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: '🎞️ Открыть Genopoisk', web_app: { url: SITE_URL } }],
-      [
-        { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
-        { text: '❤️ Избранное', callback_data: 'menu_favorites' }
-      ],
-      [{ text: '❓ Помощь', callback_data: 'menu_help' }]
+function userMenuKeyboard(user) {
+  var isPremium = user && user.is_premium;
+  var keyboard = [
+    [{ text: '🎞️ Открыть Genopoisk', web_app: { url: SITE_URL } }],
+    [
+      { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
+      { text: '❤️ Избранное', callback_data: 'menu_favorites' }
     ]
-  };
+  ];
+  if (isPremium) {
+    // Premium user — show their status instead of buy button
+    keyboard.push([{ text: '👑 Premium активен', callback_data: 'menu_premium_status' }]);
+  } else {
+    keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
+  }
+  keyboard.push([{ text: '❓ Помощь', callback_data: 'menu_help' }]);
+  return { inline_keyboard: keyboard };
 }
 
 async function cmdStart(chatId, user, text) {
@@ -145,6 +174,32 @@ async function cmdStart(chatId, user, text) {
       }
     });
     return;
+  }
+
+  // /start film_<ID> — shared film deep link. Opens the player directly.
+  if (startParam.indexOf('film_') === 0) {
+    const filmId = startParam.slice(5);
+    if (filmId && /^\d+$/.test(filmId)) {
+      const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + filmId;
+      // Track this as a movies_opened event so it shows up in user's history
+      try {
+        const { recordEvent } = require('../_lib/supabase');
+        await recordEvent(String(user.id), 'movies_opened', {
+          filmId: filmId,
+          title: 'Поделённый фильм',
+          ip: null
+        });
+      } catch (_) {}
+      await sendMessage(chatId, '🎬 <b>Вам поделились фильмом!</b>\n\nНажмите кнопку ниже, чтобы открыть плеер:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
+            [{ text: '🏠 На главную', callback_data: 'menu_main' }]
+          ]
+        }
+      });
+      return;
+    }
   }
 
   // /start app — user clicked "Открыть в Telegram" on the website.
@@ -170,7 +225,7 @@ async function cmdStart(chatId, user, text) {
         `Ваш профиль единый для всех устройств — сайт, бот, установленное приложение.\n` +
         `Позиция просмотра синхронизируется автоматически.\n\n` +
         `👇 Используйте кнопки ниже:`;
-      await sendMessage(chatId, welcomeText, { reply_markup: userMenuKeyboard() });
+      await sendMessage(chatId, welcomeText, { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
       return;
     }
 
@@ -180,7 +235,7 @@ async function cmdStart(chatId, user, text) {
       await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard() });
     } else {
       const welcome = `🎬 <b>С возвращением в Genopoisk!</b>\n\n👇 Используйте кнопки ниже:`;
-      await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard() });
+      await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
     }
     return;
   }
@@ -193,8 +248,13 @@ async function cmdStart(chatId, user, text) {
   }
 
   // REGULAR USER: minimal welcome + user-facing buttons only
+  // Check if this user already exists in DB — if not, notify admin
+  const existingUser = await getUser(String(user.id));
   const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Используйте кнопки ниже:`;
-  await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard() });
+  await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(existingUser) });
+  if (!existingUser) {
+    await notifyAdminNewUser(user, '/start (бот)');
+  }
 }
 
 // Detailed help text for regular users. Describes all features available
@@ -253,7 +313,7 @@ async function cmdHelp(chatId, user) {
     return;
   }
   // Regular user — show full feature guide
-  await sendMessage(chatId, buildUserHelpText(), { reply_markup: userMenuKeyboard() });
+  await sendMessage(chatId, buildUserHelpText(), { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
 }
 
 // ---- Stats view ----
@@ -659,13 +719,13 @@ async function handleMessage(update) {
       await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard() });
     } else {
       // Regular user — show their menu
-      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard() });
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
     }
   } else {
     if (isAdmin(user.id)) {
       await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: mainMenuKeyboard() });
     } else {
-      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard() });
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
     }
   }
 }
@@ -679,6 +739,8 @@ const USER_ALLOWED_CALLBACKS = new Set([
   'menu_myfilms',
   'menu_favorites',
   'menu_help',
+  'menu_buy_premium',
+  'menu_premium_status',
   'noop'
 ]);
 // Pagination/film navigation callbacks (regex prefixes) allowed for users.
@@ -743,7 +805,7 @@ async function handleCallback(update) {
       } else {
         // Regular user — show their menu
         const text = `🎞️ <b>Genopoisk</b>\n\nВыберите раздел:`;
-        await edit(text, userMenuKeyboard());
+        await edit(text, userMenuKeyboard(await getUser(String(fromId))));
       }
       return;
     }
@@ -765,7 +827,44 @@ async function handleCallback(update) {
         await edit(adminHelp, mainMenuKeyboard());
       } else {
         // Regular user — full feature guide
-        await edit(buildUserHelpText(), userMenuKeyboard());
+        const userObj = await getUser(String(fromId));
+        await edit(buildUserHelpText(), userMenuKeyboard(userObj));
+      }
+      return;
+    }
+    // Buy premium — send Telegram Stars invoice
+    if (data === 'menu_buy_premium') {
+      const userObj = await getUser(String(fromId));
+      if (userObj && userObj.is_premium) {
+        await answerCallback(cq.id, 'У вас уже активен Premium 👑');
+        await edit('👑 <b>Premium активен</b>\n\nСпасибо за поддержку проекта!', userMenuKeyboard(userObj));
+        return;
+      }
+      // Send invoice with Telegram Stars as currency
+      try {
+        await tg('sendInvoice', {
+          chat_id: chatId,
+          title: '👑 Genopoisk Premium',
+          description: 'Поддержка проекта + бейдж 👑 в шапке сайта.\n\nPremium — это знак вашей поддержки. Спасибо!',
+          payload: JSON.stringify({ type: 'premium', user_id: String(fromId) }),
+          prices: [{ label: 'Premium подписка', amount: 5 }],
+          currency: 'XTR', // Telegram Stars
+          provider_token: '' // empty for Stars (in-bot currency)
+        });
+        await answerCallback(cq.id, 'Счёт отправлен ⭐');
+      } catch (e) {
+        console.error('[premium] sendInvoice error:', e.message);
+        await answerCallback(cq.id, 'Ошибка: ' + e.message);
+      }
+      return;
+    }
+    // Premium status — show info for users who already have premium
+    if (data === 'menu_premium_status') {
+      const userObj = await getUser(String(fromId));
+      if (userObj && userObj.is_premium) {
+        await edit('👑 <b>Premium активен</b>\n\nСпасибо за поддержку проекта Genopoisk!\n\nВаш бейдж 👑 отображается в шапке сайта.', userMenuKeyboard(userObj));
+      } else {
+        await edit('У вас нет Premium.\n\nНажмите «⭐ Купить Premium» чтобы поддержать проект.', userMenuKeyboard(userObj));
       }
       return;
     }
@@ -806,14 +905,16 @@ async function handleCallback(update) {
         return;
       }
       const playerUrl = SITE_URL.replace(/\/$/, '') + '/player.html?id=' + film.filmId + '&title=' + encodeURIComponent(film.title);
+      const shareUrl = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
       await answerCallback(cq.id, '');
-      await edit('⭐ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или "Убрать", чтобы удалить из избранного:', {
+      await edit('❤️ <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или "Убрать", чтобы удалить из избранного:', {
         inline_keyboard: [
           [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
           [
-            { text: '🗑 Убрать из избранного', callback_data: 'favremove_' + idx },
-            { text: '⬅️ К избранному', callback_data: 'menu_favorites' }
-          ]
+            { text: '📤 Поделиться', url: shareUrl },
+            { text: '🗑 Убрать', callback_data: 'favremove_' + idx }
+          ],
+          [{ text: '⬅️ К избранному', callback_data: 'menu_favorites' }]
         ]
       });
       return;
@@ -1013,11 +1114,15 @@ async function handleCallback(update) {
         starButtons.push({ text: star + s, callback_data: 'rate_' + idx + '_' + s });
       }
       // EDIT existing message instead of sending new
+      var shareUrl = 'https://t.me/Genopoiskbot?start=film_' + encodeURIComponent(film.filmId);
       await edit('📀 <b>' + escapeHtml(film.title) + '</b>\n\nНажмите "Смотреть", чтобы открыть плеер, или нажмите на звёзды для оценки фильма:', {
         inline_keyboard: [
           [{ text: '▶ Смотреть', web_app: { url: playerUrl } }],
           starButtons,
-          [{ text: '⬅️ К списку', callback_data: 'menu_myfilms' }]
+          [
+            { text: '📤 Поделиться', url: shareUrl },
+            { text: '⬅️ К списку', callback_data: 'menu_myfilms' }
+          ]
         ]
       });
       return;
@@ -1149,7 +1254,20 @@ module.exports = async (req, res) => {
 
   try {
     if (update.message) {
-      await handleMessage(update);
+      // Handle successful payment (Telegram Stars)
+      if (update.message.successful_payment) {
+        await handleSuccessfulPayment(update.message);
+      } else {
+        await handleMessage(update);
+      }
+    } else if (update.pre_checkout_query) {
+      // Telegram asks us to confirm the invoice is still valid.
+      // We must answer within 10 seconds, otherwise the payment is cancelled.
+      await tg('answerPreCheckoutQuery', {
+        pre_checkout_query_id: update.pre_checkout_query.id,
+        ok: true
+      });
+      console.log('[premium] Pre-checkout answered for user:', update.pre_checkout_query.from.id);
     } else if (update.callback_query) {
       await handleCallback(update);
     } else if (update.web_app_data) {
@@ -1166,3 +1284,48 @@ module.exports = async (req, res) => {
 
   res.status(200).json({ ok: true });
 };
+
+// Handle successful Telegram Stars payment — mark user as premium in Supabase
+async function handleSuccessfulPayment(msg) {
+  try {
+    const payment = msg.successful_payment;
+    const payload = JSON.parse(payment.invoice_payload || '{}');
+    const userId = payload.user_id || String(msg.from.id);
+    console.log('[premium] Successful payment from user:', userId, '— amount:', payment.total_amount, payment.currency);
+
+    if (payload.type === 'premium') {
+      // Mark user as premium in Supabase
+      const { updateUser } = require('../_lib/supabase');
+      await updateUser(userId, {
+        is_premium: true,
+        premium_since: new Date().toISOString()
+      });
+      console.log('[premium] User', userId, 'marked as premium');
+
+      // Send thank-you message
+      const userObj = await getUser(userId);
+      await sendMessage(msg.chat.id,
+        '👑 <b>Спасибо за поддержку!</b>\n\n' +
+        'Ваш Premium активирован.\n' +
+        'Бейдж 👑 теперь отображается в шапке сайта.\n\n' +
+        'Если бейдж не появился — обновите страницу (pull-to-refresh).',
+        { reply_markup: userMenuKeyboard(userObj) }
+      );
+
+      // Notify admin about new premium user
+      const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+      for (const adminId of adminIds) {
+        try {
+          await sendMessage(Number(adminId),
+            '👑 <b>Новый Premium-пользователь!</b>\n\n' +
+            'ID: <code>' + userId + '</code>\n' +
+            'Username: ' + (userObj && userObj.username ? '@' + userObj.username : '—') + '\n' +
+            'Сумма: ' + payment.total_amount + ' ' + payment.currency
+          );
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    console.error('[premium] handleSuccessfulPayment error:', e);
+  }
+}

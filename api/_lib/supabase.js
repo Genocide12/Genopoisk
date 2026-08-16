@@ -40,6 +40,8 @@ async function upsertUser(telegramId, data) {
     delete fallbackBody.favorite_films;
     delete fallbackBody.search_history;
     delete fallbackBody.sessions;
+    delete fallbackBody.is_premium;
+    delete fallbackBody.premium_since;
     const res2 = await fetch(url, {
       method: 'POST',
       headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
@@ -113,6 +115,8 @@ async function updateUser(telegramId, updates) {
     delete fallbackUpdates.favorite_films;
     delete fallbackUpdates.search_history;
     delete fallbackUpdates.sessions;
+    delete fallbackUpdates.is_premium;
+    delete fallbackUpdates.premium_since;
     const res2 = await fetch(url, {
       method: 'PATCH',
       headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
@@ -199,7 +203,7 @@ function upsertSession(sessions, platform, device, ip, nowIso) {
 
 // Record an event for a user
 async function recordEvent(telegramId, eventType, data) {
-  if (!telegramId) return;
+  if (!telegramId) return { isNewUser: false };
   data = data || {};
 
   const nowIso = new Date().toISOString();
@@ -349,7 +353,7 @@ async function recordEvent(telegramId, eventType, data) {
     // Note: 'searches' events only increment the events_by_type counter set
     // above — we no longer save the actual query text to search_history
     // (user-requested removal of search query saving).
-    return;
+    return { isNewUser: true, username: data.username, platform: platform, device: device, ip: data.ip, eventType: eventType };
   }
 
   // Update existing user
@@ -406,6 +410,7 @@ async function recordEvent(telegramId, eventType, data) {
   // (user-requested removal of search query saving).
 
   await updateUser(telegramId, updates);
+  return { isNewUser: false };
 }
 
 // Delete all users (logout all devices)

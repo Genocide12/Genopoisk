@@ -326,7 +326,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       </div>
     </div>
     <div class="hero">
-      <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто">Genopoisk</h1>
+      <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто"><span id="premiumBadge" style="display:none;margin-right:8px;">👑</span>Genopoisk</h1>
       <p class="hero-subtitle">Кинотеатр в твоем кармане</p>
     </div>
     <div class="resume-card" id="resumeCard">
@@ -1189,6 +1189,31 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
 
     // Apply theme on load
     applyCurrentTheme();
+
+    // Check premium status and show crown badge if premium
+    async function checkPremiumStatus() {
+      try {
+        var uid = getUserId();
+        if (!uid || String(uid).indexOf('web_') === 0) return; // guest
+        var res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+        });
+        if (!res.ok) return;
+        var data = await res.json();
+        if (data.is_premium) {
+          var badge = document.getElementById('premiumBadge');
+          if (badge) {
+            badge.style.display = 'inline';
+            console.log('[premium] Crown badge shown');
+          }
+        }
+      } catch (e) {
+        console.warn('[premium] check failed:', e);
+      }
+    }
+    checkPremiumStatus();
 
     // In auto mode, re-evaluate every 30 minutes
     setInterval(function() {

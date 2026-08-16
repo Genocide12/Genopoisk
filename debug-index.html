@@ -975,16 +975,20 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       // Note: removed sessionStorage dismissal check — card should always show
       // if user has a recently watched film.
       try {
+        var uid = getUserId();
+        var initData = getTgInitData();
+        console.log('[resume] loadResumeCard called, uid:', uid, 'initData:', initData ? 'yes' : 'no');
         const res = await fetch('/api/last-film', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            initData: getTgInitData(),
-            userId: getUserId() // fallback for browser users
+            initData: initData,
+            userId: uid || ''
           })
         });
-        if (!res.ok) return;
+        if (!res.ok) { console.warn('[resume] last-film HTTP', res.status); return; }
         const data = await res.json();
+        console.log('[resume] last-film response:', data.film ? data.film.title : 'null');
         if (!data.film) return;
         // Only show if watched in last 48h
         const age = Date.now() - new Date(data.film.ts).getTime();

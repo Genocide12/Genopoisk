@@ -184,10 +184,19 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
   var caption = '🎬 <b>' + escapeHtml(film.title) + '</b>\n\n' +
     'Здесь вы можете оценить фильм, а также порекомендовать другу';
 
-  // Delete old message, send new photo message
-  try {
-    if (messageId) await deleteMessage(chatId, messageId);
-  } catch (_) {} // old message may not exist
+  // Delete old message (the film list), then send new photo message.
+  // The deletion is important — otherwise the list stays in chat and
+  // clutters it. We log errors but don't fail the whole operation.
+  if (messageId) {
+    try {
+      await deleteMessage(chatId, messageId);
+      console.log('[filmcard] Deleted old message', messageId, 'in chat', chatId);
+    } catch (e) {
+      console.warn('[filmcard] deleteMessage failed:', e.message, '(chat:', chatId, 'msg:', messageId, ')');
+    }
+  } else {
+    console.warn('[filmcard] No messageId to delete — list will remain in chat');
+  }
 
   try {
     await sendPhoto(chatId, posterUrl, caption, { reply_markup: keyboard });
@@ -611,17 +620,17 @@ function myFilmsKeyboard(films, page) {
 async function buildFavoritesText(targetUserId) {
   let u = await getUser(targetUserId);
   if (!u) {
-    return { text: `⭐ <b>Избранное</b>\n\nИстория ещё не создана.`, films: [] };
+    return { text: `❤️ <b>Избранное</b>\n\nИстория ещё не создана.`, films: [] };
   }
   const films = u.favorite_films || [];
   if (films.length === 0) {
-    return { text: `⭐ <b>Избранное</b>\n\nВы ещё не добавляли фильмы в избранное. Нажмите ⭐ в плеере, чтобы добавить.`, films: [] };
+    return { text: `❤️ <b>Избранное</b>\n\nВы ещё не добавляли фильмы в избранное. Нажмите ❤️ в плеере, чтобы добавить.`, films: [] };
   }
   var lines = films.slice(0, 20).map(function(f, i) {
     return (i + 1) + '. «' + escapeHtml(f.title) + '»';
   }).join('\n');
   return {
-    text: '⭐ <b>Избранное</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    text: '❤️ <b>Избранное</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
     films: films
   };
 }

@@ -170,23 +170,20 @@ module.exports = async (req, res) => {
       }
 
       if (!upstream.ok) {
-        // Other errors (403, 404, 500, etc.) — return to client, don't mark key
         const text = await upstream.text();
         console.error(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
 
-        // For 403 specifically, return a clear user-facing message.
-        // 403 from Kinopoisk usually means the requester's IP is blocked
-        // (VPN, proxy, hosting provider on their blocklist) — the API key
-        // is fine, but Kinopoisk refuses to serve that IP.
+        // 403 — Kinopoisk blocks the IP (VPN, proxy, or rate-limit).
+        // Try the next API key — different keys may route through different
+        // Kinopoisk backend nodes, one of them might accept the request.
+        // Only return 403 to client if ALL keys fail.
         if (upstream.status === 403) {
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          return res.status(403).json({
-            error: 'Kinopoisk API 403',
-            message: 'Кинопоиск заблокировал ваш IP. Отключите VPN и попробуйте снова.',
-            hint: 'disable_vpn'
-          });
+          markKeyExhausted(apiKey);
+          lastError = { status: 403, message: 'Kinopoisk API 403 (IP blocked or rate-limited)' };
+          continue; // try next key
         }
 
+        // Other errors (404, 500, etc.) — return to client, don't try other keys
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         return res.status(upstream.status).json({
           error: `Kinopoisk API ${upstream.status}`,
@@ -215,12 +212,17 @@ module.exports = async (req, res) => {
     }
   }
 
-  // All keys exhausted
-  console.error('[kinopoisk] All API keys exhausted. tried:', triedKeys.size, 'of', API_KEYS.length);
+  // All keys exhausted or all returned 403
+  console.error('[kinopoisk] All API keys failed. tried:', triedKeys.size, 'of', API_KEYS.length, 'lastError:', lastError);
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  return res.status(429).json({
-    error: 'All Kinopoisk API keys exhausted',
-    message: 'Попробуйте позже — суточный лимит запросов исчерпан. ' + (API_KEYS.length) + ' ключ(ей) были использованы.',
+  // If last error was 403, return 403 (IP blocked); otherwise 429 (rate limit)
+  const finalStatus = (lastError && lastError.status === 403) ? 403 : 429;
+  const finalMessage = (finalStatus === 403)
+    ? 'Кинопоиск заблокировал запрос. Попробуйте позже или отключите VPN.'
+    : 'Попробуйте позже — лимит запросов исчерпан. ' + API_KEYS.length + ' ключ(ей) были использованы.';
+  return res.status(finalStatus).json({
+    error: 'Kinopoisk API unavailable',
+    message: finalMessage,
     tried: triedKeys.size,
     total: API_KEYS.length
   });

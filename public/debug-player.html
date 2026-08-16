@@ -678,6 +678,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       if (savedPos) console.log('[player] Using localStorage position:', savedPos.t);
     }
     var playerReady = false;
+    var playerReadyTime = 0; // timestamp when player became ready (for ended-event validation)
     var lastKnownTime = 0;
     var lastKnownDuration = 0;
     var lastSaveTime = 0;
@@ -807,6 +808,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       }
       if (data.type === 'ready' || data.type === 'loaded') {
         playerReady = true;
+        if (!playerReadyTime) playerReadyTime = Date.now();
         loadingOverlay.classList.add('hidden');
         if (typeof data.duration === 'number' && data.duration > 0) {
           lastKnownDuration = data.duration;
@@ -830,17 +832,27 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
           console.log('[player] Ignored ended event during resume');
           return;
         }
-        // Only clear position if video ACTUALLY reached the end.
-        // Require: duration known AND currentTime > duration - 30 AND
-        // currentTime > duration / 2 (to avoid false positives from reset-to-0).
-        if (lastKnownDuration > 0 && lastKnownTime > lastKnownDuration - 30 && lastKnownTime > lastKnownDuration / 2) {
+        // Only show rate overlay if video ACTUALLY reached the end.
+        // Strict checks to avoid false positives from venoplayer's
+        // spurious 'ended' events during buffer underruns:
+        //   1. duration must be known (> 60s — skip short videos/trailers)
+        //   2. currentTime must be within last 5% of duration (not 30s —
+        //      some films are 3h long, 30s is too generous)
+        //   3. currentTime must be > 80% of duration (user watched most of it)
+        //   4. video must have been playing for at least 60 seconds (not
+        //      immediately after load)
+        var videoAge = Date.now() - playerReadyTime;
+        var isRealEnd = lastKnownDuration > 60 &&
+                        lastKnownTime > lastKnownDuration * 0.95 &&
+                        lastKnownTime > lastKnownDuration * 0.8 &&
+                        videoAge > 60000;
+        if (isRealEnd) {
           clearPosition();
-          console.log('[player] Position cleared (video reached end at', lastKnownTime + ')');
+          console.log('[player] Position cleared (video reached end at', lastKnownTime, '/', lastKnownDuration + ')');
           // Show the rate-film overlay — user finished watching.
-          // Small delay so the credits scene isn't abruptly covered.
           setTimeout(showRateOverlay, 800);
         } else {
-          console.log('[player] Ignored ended event (currentTime:', lastKnownTime, 'duration:', lastKnownDuration + ')');
+          console.log('[player] Ignored ended event (currentTime:', lastKnownTime, 'duration:', lastKnownDuration, 'videoAge:', videoAge + 'ms)');
         }
       }
       if (data.type === 'pip_enter') console.log('[player] PiP active');

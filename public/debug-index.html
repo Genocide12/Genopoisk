@@ -1619,26 +1619,53 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
 
     // Show loader until all posters in the grid have loaded.
     // Called after appendFilms — waits for every <img> to fire onload/onerror.
+    // Uses a Map to track which images are still pending.
+    var posterLoadTimeout = null;
     function waitForPosters() {
-      var imgs = filmGrid.querySelectorAll('img.film-poster');
-      if (imgs.length === 0) { hideLoader(); return; }
-      var loaded = 0;
-      var total = imgs.length;
+      // Clear any previous timeout
+      if (posterLoadTimeout) clearTimeout(posterLoadTimeout);
+      // Get only NEW posters (not yet loaded — no .loaded or .error class)
+      var imgs = filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)');
+      if (imgs.length === 0) {
+        hideLoader();
+        return;
+      }
+      var pending = imgs.length;
       function check() {
-        loaded++;
-        if (loaded >= total) hideLoader();
+        pending--;
+        if (pending <= 0) {
+          hideLoader();
+          if (posterLoadTimeout) { clearTimeout(posterLoadTimeout); posterLoadTimeout = null; }
+        }
       }
       imgs.forEach(function(img) {
-        if (img.complete && img.naturalWidth > 0) {
-          // Already loaded (cached)
+        if (img.complete) {
+          // Already loaded or errored
+          if (img.naturalWidth > 0) {
+            img.classList.add('loaded');
+          } else {
+            img.classList.add('error');
+          }
           check();
         } else {
-          img.addEventListener('load', check, { once: true });
-          img.addEventListener('error', check, { once: true });
+          img.addEventListener('load', function() {
+            this.classList.add('loaded');
+            check();
+          }, { once: true });
+          img.addEventListener('error', function() {
+            this.classList.add('error');
+            check();
+          }, { once: true });
         }
       });
-      // Safety timeout — hide loader after 8s even if not all loaded
-      setTimeout(hideLoader, 8000);
+      // Safety timeout — hide loader after 10s even if not all loaded
+      posterLoadTimeout = setTimeout(function() {
+        // Force-load any remaining images
+        filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)').forEach(function(img) {
+          img.classList.add(img.naturalWidth > 0 ? 'loaded' : 'error');
+        });
+        hideLoader();
+      }, 10000);
     }
 
     function clearFilms() {
@@ -1824,7 +1851,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         } else {
           hasMore = false;
           if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
-          else hideLoader();
+          // Don't call hideLoader here — waitForPosters in appendFilms handles it
         }
       } catch (e) {
         showEmptyState('Ошибка загрузки: ' + e.message);

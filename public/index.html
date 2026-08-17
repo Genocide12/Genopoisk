@@ -67,6 +67,9 @@
     .search-input{padding-right:44px;}
     .search-input:not(:placeholder-shown) ~ .search-clear{display:flex;}
     .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
+    /* Padding for fixed bottom Telegram button */
+    body { padding-bottom: 60px; }
+    #fixedTelegramBtn.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
     .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
     .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
     .action-card:active{transform:scale(0.96);}
@@ -192,6 +195,12 @@
       <div class="film-grid" id="filmGrid"></div>
     </div>
     </div>
+  </div>
+  <!-- Fixed "Open in Telegram" button — always visible at bottom on scroll -->
+  <a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener" id="fixedTelegramBtn" style="position:fixed;bottom:0;left:0;right:0;z-index:999;background:linear-gradient(135deg,#229ED9 0%,#2AABEE 100%);color:#fff;text-align:center;padding:14px 20px;text-decoration:none;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 -4px 20px rgba(0,0,0,0.4);transition:transform 0.3s,opacity 0.3s;calc(env(safe-area-inset-bottom) + 14px) padding-bottom;">
+    <span style="font-size:18px;">🤖</span>
+    <span id="fixedTelegramText">Открыть в Telegram</span>
+  </a>
   <script>
     // Защита от копирования / инспектора
     document.addEventListener('contextmenu', e => e.preventDefault());
@@ -297,6 +306,18 @@
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
       const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
       const isLoggedIn = !!(storedTgId || storedTgUsername);
+
+      // Hide/show fixed bottom Telegram button
+      var fixedBtn = document.getElementById('fixedTelegramBtn');
+      var fixedText = document.getElementById('fixedTelegramText');
+      if (fixedBtn) {
+        if (isInTelegram) {
+          fixedBtn.classList.add('hidden');
+        } else {
+          fixedBtn.classList.remove('hidden');
+          if (fixedText && typeof t === 'function') fixedText.textContent = t('openInTelegram');
+        }
+      }
 
       // In Mini App — hide entire bar (user is already in Telegram)
       if (isInTelegram) {

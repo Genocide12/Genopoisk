@@ -891,6 +891,10 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
           <span class="ds-label">Тема</span>
           <button class="ds-btn" id="dsThemeBtn" style="width:auto;padding:6px 12px;margin:0;">🎨 Цикл</button>
         </div>
+        <div class="ds-row">
+          <span class="ds-label">🔥 IRONFORGE</span>
+          <button class="ds-toggle" id="dsIronforgeToggle"></button>
+        </div>
         <button class="ds-btn" id="dsResetBtn">Сбросить настройки</button>
       `;
       document.body.appendChild(panel);
@@ -954,9 +958,220 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       document.getElementById('dsResetBtn').addEventListener('click', function() {
         localStorage.removeItem('debug_zoom');
         localStorage.removeItem('debug_effects');
+        localStorage.removeItem('debug_ironforge');
         applyZoom(100);
         applyEffects(true);
+        applyIronforge(false);
         console.log('[debug] Settings reset');
+      });
+
+      // --- IRONFORGE design preset ---
+      // Extracted from IRONFORGE template: dark bg with orange accent,
+      // grain overlay, scroll reveal, card hover lift, pulse glow,
+      // custom scrollbar, text stroke effects, corner notch.
+      var ironforgeStyle = null;
+      function applyIronforge(on) {
+        var toggle = document.getElementById('dsIronforgeToggle');
+        if (toggle) toggle.classList.toggle('on', on);
+
+        if (on && !ironforgeStyle) {
+          ironforgeStyle = document.createElement('style');
+          ironforgeStyle.id = 'ironforge-preset';
+          ironforgeStyle.textContent = `
+            /* === IRONFORGE Design Preset === */
+            :root {
+              --if-bg: #0a0a0a;
+              --if-bg-card: #141414;
+              --if-fg: #f5f5f5;
+              --if-accent: #FF5400;
+              --if-accent-glow: rgba(255, 84, 0, 0.45);
+              --if-border: #1f1f1f;
+            }
+
+            /* Grain overlay */
+            body.ironforge::after {
+              content: '';
+              position: fixed;
+              inset: -10%;
+              pointer-events: none;
+              z-index: 200;
+              opacity: 0.06;
+              background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='250' height='250'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+              mix-blend-mode: overlay;
+            }
+
+            body.ironforge {
+              background: var(--if-bg) !important;
+              --bg-primary: #0a0a0a;
+              --bg-secondary: #141414;
+              --bg-tertiary: #1a1a1a;
+              --text-primary: #f5f5f5;
+              --text-secondary: #999;
+              --separator: #1f1f1f;
+              --fill: rgba(255, 84, 0, 0.08);
+              --ios-blue: #FF5400;
+            }
+
+            body.ironforge .hero {
+              background: linear-gradient(135deg, rgba(255,84,0,0.12) 0%, rgba(10,10,10,0.8) 50%, rgba(255,84,0,0.08) 100%) !important;
+              border-color: var(--if-border) !important;
+            }
+            body.ironforge .hero-title {
+              background: linear-gradient(135deg, #FF5400 0%, #FF7A33 50%, #FF5400 100%) !important;
+              -webkit-background-clip: text !important;
+              -webkit-text-fill-color: transparent !important;
+            }
+
+            body.ironforge .film-card {
+              background: var(--if-bg-card) !important;
+              border: 1px solid var(--if-border) !important;
+              border-radius: 12px !important;
+              overflow: hidden;
+              transition: transform 0.5s cubic-bezier(0.22,1,0.36,1), border-color 0.4s, box-shadow 0.4s !important;
+            }
+            body.ironforge .film-card:hover {
+              transform: translateY(-8px) !important;
+              border-color: var(--if-accent) !important;
+              box-shadow: 0 12px 40px var(--if-accent-glow) !important;
+            }
+            body.ironforge .film-card:hover .film-poster {
+              filter: grayscale(60%) contrast(1.3) brightness(0.8);
+              transform: scale(1.05);
+            }
+            body.ironforge .film-poster {
+              transition: filter 0.6s, transform 0.6s !important;
+            }
+
+            body.ironforge .action-card {
+              background: var(--if-bg-card) !important;
+              border: 1px solid var(--if-border) !important;
+              border-radius: 16px !important;
+              position: relative;
+              transition: transform 0.4s, border-color 0.4s, box-shadow 0.4s !important;
+            }
+            body.ironforge .action-card:hover {
+              border-color: var(--if-accent) !important;
+              box-shadow: 0 8px 24px var(--if-accent-glow) !important;
+              transform: translateY(-4px) !important;
+            }
+            /* Corner notch */
+            body.ironforge .action-card::before,
+            body.ironforge .action-card::after {
+              content: '';
+              position: absolute;
+              width: 12px;
+              height: 12px;
+              border: 1px solid var(--if-accent);
+              pointer-events: none;
+              opacity: 0;
+              transition: opacity 0.3s;
+            }
+            body.ironforge .action-card::before {
+              top: -1px; left: -1px;
+              border-right: none; border-bottom: none;
+            }
+            body.ironforge .action-card::after {
+              bottom: -1px; right: -1px;
+              border-left: none; border-top: none;
+            }
+            body.ironforge .action-card:hover::before,
+            body.ironforge .action-card:hover::after { opacity: 1; }
+
+            body.ironforge .search-input {
+              background: var(--if-bg-card) !important;
+              border-color: var(--if-border) !important;
+              border-radius: 12px !important;
+            }
+            body.ironforge .search-input:focus {
+              border-color: var(--if-accent) !important;
+              box-shadow: 0 0 0 4px var(--if-accent-glow) !important;
+            }
+
+            body.ironforge .content {
+              background: var(--if-bg-card) !important;
+              border-color: var(--if-border) !important;
+              border-radius: 20px !important;
+            }
+
+            body.ironforge .tg-login-bar {
+              background: var(--if-bg-card) !important;
+              border-color: var(--if-border) !important;
+            }
+
+            body.ironforge .resume-card {
+              background: linear-gradient(135deg, rgba(255,84,0,0.15), rgba(20,20,20,0.9)) !important;
+              border-color: var(--if-accent) !important;
+              border-radius: 16px !important;
+            }
+
+            /* Pulse glow on primary buttons */
+            body.ironforge .btn-close,
+            body.ironforge .search-clear {
+              animation: if-pulse 3s ease-out infinite;
+            }
+            @keyframes if-pulse {
+              0%, 100% { box-shadow: 0 0 0 0 var(--if-accent-glow); }
+              50% { box-shadow: 0 0 0 8px transparent; }
+            }
+
+            /* Custom scrollbar */
+            body.ironforge::-webkit-scrollbar { width: 8px; }
+            body.ironforge::-webkit-scrollbar-track { background: #050505; }
+            body.ironforge::-webkit-scrollbar-thumb { background: #B33A00; border-radius: 4px; }
+            body.ironforge::-webkit-scrollbar-thumb:hover { background: #FF5400; }
+
+            /* Text stroke effect on hero title hover */
+            body.ironforge .hero-title:hover {
+              -webkit-text-stroke: 1px #FF5400;
+              -webkit-text-fill-color: transparent;
+            }
+
+            /* Section reveal on scroll */
+            body.ironforge .film-card,
+            body.ironforge .action-card {
+              opacity: 0;
+              transform: translateY(30px);
+              animation: if-reveal 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+            }
+            body.ironforge .film-card:nth-child(1) { animation-delay: 0.05s; }
+            body.ironforge .film-card:nth-child(2) { animation-delay: 0.1s; }
+            body.ironforge .film-card:nth-child(3) { animation-delay: 0.15s; }
+            body.ironforge .film-card:nth-child(4) { animation-delay: 0.2s; }
+            body.ironforge .film-card:nth-child(5) { animation-delay: 0.25s; }
+            body.ironforge .film-card:nth-child(6) { animation-delay: 0.3s; }
+            @keyframes if-reveal {
+              to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* Loader spinner color */
+            body.ironforge .spinner {
+              border-top-color: #FF5400 !important;
+            }
+
+            /* Debug settings button glow */
+            body.ironforge #debugSettingsBtn {
+              background: #FF5400 !important;
+              box-shadow: 0 0 16px var(--if-accent-glow) !important;
+            }
+          `;
+          document.head.appendChild(ironforgeStyle);
+          document.body.classList.add('ironforge');
+          console.log('[ironforge] Design preset ON');
+        } else if (!on && ironforgeStyle) {
+          ironforgeStyle.remove();
+          ironforgeStyle = null;
+          document.body.classList.remove('ironforge');
+          console.log('[ironforge] Design preset OFF');
+        }
+      }
+
+      var savedIronforge = localStorage.getItem('debug_ironforge') === 'on';
+      applyIronforge(savedIronforge);
+
+      document.getElementById('dsIronforgeToggle').addEventListener('click', function() {
+        var on = !this.classList.contains('on');
+        applyIronforge(on);
+        localStorage.setItem('debug_ironforge', on ? 'on' : 'off');
       });
 
       console.log('[debug-effects] Settings panel ready. Zoom:', savedZoom + '%', 'Effects:', savedEffects);

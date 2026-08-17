@@ -406,7 +406,7 @@ async function cmdStart(chatId, user, text) {
 
   if (isAdmin(user.id)) {
     // ADMIN: welcome + full admin control panel
-    const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.`;
+    const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nФильмы прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.`;
     await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
     return;
   }
@@ -414,7 +414,7 @@ async function cmdStart(chatId, user, text) {
   // REGULAR USER: minimal welcome + user-facing buttons only
   // Check if this user already exists in DB — if not, notify admin
   const existingUser = await getUser(String(user.id));
-  const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nКинотеатр прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Используйте кнопки ниже:`;
+  const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nФильмы прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Используйте кнопки ниже:`;
   await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(existingUser) });
   if (!existingUser) {
     await notifyAdminNewUser(user, '/start (бот)');

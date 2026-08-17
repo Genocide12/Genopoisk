@@ -41,7 +41,11 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     s.textContent =
       '#__vconsole { z-index: 2147483647 !important; }' +
       '#__vconsole .vc-switch { z-index: 2147483647 !important; position: fixed !important; right: 10px !important; bottom: 10px !important; opacity: 1 !important; visibility: visible !important; display: block !important; }' +
-      '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }';
+      '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }' +
+      '#__vconsole .vc-content, #__vconsole .vc-plugin-content { -webkit-overflow-scrolling: touch; }' +
+      '#__vconsole .vc-item .vc-item-copy { display: block !important; opacity: 1 !important; visibility: visible !important; }' +
+      '#__vconsole .vc-toolbar .vc-tool { pointer-events: auto !important; }' +
+      '#__vconsole .vc-log .vc-item .vc-item-content { word-break: break-all; }';
     return s;
   })());
 

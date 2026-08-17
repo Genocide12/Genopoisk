@@ -41,7 +41,11 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     s.textContent =
       '#__vconsole { z-index: 2147483647 !important; }' +
       '#__vconsole .vc-switch { z-index: 2147483647 !important; position: fixed !important; right: 10px !important; bottom: 10px !important; opacity: 1 !important; visibility: visible !important; display: block !important; }' +
-      '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }';
+      '#__vconsole .vc-mask, #__vconsole .vc-panel { z-index: 2147483647 !important; }' +
+      '#__vconsole .vc-content, #__vconsole .vc-plugin-content { -webkit-overflow-scrolling: touch; }' +
+      '#__vconsole .vc-item .vc-item-copy { display: block !important; opacity: 1 !important; visibility: visible !important; }' +
+      '#__vconsole .vc-toolbar .vc-tool { pointer-events: auto !important; }' +
+      '#__vconsole .vc-log .vc-item .vc-item-content { word-break: break-all; }';
     return s;
   })());
 
@@ -254,8 +258,83 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     /* Padding for fixed bottom Telegram button */
     body { padding-bottom: 60px; }
     #fixedTelegramBtn.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
-    .action-card{position:relative;background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);overflow:hidden;}
-    .action-card:hover{transform:translateY(-4px) scale(1.02);border-color:var(--ios-blue);box-shadow:0 12px 40px rgba(0,122,255,0.3);}
+
+    /* === PRODUCTION EFFECTS (always on) === */
+
+    /* Cube loader — replaces spinner */
+    .loader .spinner { display: none; }
+    .loader { display: flex; align-items: center; justify-content: center; padding: 40px; }
+    .loader .fx-cube-loader {
+      width: 44px; height: 44px;
+      transform: rotateZ(45deg);
+      position: relative;
+      margin-right: 14px;
+    }
+    .loader .fx-cube-loader span {
+      display: block; position: absolute;
+      width: 20px; height: 20px;
+      background: var(--ios-blue);
+      animation: prod-cube-fold 2.4s infinite linear;
+    }
+    .loader .fx-cube-loader span:nth-child(1) { top: 0; left: 0; }
+    .loader .fx-cube-loader span:nth-child(2) { top: 0; right: 0; animation-delay: 0.6s; background: var(--ios-purple); }
+    .loader .fx-cube-loader span:nth-child(3) { bottom: 0; left: 0; animation-delay: 1.2s; background: var(--ios-pink); }
+    .loader .fx-cube-loader span:nth-child(4) { bottom: 0; right: 0; animation-delay: 1.8s; background: #f59e0b; }
+    @keyframes prod-cube-fold {
+      0%, 10%   { transform: perspective(120px) rotateX(-180deg); opacity: 0; }
+      25%, 75%  { transform: perspective(120px) rotateX(0deg);   opacity: 1; }
+      90%, 100% { transform: perspective(120px) rotateY(180deg);  opacity: 0; }
+    }
+
+    /* Holographic action cards — follows cursor from all sides */
+    .action-card {
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+      --mx: 50%;
+      --my: 50%;
+      perspective: 800px;
+    }
+    .action-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        circle at var(--mx) var(--my),
+        rgba(0,122,255,0.25),
+        rgba(88,86,214,0.18),
+        rgba(255,45,85,0.12),
+        transparent 70%
+      );
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      z-index: -1;
+    }
+    .action-card:hover::before { opacity: 1; }
+    .action-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: var(--ios-blue);
+      box-shadow: 0 12px 40px rgba(0,122,255,0.3);
+    }
+
+    /* Film card entrance animation */
+    .film-card {
+      animation: prod-card-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+    .film-card:nth-child(1) { animation-delay: 0.03s; }
+    .film-card:nth-child(2) { animation-delay: 0.06s; }
+    .film-card:nth-child(3) { animation-delay: 0.09s; }
+    .film-card:nth-child(4) { animation-delay: 0.12s; }
+    .film-card:nth-child(5) { animation-delay: 0.15s; }
+    .film-card:nth-child(6) { animation-delay: 0.18s; }
+    .film-card:nth-child(7) { animation-delay: 0.21s; }
+    .film-card:nth-child(8) { animation-delay: 0.24s; }
+    .film-card:nth-child(n+9) { animation-delay: 0.27s; }
+    @keyframes prod-card-in {
+      from { opacity: 0; transform: translateY(24px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .action-card{background:var(--fill);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--separator);padding:24px 16px;text-align:center;cursor:pointer;}
     .action-card:active{transform:scale(0.96);}
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;}
@@ -345,7 +424,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     <div class="search-wrapper">
       <div class="search-container">
         <span class="search-icon">🔍</span>
-        <input type="search" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" enterkeyhint="done" inputmode="search" />
+        <input type="text" id="searchInput" class="search-input" placeholder="Поиск фильмов..." autocomplete="off" enterkeyhint="done" inputmode="search" />
         <button class="search-clear" id="searchClear" type="button" title="Очистить">✕</button>
       </div>
     </div>
@@ -373,7 +452,9 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     </div>
     <div class="content hidden" id="content">
       <div class="loader" id="loader">
-        <div class="spinner"></div>
+        <div class="fx-cube-loader">
+          <span></span><span></span><span></span><span></span>
+        </div>
         <div class="loader-text">Загрузка...</div>
       </div>
       <div class="film-grid" id="filmGrid"></div>
@@ -503,29 +584,21 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         }
       }
 
-      // In Mini App — hide entire bar (user is already in Telegram)
+      // Top bar: only show login button if NOT logged in.
+      // If logged in — hide top bar entirely (fixed bottom button handles it).
       if (isInTelegram) {
         tgLoginBar.classList.remove('visible');
         return;
       }
-
-      // Check if user dismissed the "Open in Telegram" bar this session
-      const dismissed = sessionStorage.getItem('genopoisk_tg_bar_dismissed') === '1';
-
-      if (!isLoggedIn) {
-        // State A: show login button
-        tgLoginStateLoggedOut.style.display = '';
-        tgLoginStateLoggedIn.style.display = 'none';
-        tgLoginBar.classList.add('visible');
-      } else if (dismissed) {
-        // User closed the bar this session — keep it hidden
+      if (isLoggedIn) {
+        // Logged in — hide top bar, fixed bottom button is enough
         tgLoginBar.classList.remove('visible');
-      } else {
-        // State B: show "Open in Telegram" + close button
-        tgLoginStateLoggedOut.style.display = 'none';
-        tgLoginStateLoggedIn.style.display = 'flex';
-        tgLoginBar.classList.add('visible');
+        return;
       }
+      // Not logged in — show login button in top bar
+      tgLoginStateLoggedOut.style.display = '';
+      tgLoginStateLoggedIn.style.display = 'none';
+      tgLoginBar.classList.add('visible');
     }
 
     if (tgLoginBarCloseBtn) {
@@ -1467,6 +1540,23 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
 
       console.log('[debug-effects] Settings panel ready. Zoom:', savedZoom + '%', 'Effects:', savedEffects);
     })();
+
+    // --- Holo card mouse tracking (production) ---
+    // Cards glow follows cursor from any side — smooth radial gradient
+    document.addEventListener('mousemove', function(e) {
+      document.querySelectorAll('.action-card').forEach(function(card) {
+        var rect = card.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        // Track cursor even when slightly outside card (within 100px)
+        if (x >= -100 && x <= rect.width + 100 && y >= -100 && y <= rect.height + 100) {
+          var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
+          card.style.setProperty('--mx', px + '%');
+          card.style.setProperty('--my', py + '%');
+        }
+      });
+    });
 
     // Track initial page view
     trackEvent('page_views', { path: '/' });

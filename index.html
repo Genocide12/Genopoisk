@@ -633,8 +633,6 @@
         body.fx-on .search-wrapper { animation: fx-slide-down 0.5s ease-out; }
         body.fx-on .content { animation: fx-fade-in 0.3s ease-out; }
         body.fx-on .resume-card.visible { animation: fx-slide-up 0.4s cubic-bezier(0.34,1.56,0.64,1); }
-        body.fx-on .film-card:hover { transform: translateY(-6px) scale(1.05); box-shadow: 0 16px 48px rgba(0,122,255,0.4); }
-        body.fx-on .action-card:hover { transform: translateY(-6px) scale(1.04) rotate(-1deg); }
         body.fx-on .btn:active, body.fx-on .action-card:active { transform: scale(0.92); }
 
         @keyframes fx-fade-up { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
@@ -642,6 +640,134 @@
         @keyframes fx-slide-down { from { opacity:0; transform: translateY(-15px); } to { opacity:1; transform: translateY(0); } }
         @keyframes fx-slide-up { from { opacity:0; transform: translateY(30px); } to { opacity:1; transform: translateY(0); } }
         @keyframes fx-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+        /* === 1. Cube loader (replaces spinner) === */
+        .fx-loader-cube {
+          width: 44px; height: 44px;
+          transform: rotateZ(45deg);
+          position: relative;
+          margin-right: 12px;
+        }
+        .fx-loader-cube span {
+          display: block;
+          position: absolute;
+          width: 20px; height: 20px;
+          background: #22d3ee;
+          animation: fx-cube-fold 2.4s infinite linear;
+        }
+        .fx-loader-cube span:nth-child(1) { top: 0; left: 0; }
+        .fx-loader-cube span:nth-child(2) { top: 0; right: 0; animation-delay: 0.6s; background: #8b5cf6; }
+        .fx-loader-cube span:nth-child(3) { bottom: 0; left: 0; animation-delay: 1.2s; background: #ec4899; }
+        .fx-loader-cube span:nth-child(4) { bottom: 0; right: 0; animation-delay: 1.8s; background: #f59e0b; }
+        @keyframes fx-cube-fold {
+          0%, 10%    { transform: perspective(120px) rotateX(-180deg); opacity: 0; }
+          25%, 75%   { transform: perspective(120px) rotateX(0deg);    opacity: 1; }
+          90%, 100%  { transform: perspective(120px) rotateY(180deg);  opacity: 0; }
+        }
+        body.fx-on .spinner { display: none !important; }
+        body.fx-on .loader { align-items: center; }
+        body.fx-on .loader::before {
+          content: '';
+          display: block;
+          width: 44px; height: 44px;
+          transform: rotateZ(45deg);
+          position: relative;
+          animation: fx-cube-fold 2.4s infinite linear;
+          background: #22d3ee;
+          margin-right: 12px;
+        }
+
+        /* === 2. Rainbow text on hero title === */
+        body.fx-on .hero-title {
+          font-weight: 900 !important;
+          letter-spacing: 4px !important;
+        }
+        body.fx-on .hero-title span.fx-rb {
+          display: inline-block;
+          color: hsl(calc(var(--i, 0) * 60deg) 80% 60%);
+          animation: fx-rainbow 4s linear infinite;
+          animation-delay: calc(var(--i, 0) * -0.4s);
+          -webkit-text-fill-color: hsl(calc(var(--i, 0) * 60deg) 80% 60%) !important;
+          background: none !important;
+        }
+        @keyframes fx-rainbow { to { filter: hue-rotate(360deg); } }
+
+        /* === 3. Holographic action cards === */
+        body.fx-on .action-card {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+          --mx: 50%;
+          --my: 50%;
+          perspective: 800px;
+          transition: transform 0.15s ease-out, box-shadow 0.3s !important;
+        }
+        body.fx-on .action-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(
+            circle at var(--mx) var(--my),
+            rgba(236,72,153,0.5),
+            rgba(139,92,246,0.4),
+            rgba(34,211,238,0.3),
+            rgba(16,185,129,0.2),
+            rgba(245,158,11,0.1)
+          );
+          filter: blur(20px);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          z-index: -1;
+        }
+        body.fx-on .action-card::after {
+          content: "";
+          position: absolute;
+          inset: 1px;
+          border-radius: 19px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(0,0,0,0.3));
+          z-index: 0;
+          pointer-events: none;
+        }
+        body.fx-on .action-card:hover::before { opacity: 0.7; }
+        body.fx-on .action-card:hover {
+          transform: rotateX(15deg) rotateY(-15deg) translateY(-4px) !important;
+          box-shadow: 0 18px 40px -10px rgba(168,85,247,0.5) !important;
+        }
+        body.fx-on .action-card > * { position: relative; z-index: 1; }
+
+        /* === 4. Film card hover zoom + caption slide === */
+        body.fx-on .film-card {
+          overflow: hidden;
+          border-radius: 14px;
+          box-shadow: 0 14px 30px -10px rgba(0,0,0,0.4);
+        }
+        body.fx-on .film-card:hover {
+          transform: translateY(-6px) !important;
+          box-shadow: 0 20px 50px -10px rgba(0,122,255,0.5) !important;
+        }
+        body.fx-on .film-poster {
+          transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease !important;
+        }
+        body.fx-on .film-card:hover .film-poster {
+          transform: scale(1.12);
+        }
+        body.fx-on .film-info {
+          position: absolute !important;
+          left: 0; right: 0; bottom: 0;
+          padding: 16px !important;
+          background: linear-gradient(transparent, rgba(0,0,0,0.85)) !important;
+          transform: translateY(100%);
+          transition: transform 0.4s ease !important;
+          z-index: 2;
+        }
+        body.fx-on .film-card:hover .film-info {
+          transform: translateY(0);
+        }
+        body.fx-on .film-title {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+        }
+        body.fx-on .film-meta span { font-size: 12px; opacity: 0.85; }
 
         /* Settings gear button */
         #debugSettingsBtn {
@@ -740,6 +866,36 @@
         document.body.classList.toggle('fx-on', on);
         var toggle = document.getElementById('dsEffectsToggle');
         if (toggle) toggle.classList.toggle('on', on);
+
+        // Rainbow text on hero title — wrap each letter in span.fx-rb
+        if (on) {
+          var titleEl = document.querySelector('.hero-title');
+          if (titleEl && !titleEl.dataset.fxRainbow) {
+            titleEl.dataset.fxRainbow = '1';
+            var badge = titleEl.querySelector('#premiumBadge');
+            var text = titleEl.textContent.replace(badge ? badge.textContent : '', '').trim();
+            var html = badge ? badge.outerHTML : '';
+            for (var i = 0; i < text.length; i++) {
+              html += '<span class="fx-rb" style="--i:' + i + '">' + text[i] + '</span>';
+            }
+            titleEl.innerHTML = html;
+          }
+          // Mouse tracking for holographic cards
+          if (!window._fxMouseTrack) {
+            window._fxMouseTrack = true;
+            document.addEventListener('mousemove', function(e) {
+              document.querySelectorAll('.action-card').forEach(function(card) {
+                var rect = card.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+                  card.style.setProperty('--mx', (x / rect.width * 100) + '%');
+                  card.style.setProperty('--my', (y / rect.height * 100) + '%');
+                }
+              });
+            });
+          }
+        }
       }
       applyEffects(savedEffects);
 

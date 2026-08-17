@@ -810,6 +810,9 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         body.fx-on .action-card:nth-child(4) { animation-delay: 0.2s; }
         body.fx-on .action-card:nth-child(5) { animation-delay: 0.25s; }
         body.fx-on .film-card { animation: fx-fade-up 0.35s cubic-bezier(0.4,0,0.2,1) backwards; }
+    .film-poster { opacity: 0; transition: opacity 0.3s ease; }
+    .film-poster.loaded { opacity: 1; }
+    .film-poster.error { opacity: 0.3; }
         body.fx-on .hero { animation: fx-fade-in 0.6s ease-out; }
         body.fx-on .search-wrapper { animation: fx-slide-down 0.5s ease-out; }
         body.fx-on .content { animation: fx-fade-in 0.3s ease-out; }
@@ -1653,7 +1656,7 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         card.className = 'film-card';
         if (index < 10) card.style.animationDelay = `${index * 0.04}s`;
         card.innerHTML = `
-          <img src="${poster}" class="film-poster" alt="${title}" loading="${loadingAttr}" ${fetchPriority} decoding="async" onerror="this.style.opacity='0.3';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>'">
+          <img src="${poster}" class="film-poster" alt="${title}" loading="${loadingAttr}" ${fetchPriority} decoding="async" onload="this.classList.add('loaded')" onerror="this.classList.add('error');this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>'">
           <div class="film-info">
             <div class="film-title">${title}</div>
             <div class="film-meta">

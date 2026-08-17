@@ -1433,6 +1433,30 @@
       loader.classList.add('hidden');
     }
 
+    // Show loader until all posters in the grid have loaded.
+    // Called after appendFilms — waits for every <img> to fire onload/onerror.
+    function waitForPosters() {
+      var imgs = filmGrid.querySelectorAll('img.film-poster');
+      if (imgs.length === 0) { hideLoader(); return; }
+      var loaded = 0;
+      var total = imgs.length;
+      function check() {
+        loaded++;
+        if (loaded >= total) hideLoader();
+      }
+      imgs.forEach(function(img) {
+        if (img.complete && img.naturalWidth > 0) {
+          // Already loaded (cached)
+          check();
+        } else {
+          img.addEventListener('load', check, { once: true });
+          img.addEventListener('error', check, { once: true });
+        }
+      });
+      // Safety timeout — hide loader after 8s even if not all loaded
+      setTimeout(hideLoader, 8000);
+    }
+
     function clearFilms() {
       filmGrid.innerHTML = '';
       filmGrid.classList.remove('centered');
@@ -1484,7 +1508,8 @@
         frag.appendChild(card);
       });
       filmGrid.appendChild(frag);
-      hideLoader();
+      // Wait for all posters to load before hiding loader
+      waitForPosters();
       if (forceCenter || films.length === 1) {
         filmGrid.classList.add('centered');
       }

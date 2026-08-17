@@ -9,7 +9,7 @@ var TRANSLATIONS = {
   ru: {
     // Hero
     heroTitle: 'Genopoisk',
-    heroSubtitle: 'Фильмы без границ',
+    heroSubtitle: '',
     // Search
     searchPlaceholder: 'Поиск фильмов...',
     searchClear: 'Очистить',
@@ -63,7 +63,7 @@ var TRANSLATIONS = {
   },
   en: {
     heroTitle: 'Genopoisk',
-    heroSubtitle: 'Movies without limits',
+    heroSubtitle: '',
     searchPlaceholder: 'Search movies...',
     searchClear: 'Clear',
     catPopular: 'Popular',

@@ -8,6 +8,52 @@ const {
   formatDeployment
 } = require('../_lib/vercel');
 
+// ====== Bot i18n ======
+// Detects user language from Telegram's user.language_code field.
+// Returns 'ru' (default) or 'en'.
+function detectLang(user) {
+  if (user && user.language_code) {
+    if (user.language_code.indexOf('ru') === 0) return 'ru';
+    if (user.language_code.indexOf('en') === 0) return 'en';
+  }
+  return 'ru';
+}
+
+// Bot message translations
+const BOT_I18N = {
+  ru: {
+    welcomeAdmin: '🎬 <b>Добро пожаловать в Genopoisk!</b>\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.',
+    welcomeUser: '🎬 <b>Добро пожаловать в Genopoisk!</b>\n\n👇 Используйте кнопки ниже:',
+    welcomeBack: '🎬 <b>С возвращением в Genopoisk!</b>\n\n👇 Используйте кнопки ниже:',
+    openApp: '🎞️ Открыть Genopoisk',
+    myFilms: '📀 Мои фильмы',
+    collection: '❤️ Коллекция',
+    findFilm: '🔍 Найти фильм',
+    buyPremium: '⭐ Купить Premium (5 звёзд)',
+    premiumActive: '🔥 Premium активен',
+    help: '❓ Помощь',
+    home: '🏠 На главную',
+  },
+  en: {
+    welcomeAdmin: '🎬 <b>Welcome to Genopoisk!</b>\n\n🛠 <b>Admin panel:</b> all controls below.',
+    welcomeUser: '🎬 <b>Welcome to Genopoisk!</b>\n\n👇 Use the buttons below:',
+    welcomeBack: '🎬 <b>Welcome back to Genopoisk!</b>\n\n👇 Use the buttons below:',
+    openApp: '🎞️ Open Genopoisk',
+    myFilms: '📀 My films',
+    collection: '❤️ Collection',
+    findFilm: '🔍 Find movie',
+    buyPremium: '⭐ Buy Premium (5 stars)',
+    premiumActive: '🔥 Premium active',
+    help: '❓ Help',
+    home: '🏠 Home',
+  }
+};
+
+function bt(lang, key) {
+  var dict = BOT_I18N[lang] || BOT_I18N.ru;
+  return dict[key] || BOT_I18N.ru[key] || key;
+}
+
 const SITE_URL = process.env.SITE_URL || 'https://genopoisk.vercel.app';
 const DEBUG_URL = SITE_URL.replace(/\/$/, '') + '/debug-index.html';
 
@@ -38,7 +84,8 @@ const broadcastPending = new Map(); // userId -> true
 
 // Track last admin message IDs for editMessage (prevents duplicate messages)
 const lastAdminMsg = new Map(); // chatId -> { messageId, type }
-function mainMenuKeyboard(user) {
+function mainMenuKeyboard(user, lang) {
+  lang = lang || 'ru';
   var isPremium = (user && user.is_premium) || (user && user.events_by_type && user.events_by_type.premium);
   var keyboard = [
     [
@@ -46,24 +93,24 @@ function mainMenuKeyboard(user) {
       { text: '👥 Пользователи', callback_data: 'menu_users' }
     ],
     [
-      { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
+      { text: bt(lang, 'myFilms'), callback_data: 'menu_myfilms' },
       { text: '🚀 Деплой', callback_data: 'menu_deploy' }
     ],
     [
-      { text: '❤️ Коллекция', callback_data: 'menu_favorites' },
+      { text: bt(lang, 'collection'), callback_data: 'menu_favorites' },
       { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
     ],
-    [{ text: '🔍 Найти фильм', switch_inline_query_current_chat: '' }],
+    [{ text: bt(lang, 'findFilm'), switch_inline_query_current_chat: '' }],
     [
       { text: '🧹 Очистить статистику', callback_data: 'menu_clear' },
-      { text: '❓ Помощь', callback_data: 'menu_help' }
+      { text: bt(lang, 'help'), callback_data: 'menu_help' }
     ]
   ];
   // Premium button — for admin too (admin can support the project)
   if (isPremium) {
-    keyboard.push([{ text: '🔥 Premium активен', callback_data: 'menu_premium_status' }]);
+    keyboard.push([{ text: bt(lang, 'premiumActive'), callback_data: 'menu_premium_status' }]);
   } else {
-    keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
+    keyboard.push([{ text: bt(lang, 'buyPremium'), callback_data: 'menu_buy_premium' }]);
   }
   keyboard.push([{ text: '🐛 Debug (с консолью)', web_app: { url: DEBUG_URL } }]);
   return { inline_keyboard: keyboard };
@@ -261,22 +308,23 @@ async function showFilmCard(chatId, messageId, film, currentRating, context) {
 // ---- Command handlers (each returns {text, keyboard} or sends a message) ----
 
 // Keyboard for regular (non-admin) users — limited to user-facing features only.
-function userMenuKeyboard(user) {
+function userMenuKeyboard(user, lang) {
+  lang = lang || 'ru';
   var isPremium = (user && user.is_premium) || (user && user.events_by_type && user.events_by_type.premium);
   var keyboard = [
-    [{ text: '🎞️ Открыть Genopoisk', web_app: { url: SITE_URL } }],
+    [{ text: bt(lang, 'openApp'), web_app: { url: SITE_URL } }],
     [
-      { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
-      { text: '❤️ Коллекция', callback_data: 'menu_favorites' }
+      { text: bt(lang, 'myFilms'), callback_data: 'menu_myfilms' },
+      { text: bt(lang, 'collection'), callback_data: 'menu_favorites' }
     ],
-    [{ text: '🔍 Найти фильм', switch_inline_query_current_chat: '' }]
+    [{ text: bt(lang, 'findFilm'), switch_inline_query_current_chat: '' }]
   ];
   if (isPremium) {
-    keyboard.push([{ text: '🔥 Premium активен', callback_data: 'menu_premium_status' }]);
+    keyboard.push([{ text: bt(lang, 'premiumActive'), callback_data: 'menu_premium_status' }]);
   } else {
-    keyboard.push([{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }]);
+    keyboard.push([{ text: bt(lang, 'buyPremium'), callback_data: 'menu_buy_premium' }]);
   }
-  keyboard.push([{ text: '❓ Помощь', callback_data: 'menu_help' }]);
+  keyboard.push([{ text: bt(lang, 'help'), callback_data: 'menu_help' }]);
   return { inline_keyboard: keyboard };
 }
 
@@ -389,33 +437,34 @@ async function cmdStart(chatId, user, text) {
         `Ваш профиль единый для всех устройств — сайт, бот, установленное приложение.\n` +
         `Позиция просмотра синхронизируется автоматически.\n\n` +
         `👇 Используйте кнопки ниже:`;
-      await sendMessage(chatId, welcomeText, { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, welcomeText, { reply_markup: userMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
       return;
     }
 
     // RETURNING USER — just show their menu (no welcome spam)
     if (isAdmin(user.id)) {
       const welcome = `🎬 <b>С возвращением!</b>\n\n🛠 <b>Админ-панель:</b>`;
-      await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     } else {
       const welcome = `🎬 <b>С возвращением в Genopoisk!</b>\n\n👇 Используйте кнопки ниже:`;
-      await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     }
     return;
   }
 
   if (isAdmin(user.id)) {
     // ADMIN: welcome + full admin control panel
-    const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nФильмы прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n🛠 <b>Админ-панель:</b> все кнопки управления ниже.`;
-    await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+    const lang = detectLang(user);
+    const welcome = bt(lang, 'welcomeAdmin');
+    await sendMessage(chatId, welcome, { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), lang) });
     return;
   }
 
   // REGULAR USER: minimal welcome + user-facing buttons only
-  // Check if this user already exists in DB — if not, notify admin
+  const lang = detectLang(user);
   const existingUser = await getUser(String(user.id));
-  const welcome = `🎬 <b>Добро пожаловать в Genopoisk!</b>\n\nФильмы прямо в Telegram — ищите фильмы, смотрите через встроенный плеер.\n\n👇 Используйте кнопки ниже:`;
-  await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(existingUser) });
+  const welcome = bt(lang, 'welcomeUser');
+  await sendMessage(chatId, welcome, { reply_markup: userMenuKeyboard(existingUser, lang) });
   if (!existingUser) {
     await notifyAdminNewUser(user, '/start (бот)');
   }
@@ -510,11 +559,11 @@ async function cmdHelp(chatId, user) {
 <i>Ниже — справка, которую видят обычные пользователи при нажатии «❓ Помощь»:</i>
 
 ` + buildUserHelpText();
-    await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+    await sendMessage(chatId, text, { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     return;
   }
   // Regular user — show full feature guide
-  await sendMessage(chatId, buildUserHelpText(), { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
+  await sendMessage(chatId, buildUserHelpText(), { reply_markup: userMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
 }
 
 // ---- Stats view ----
@@ -849,7 +898,7 @@ async function cmdBroadcast(chatId, user, text) {
     }
     await new Promise(r => setTimeout(r, 50));
   }
-  await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+  await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
 }
 
 async function cmdClear(chatId, user) {
@@ -858,7 +907,7 @@ async function cmdClear(chatId, user) {
     return;
   }
       await deleteAllUsers();
-  await sendMessage(chatId, '🧹 Статистика сброшена.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+  await sendMessage(chatId, '🧹 Статистика сброшена.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
 }
 
 async function cmdUser(chatId, user, text) {
@@ -869,7 +918,7 @@ async function cmdUser(chatId, user, text) {
   const parts = (text || '').split(/\s+/);
   const targetId = parts[1];
   if (!targetId) {
-    await sendMessage(chatId, 'Использование: <code>/user &lt;telegram_id&gt;</code>\n\nСписок ID через /users', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+    await sendMessage(chatId, 'Использование: <code>/user &lt;telegram_id&gt;</code>\n\nСписок ID через /users', { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     return;
   }
   const result = await buildUserProfileText(String(targetId).trim());
@@ -892,7 +941,7 @@ async function handleMessage(update) {
     const message = text;
     const allUsers = await getAllUsers();
     if (allUsers.length === 0) {
-      await sendMessage(chatId, 'Нет пользователей для рассылки.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, 'Нет пользователей для рассылки.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
       return;
     }
     let sent = 0, failed = 0;
@@ -908,7 +957,7 @@ async function handleMessage(update) {
       } catch (e) { failed++; }
       await new Promise(r => setTimeout(r, 50));
     }
-    await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+    await sendMessage(chatId, `✅ Отправлено: ${sent}, не доставлено: ${failed}`, { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     return;
   }
 
@@ -917,7 +966,7 @@ async function handleMessage(update) {
 
   // Admin-only commands (no menu for regular users)
   if (isAdmin(user.id)) {
-    if (text.startsWith('/stats')) return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+    if (text.startsWith('/stats')) return sendMessage(chatId, await buildStatsText(), { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     if (text.startsWith('/users')) {
       const allUsers = await getAllUsers();
       return sendMessage(chatId, await buildUsersListText(), { reply_markup: usersListKeyboard(allUsers || [], 0) });
@@ -931,16 +980,16 @@ async function handleMessage(update) {
 
   if (text.startsWith('/')) {
     if (isAdmin(user.id)) {
-      await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, 'Неизвестная команда. /help — список команд.', { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     } else {
       // Regular user — show their menu
-      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     }
   } else {
     if (isAdmin(user.id)) {
-      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: mainMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: mainMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     } else {
-      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id))) });
+      await sendMessage(chatId, 'Используйте кнопки ниже 👇', { reply_markup: userMenuKeyboard(await getUser(String(user.id)), detectLang(user)) });
     }
   }
 }
@@ -1017,11 +1066,11 @@ async function handleCallback(update) {
     if (data === 'menu_main') {
       if (isAdmin(fromId)) {
         const text = `<b>🛠 Админ-панель Genopoisk</b>\n\nВыберите раздел:`;
-        await edit(text, mainMenuKeyboard(await getUser(String(fromId))));
+        await edit(text, mainMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       } else {
         // Regular user — show their menu
         const text = `🎞️ <b>Genopoisk</b>\n\nВыберите раздел:`;
-        await edit(text, userMenuKeyboard(await getUser(String(fromId))));
+        await edit(text, userMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       }
       return;
     }
@@ -1040,7 +1089,7 @@ async function handleCallback(update) {
 <i>Ниже — справка, которую видят обычные пользователи при нажатии «❓ Помощь»:</i>
 
 ` + buildUserHelpText();
-        await edit(adminHelp, mainMenuKeyboard(await getUser(String(fromId))));
+        await edit(adminHelp, mainMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       } else {
         // Regular user — full feature guide
         const userObj = await getUser(String(fromId));
@@ -1235,7 +1284,7 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'menu_stats') {
-      await edit(await buildStatsText(), mainMenuKeyboard(await getUser(String(fromId))));
+      await edit(await buildStatsText(), mainMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       return;
     }
     if (data === 'menu_myfilms') {
@@ -1355,7 +1404,7 @@ async function handleCallback(update) {
 
       // Keep totals but clear all users
       await deleteAllUsers();
-      await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard(await getUser(String(fromId))));
+      await edit('✅ <b>Все сессии сброшены.</b>\n\nВсе устройства должны заново пройти авторизацию через Telegram.', mainMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       return;
     }
     if (data === 'clear_stats_prompt') {
@@ -1372,7 +1421,7 @@ async function handleCallback(update) {
     }
     if (data === 'clear_confirm') {
       await deleteAllUsers();
-      await edit('✅ <b>Статистика очищена.</b>\n\nВсе данные удалены.', mainMenuKeyboard(await getUser(String(fromId))));
+      await edit('✅ <b>Статистика очищена.</b>\n\nВсе данные удалены.', mainMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       return;
     }
     if (data === 'menu_broadcast') {
@@ -1442,7 +1491,7 @@ async function handleCallback(update) {
         const allUsers = await getAllUsers();
         await edit('✅ Профиль <code>' + escapeHtml(targetId) + '</code> удалён.', usersListKeyboard(allUsers || [], 0));
       } catch (e) {
-        await edit('❌ Ошибка: ' + escapeHtml(e.message), mainMenuKeyboard(await getUser(String(fromId))));
+        await edit('❌ Ошибка: ' + escapeHtml(e.message), mainMenuKeyboard(await getUser(String(fromId)), detectLang(cq.from)));
       }
       return;
     }

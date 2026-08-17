@@ -1006,8 +1006,20 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       panel.innerHTML = `
         <div class="ds-title">⚙️ Настройки (debug)</div>
         <div class="ds-row">
-          <span class="ds-label">Эффекты</span>
-          <button class="ds-toggle on" id="dsEffectsToggle"></button>
+          <span class="ds-label">🧊 Cube loader</span>
+          <button class="ds-toggle" id="dsFx1Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">🌈 Rainbow title</span>
+          <button class="ds-toggle" id="dsFx2Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">💎 Holo cards</span>
+          <button class="ds-toggle" id="dsFx3Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">🔍 Film zoom</span>
+          <button class="ds-toggle" id="dsFx4Toggle"></button>
         </div>
         <div class="ds-row">
           <span class="ds-label">Масштаб</span>
@@ -1024,34 +1036,68 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
           <span class="ds-label">🔥 IRONFORGE</span>
           <button class="ds-toggle" id="dsIronforgeToggle"></button>
         </div>
+        <div class="ds-row">
+          <span class="ds-label">🌐 Язык</span>
+          <button class="ds-btn" id="dsLangBtn" style="width:auto;padding:6px 12px;margin:0;">RU</button>
+        </div>
         <button class="ds-btn" id="dsResetBtn">Сбросить настройки</button>
+        <button class="ds-btn" id="dsSaveAllBtn" style="margin-top:6px;background:var(--ios-blue);color:#fff;border:none;">💾 Сохранить для всех</button>
       `;
       document.body.appendChild(panel);
 
       // Load saved settings
       var savedZoom = localStorage.getItem('debug_zoom') || '100';
-      var savedEffects = localStorage.getItem('debug_effects') !== 'off';
+      var savedFx1 = localStorage.getItem('debug_fx1') === 'on';
+      var savedFx2 = localStorage.getItem('debug_fx2') === 'on';
+      var savedFx3 = localStorage.getItem('debug_fx3') === 'on';
+      var savedFx4 = localStorage.getItem('debug_fx4') === 'on';
+      var savedLang = localStorage.getItem('debug_lang') || (window.__genopoiskLang || 'ru');
 
       // Apply zoom
       function applyZoom(zoom) {
         document.documentElement.style.zoom = zoom + '%';
-        // For browsers that don't support zoom (Firefox), use transform scale
         if (!('zoom' in document.documentElement.style) || navigator.userAgent.indexOf('Firefox') !== -1) {
           document.body.style.transform = 'scale(' + (zoom / 100) + ')';
           document.body.style.transformOrigin = 'top center';
         }
-        document.getElementById('dsZoomValue').textContent = zoom + '%';
-        document.getElementById('dsZoomSlider').value = zoom;
+        var zv = document.getElementById('dsZoomValue');
+        var zs = document.getElementById('dsZoomSlider');
+        if (zv) zv.textContent = zoom + '%';
+        if (zs) zs.value = zoom;
       }
       applyZoom(savedZoom);
 
-      // Apply effects
-      function applyEffects(on) {
-        document.body.classList.toggle('fx-on', on);
-        var toggle = document.getElementById('dsEffectsToggle');
-        if (toggle) toggle.classList.toggle('on', on);
+      // --- Individual effect toggles ---
+      // fx1: Cube loader, fx2: Rainbow title, fx3: Holo cards, fx4: Film zoom
+      function updateBodyClasses() {
+        document.body.classList.toggle('fx-on', savedFx1 || savedFx2 || savedFx3 || savedFx4);
+        document.body.classList.toggle('fx-cube', savedFx1);
+        document.body.classList.toggle('fx-rainbow', savedFx2);
+        document.body.classList.toggle('fx-holo', savedFx3);
+        document.body.classList.toggle('fx-zoom', savedFx4);
+      }
 
-        // Rainbow text on hero title — wrap each letter in span.fx-rb
+      function applyFx1(on) {
+        savedFx1 = on;
+        document.body.classList.toggle('fx-cube', on);
+        updateBodyClasses();
+        document.getElementById('dsFx1Toggle').classList.toggle('on', on);
+        if (on) {
+          // Hide spinner, show cube
+          var loader = document.getElementById('loader');
+          if (loader) loader.classList.add('fx-cube-loader');
+        } else {
+          var loader2 = document.getElementById('loader');
+          if (loader2) loader2.classList.remove('fx-cube-loader');
+        }
+        localStorage.setItem('debug_fx1', on ? 'on' : 'off');
+      }
+
+      function applyFx2(on) {
+        savedFx2 = on;
+        document.body.classList.toggle('fx-rainbow', on);
+        updateBodyClasses();
+        document.getElementById('dsFx2Toggle').classList.toggle('on', on);
         if (on) {
           var titleEl = document.querySelector('.hero-title');
           if (titleEl && !titleEl.dataset.fxRainbow) {
@@ -1064,24 +1110,55 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
             }
             titleEl.innerHTML = html;
           }
-          // Mouse tracking for holographic cards
-          if (!window._fxMouseTrack) {
-            window._fxMouseTrack = true;
-            document.addEventListener('mousemove', function(e) {
-              document.querySelectorAll('.action-card').forEach(function(card) {
-                var rect = card.getBoundingClientRect();
-                var x = e.clientX - rect.left;
-                var y = e.clientY - rect.top;
-                if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
-                  card.style.setProperty('--mx', (x / rect.width * 100) + '%');
-                  card.style.setProperty('--my', (y / rect.height * 100) + '%');
-                }
-              });
-            });
-          }
         }
+        localStorage.setItem('debug_fx2', on ? 'on' : 'off');
       }
-      applyEffects(savedEffects);
+
+      function applyFx3(on) {
+        savedFx3 = on;
+        document.body.classList.toggle('fx-holo', on);
+        updateBodyClasses();
+        document.getElementById('dsFx3Toggle').classList.toggle('on', on);
+        if (on && !window._fxMouseTrack) {
+          window._fxMouseTrack = true;
+          document.addEventListener('mousemove', function(e) {
+            document.querySelectorAll('.action-card').forEach(function(card) {
+              var rect = card.getBoundingClientRect();
+              var x = e.clientX - rect.left;
+              var y = e.clientY - rect.top;
+              if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+                card.style.setProperty('--mx', (x / rect.width * 100) + '%');
+                card.style.setProperty('--my', (y / rect.height * 100) + '%');
+              }
+            });
+          });
+        }
+        localStorage.setItem('debug_fx3', on ? 'on' : 'off');
+      }
+
+      function applyFx4(on) {
+        savedFx4 = on;
+        document.body.classList.toggle('fx-zoom', on);
+        updateBodyClasses();
+        document.getElementById('dsFx4Toggle').classList.toggle('on', on);
+        localStorage.setItem('debug_fx4', on ? 'on' : 'off');
+      }
+
+      // Apply all on load
+      applyFx1(savedFx1);
+      applyFx2(savedFx2);
+      applyFx3(savedFx3);
+      applyFx4(savedFx4);
+
+      // --- Language toggle ---
+      function applyLang(lang) {
+        window.__genopoiskLang = lang;
+        localStorage.setItem('debug_lang', lang);
+        var btn = document.getElementById('dsLangBtn');
+        if (btn) btn.textContent = lang.toUpperCase();
+        if (typeof applyTranslations === 'function') applyTranslations();
+      }
+      applyLang(savedLang);
 
       // Toggle panel
       gearBtn.addEventListener('click', function(e) {
@@ -1094,11 +1171,16 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
         }
       });
 
-      // Effects toggle
-      document.getElementById('dsEffectsToggle').addEventListener('click', function() {
-        var on = !this.classList.contains('on');
-        applyEffects(on);
-        localStorage.setItem('debug_effects', on ? 'on' : 'off');
+      // Individual effect toggles
+      document.getElementById('dsFx1Toggle').addEventListener('click', function() { applyFx1(!this.classList.contains('on')); });
+      document.getElementById('dsFx2Toggle').addEventListener('click', function() { applyFx2(!this.classList.contains('on')); });
+      document.getElementById('dsFx3Toggle').addEventListener('click', function() { applyFx3(!this.classList.contains('on')); });
+      document.getElementById('dsFx4Toggle').addEventListener('click', function() { applyFx4(!this.classList.contains('on')); });
+
+      // Language toggle
+      document.getElementById('dsLangBtn').addEventListener('click', function() {
+        var newLang = (window.__genopoiskLang === 'ru') ? 'en' : 'ru';
+        applyLang(newLang);
       });
 
       // Zoom slider
@@ -1116,12 +1198,41 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       // Reset
       document.getElementById('dsResetBtn').addEventListener('click', function() {
         localStorage.removeItem('debug_zoom');
-        localStorage.removeItem('debug_effects');
+        localStorage.removeItem('debug_fx1');
+        localStorage.removeItem('debug_fx2');
+        localStorage.removeItem('debug_fx3');
+        localStorage.removeItem('debug_fx4');
         localStorage.removeItem('debug_ironforge');
+        localStorage.removeItem('debug_lang');
         applyZoom(100);
-        applyEffects(true);
+        applyFx1(false); applyFx2(false); applyFx3(false); applyFx4(false);
         applyIronforge(false);
+        applyLang(window.__genopoiskLang || 'ru');
         console.log('[debug] Settings reset');
+      });
+
+      // Save for all — copies debug settings to production (localStorage
+      // without debug_ prefix, so production index.html reads them)
+      document.getElementById('dsSaveAllBtn').addEventListener('click', function() {
+        // Save effects as production settings (fx-on class on body)
+        localStorage.setItem('prod_fx1', savedFx1 ? 'on' : 'off');
+        localStorage.setItem('prod_fx2', savedFx2 ? 'on' : 'off');
+        localStorage.setItem('prod_fx3', savedFx3 ? 'on' : 'off');
+        localStorage.setItem('prod_fx4', savedFx4 ? 'on' : 'off');
+        localStorage.setItem('prod_ironforge', localStorage.getItem('debug_ironforge') || 'off');
+        localStorage.setItem('prod_lang', window.__genopoiskLang || 'ru');
+        localStorage.setItem('prod_zoom', savedZoom);
+        // Show confirmation
+        var btn = document.getElementById('dsSaveAllBtn');
+        if (btn) {
+          btn.textContent = '✅ Сохранено!';
+          btn.style.background = '#34C759';
+          setTimeout(function() {
+            btn.textContent = '💾 Сохранить для всех';
+            btn.style.background = 'var(--ios-blue)';
+          }, 2000);
+        }
+        console.log('[debug] Settings saved for production');
       });
 
       // --- IRONFORGE design preset ---

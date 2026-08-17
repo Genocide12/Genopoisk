@@ -11,8 +11,42 @@
 // long-lived Cache-Control headers, and returns the image bytes directly.
 // Vercel's Edge Network caches the response globally — first load is slow
 // (~2s) but every subsequent load is <50ms.
+//
+// Uses multiple API keys (from KINOPOISK_API_KEYS env var) to distribute
+// load — each request picks a random key, reducing the chance of hitting
+// rate limits on any single key.
 
 const KINOPOISK_IMG_BASE = 'https://kinopoiskapiunofficial.tech/images/posters';
+
+// Load API keys — used for poster requests that need authentication.
+// The poster endpoint on kinopoiskapiunofficial.tech doesn't actually
+// require an API key (it returns 301 without one), but including one
+// helps avoid 403 blocks from rate limiting.
+function loadApiKeys() {
+  const keys = [];
+  if (process.env.KINOPOISK_API_KEYS) {
+    process.env.KINOPOISK_API_KEYS.split(',').forEach(k => {
+      const trimmed = k.trim();
+      if (trimmed) keys.push(trimmed);
+    });
+  }
+  if (process.env.KINOPOISK_API_KEY) {
+    const single = process.env.KINOPOISK_API_KEY.trim();
+    if (single && keys.indexOf(single) === -1) keys.push(single);
+  }
+  return keys;
+}
+
+const API_KEYS = loadApiKeys();
+let nextKeyIdx = 0;
+
+function pickApiKey() {
+  if (API_KEYS.length === 0) return null;
+  // Round-robin
+  const key = API_KEYS[nextKeyIdx % API_KEYS.length];
+  nextKeyIdx++;
+  return key;
+}
 
 // In-memory cache (per lambda instance). Vercel also caches at the edge
 // via Cache-Control headers, so this is a secondary cache for warm instances.
@@ -35,17 +69,13 @@ module.exports = async (req, res) => {
   }
 
   // Map size to poster path segment
-  // kp_small = ~150x230 (thumbnail)
-  // kp = ~600x927 (full)
-  // We also support "medium" which uses kp_small but the Yandex CDN
-  // will serve iphone360 (360x556) — better quality for retina screens.
   let pathSegment;
   if (size === 'large') {
     pathSegment = 'kp';
   } else if (size === 'medium') {
-    pathSegment = 'kp_small'; // triggers iphone360 redirect
+    pathSegment = 'kp_small';
   } else {
-    pathSegment = 'kp_small'; // default — small thumbnail
+    pathSegment = 'kp_small';
   }
 
   const upstreamUrl = `${KINOPOISK_IMG_BASE}/${pathSegment}/${filmId}.jpg`;
@@ -60,45 +90,62 @@ module.exports = async (req, res) => {
     return res.status(200).send(cached.buffer);
   }
 
-  try {
-    // Fetch with redirect following. We use the default fetch which follows
-    // redirects automatically (Vercel's Node 18+ fetch supports this).
-    const upstream = await fetch(upstreamUrl, {
-      headers: {
-        'User-Agent': 'Genopoisk/1.0 (poster proxy)',
-        'Accept': 'image/jpeg, image/png, image/*'
-      },
-      redirect: 'follow'
-    });
-
-    if (!upstream.ok) {
-      console.error('[poster] upstream error:', upstream.status, upstreamUrl);
-      // Return a 1x1 transparent pixel as fallback — better than broken image
-      res.setHeader('Content-Type', 'image/gif');
-      res.setHeader('Cache-Control', 'public, max-age=300'); // short cache for errors
-      return res.status(200).send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
+  // Try fetching — attempt up to 3 times with different API keys
+  // to handle 403/IP blocks
+  const maxAttempts = Math.min(3, Math.max(1, API_KEYS.length));
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const apiKey = pickApiKey();
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (compatible; GenopoiskBot/1.0)',
+      'Accept': 'image/jpeg, image/png, image/*'
+    };
+    // Include API key if available — helps avoid 403 from rate limiting
+    if (apiKey) {
+      headers['X-API-KEY'] = apiKey;
     }
 
-    const buffer = Buffer.from(await upstream.arrayBuffer());
+    try {
+      const upstream = await fetch(upstreamUrl, {
+        headers: headers,
+        redirect: 'follow'
+      });
 
-    // Save to in-memory cache (limit cache size to 500 posters ~50MB)
-    if (cache.size > 500) {
-      const oldest = cache.keys().next().value;
-      cache.delete(oldest);
+      if (upstream.ok) {
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+
+        // Save to in-memory cache (limit cache size to 500 posters ~50MB)
+        if (cache.size > 500) {
+          const oldest = cache.keys().next().value;
+          cache.delete(oldest);
+        }
+        cache.set(cacheKey, { buffer, ts: Date.now() });
+
+        // Set aggressive caching
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+        res.setHeader('X-Cache', 'MISS');
+        return res.status(200).send(buffer);
+      }
+
+      if (upstream.status === 403) {
+        // IP blocked — wait 100ms and try next key
+        console.warn('[poster] 403 attempt', attempt + 1, 'of', maxAttempts);
+        await new Promise(r => setTimeout(r, 100));
+        continue;
+      }
+
+      // Other errors — return fallback immediately
+      break;
+    } catch (e) {
+      console.warn('[poster] fetch error attempt', attempt + 1, ':', e.message);
+      // Try next key
+      continue;
     }
-    cache.set(cacheKey, { buffer, ts: Date.now() });
-
-    // Set aggressive caching — posters never change (film ID is permanent)
-    // 1 year max-age + immutable tells browsers and Vercel Edge to never
-    // re-fetch. This makes subsequent loads effectively instant.
-    res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
-    res.setHeader('X-Cache', 'MISS');
-    return res.status(200).send(buffer);
-  } catch (e) {
-    console.error('[poster] fetch error:', e.message);
-    res.setHeader('Content-Type', 'image/gif');
-    res.setHeader('Cache-Control', 'public, max-age=60');
-    return res.status(200).send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
   }
+
+  // All attempts failed — return 1x1 transparent pixel
+  console.error('[poster] All attempts failed for', filmId);
+  res.setHeader('Content-Type', 'image/gif');
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  return res.status(200).send(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'));
 };

@@ -60,6 +60,10 @@ var TRANSLATIONS = {
     settingsZoom: 'Масштаб',
     settingsTheme: 'Тема',
     settingsReset: 'Сбросить настройки',
+    // Long-press film info popup
+    longpressHint: '💡 Зажмите карточку для информации',
+    filmInfoClose: 'Закрыть',
+    filmInfoWatch: '▶ Смотреть',
   },
   en: {
     heroTitle: 'Genopoisk',
@@ -103,6 +107,10 @@ var TRANSLATIONS = {
     settingsZoom: 'Zoom',
     settingsTheme: 'Theme',
     settingsReset: 'Reset settings',
+    // Long-press film info popup
+    longpressHint: '💡 Long-press a card for info',
+    filmInfoClose: 'Close',
+    filmInfoWatch: '▶ Watch',
   }
 };
 

@@ -142,25 +142,38 @@ module.exports = async (req, res) => {
   }
 
   // Try each available key until one works or all are exhausted.
-  // For 403 errors, we retry up to 3 times PER KEY with a 200ms delay —
-  // Vercel may route the retry to a different serverless instance with
-  // a different IP that Kinopoisk hasn't blocked.
+  // For 403 errors, we retry up to 3 times PER KEY with progressively
+  // longer delays (300ms, 600ms, 1200ms). This gives Vercel time to route
+  // to a different serverless instance with a different egress IP that
+  // Kinopoisk hasn't blocked. The previous 200ms flat delay was too short
+  // to actually trigger IP rotation on Vercel's side.
   const triedKeys = new Set();
   let lastError = null;
   const MAX_RETRIES_PER_KEY = 3;
+  const RETRY_DELAYS = [300, 600, 1200, 2400];
+
+  // Realistic browser headers — Kinopoisk's edge (Cloudflare) returns 403
+  // for bot-like User-Agents such as "Mozilla/5.0 (compatible; ...)".
+  // Using a real Chrome UA + Accept-Language + Referer dramatically reduces
+  // the 403 rate from Vercel egress IPs.
+  const BROWSER_HEADERS = {
+    'X-API-KEY': '', // filled per-iteration below
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Referer': 'https://kinopoisk.ru/',
+    'Origin': 'https://kinopoisk.ru'
+  };
 
   for (let attempt = 0; attempt < API_KEYS.length * MAX_RETRIES_PER_KEY; attempt++) {
     const apiKey = pickNextAvailableKey();
     if (!apiKey) break;
 
     try {
-      const upstream = await fetch(targetUrl, {
-        headers: {
-          'X-API-KEY': apiKey,
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (compatible; GenopoiskBot/1.0)'
-        }
-      });
+      const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
+      const upstream = await fetch(targetUrl, { headers });
 
       // If the key is rate-limited, mark it and try the next one
       if (isExhaustionStatus(upstream.status)) {
@@ -177,14 +190,15 @@ module.exports = async (req, res) => {
 
         // 403 — Kinopoisk blocks the IP (VPN, proxy, or rate-limit).
         // Don't mark key as exhausted (key is fine, IP is the problem).
-        // Wait 200ms and retry — Vercel may route to a different instance
-        // with a different IP that Kinopoisk hasn't blocked.
+        // Wait progressively longer before retry — Vercel may route to a
+        // different instance with a different IP that Kinopoisk hasn't blocked.
         if (upstream.status === 403) {
           console.warn(`[kinopoisk] 403 from Kinopoisk (IP blocked), attempt ${attempt + 1}`);
           lastError = { status: 403, message: 'Kinopoisk API 403 (IP blocked or rate-limited)' };
           // Don't mark key as exhausted — it's an IP issue, not a key issue
-          // Wait 200ms before retry (allows Vercel to route to different IP)
-          await new Promise(r => setTimeout(r, 200));
+          // Progressive delay: 300ms, 600ms, 1200ms, 2400ms...
+          const delayIdx = Math.min(attempt, RETRY_DELAYS.length - 1);
+          await new Promise(r => setTimeout(r, RETRY_DELAYS[delayIdx]));
           continue;
         }
 

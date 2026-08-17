@@ -93,12 +93,21 @@ module.exports = async (req, res) => {
   // Try fetching — attempt up to 3 times with different API keys
   // to handle 403/IP blocks
   const maxAttempts = Math.min(3, Math.max(1, API_KEYS.length));
+  // Realistic browser headers — same rationale as kinopoisk.js.
+  // Bot-like UA ("Mozilla/5.0 (compatible; ...)") gets 403 from Cloudflare.
+  const BROWSER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://kinopoisk.ru/',
+    'Sec-Fetch-Dest': 'image',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'cross-site'
+  };
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const apiKey = pickApiKey();
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (compatible; GenopoiskBot/1.0)',
-      'Accept': 'image/jpeg, image/png, image/*'
-    };
+    const headers = Object.assign({}, BROWSER_HEADERS);
     // Include API key if available — helps avoid 403 from rate limiting
     if (apiKey) {
       headers['X-API-KEY'] = apiKey;
@@ -128,9 +137,11 @@ module.exports = async (req, res) => {
       }
 
       if (upstream.status === 403) {
-        // IP blocked — wait 100ms and try next key
-        console.warn('[poster] 403 attempt', attempt + 1, 'of', maxAttempts);
-        await new Promise(r => setTimeout(r, 100));
+        // IP blocked — wait progressively longer and try next key.
+        const delays = [300, 600, 1200];
+        const delay = delays[Math.min(attempt, delays.length - 1)];
+        console.warn('[poster] 403 attempt', attempt + 1, 'of', maxAttempts, 'waiting', delay + 'ms');
+        await new Promise(r => setTimeout(r, delay));
         continue;
       }
 

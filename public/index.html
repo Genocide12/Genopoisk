@@ -238,6 +238,109 @@
     #tgWidgetContainer iframe{max-width:100%;border:none;overflow:hidden;}
     @media (max-width:768px){.container{padding:16px 12px;}.hero{padding:32px 16px;margin-bottom:24px;}.actions{grid-template-columns:repeat(2,1fr);}.film-grid{grid-template-columns:repeat(2,1fr);gap:12px;}}
     @media (max-width:480px){.hero-title{font-size:28px;}.action-icon{font-size:32px;}.film-grid{gap:10px;}}
+
+    /* ====== Long-press film info popup (mobile) ====== */
+    /* On touch devices :hover doesn't fire, so film-info is invisible.
+       Long-press (touchstart + hold 500ms) opens this modal with the
+       film details. Inside the modal, text IS selectable so users can
+       copy the title/year (the rest of the page blocks copy). */
+    .film-info-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 1500;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .film-info-overlay.visible { opacity: 1; pointer-events: auto; }
+    .film-info-popup {
+      background: var(--bg-secondary);
+      border: 1px solid var(--separator);
+      border-radius: 20px;
+      padding: 20px;
+      max-width: 340px; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      transform: scale(0.9);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      /* Explicitly ENABLE text selection inside the popup, overriding
+         the body-wide user-select: none */
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
+    .film-info-overlay.visible .film-info-popup { transform: scale(1); }
+    .film-info-popup .fip-poster {
+      width: 80px; height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      display: block; margin: 0 auto 14px;
+    }
+    .film-info-popup .fip-title {
+      font-size: 18px; font-weight: 700;
+      color: var(--text-primary);
+      text-align: center;
+      margin-bottom: 8px;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      /* allow selection highlight to show */
+    }
+    .film-info-popup .fip-meta {
+      display: flex; justify-content: center; align-items: center;
+      gap: 10px; flex-wrap: wrap;
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+    }
+    .film-info-popup .fip-rating {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 8px;
+      background: rgba(0,122,255,0.25);
+      border-radius: 8px;
+      font-weight: 700;
+      color: #5ac8fa;
+    }
+    .film-info-popup .fip-actions {
+      display: flex; gap: 10px;
+    }
+    .film-info-popup .fip-btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 0.15s, background 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .film-info-popup .fip-btn:active { transform: scale(0.96); }
+    .film-info-popup .fip-btn-primary {
+      background: var(--ios-blue); color: #fff;
+    }
+    .film-info-popup .fip-btn-secondary {
+      background: var(--fill); color: var(--text-primary);
+      border: 1px solid var(--separator);
+    }
+    /* Long-press hint shown briefly when grid loads on touch devices */
+    .longpress-hint {
+      position: fixed; bottom: 80px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #fff; font-size: 13px;
+      padding: 8px 16px; border-radius: 20px;
+      z-index: 1200;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      white-space: nowrap;
+    }
+    .longpress-hint.visible { opacity: 1; }
   </style>
 </head>
 <body>
@@ -317,13 +420,45 @@
     <span style="font-size:18px;">🤖</span>
     <span id="fixedTelegramText">Открыть в Telegram</span>
   </a>
+  <!-- Long-press film info popup (mobile only — desktop uses :hover) -->
+  <div class="film-info-overlay" id="filmInfoOverlay">
+    <div class="film-info-popup" id="filmInfoPopup">
+      <img class="fip-poster" id="fipPoster" src="" alt="">
+      <div class="fip-title" id="fipTitle"></div>
+      <div class="fip-meta" id="fipMeta"></div>
+      <div class="fip-actions">
+        <button class="fip-btn fip-btn-secondary" id="fipClose" data-i18n="filmInfoClose">Закрыть</button>
+        <button class="fip-btn fip-btn-primary" id="fipOpen" data-i18n="filmInfoWatch">▶ Смотреть</button>
+      </div>
+    </div>
+  </div>
+  <div class="longpress-hint" id="longpressHint" data-i18n="longpressHint">💡 Зажмите карточку для информации</div>
   <script>
     // Защита от копирования / инспектора
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    document.addEventListener('copy', e => e.preventDefault());
-    document.addEventListener('cut', e => e.preventDefault());
-    document.addEventListener('selectstart', e => e.preventDefault());
+    // EXCEPT inside the long-press film info popup — there users CAN select
+    // and copy the title/year/rating (that's the whole point of the popup).
+    function isInsideFilmInfoPopup(el) {
+      return !!(el && el.closest && el.closest('.film-info-popup'));
+    }
+    document.addEventListener('contextmenu', e => {
+      if (isInsideFilmInfoPopup(e.target)) return; // allow context menu in popup
+      e.preventDefault();
+    });
+    document.addEventListener('copy', e => {
+      if (isInsideFilmInfoPopup(e.target)) return; // allow copy in popup
+      e.preventDefault();
+    });
+    document.addEventListener('cut', e => {
+      if (isInsideFilmInfoPopup(e.target)) return;
+      e.preventDefault();
+    });
+    document.addEventListener('selectstart', e => {
+      if (isInsideFilmInfoPopup(e.target)) return; // allow text selection in popup
+      e.preventDefault();
+    });
     document.onkeydown = function(e) {
+      // Allow copy/cut shortcuts inside the long-press film info popup
+      if (isInsideFilmInfoPopup(e.target)) return;
       const key = e.key || '';
       if (e.ctrlKey && (key === 'c' || key === 'C' || key === 'x' || key === 'X' || key === 'u' || key === 'U' || key === 's' || key === 'S')) {
         e.preventDefault();
@@ -1583,6 +1718,30 @@
     let isLoading = false;
     let hasMore = true;
 
+    // ====== Mobile pagination ======
+    // On mobile (Telegram Mini App, phone browsers) loading 20 films at once
+    // is wasteful — the screen only shows ~6-8 cards. We fetch a full page
+    // (20 films) from Kinopoisk, then display in smaller chunks:
+    //   - Initial load: 12 films (visible + a bit of buffer for scroll)
+    //   - Each subsequent scroll-load: 8 films
+    // On desktop, keep the original behavior (full 20 per page).
+    // The "film buffer" holds films fetched but not yet displayed.
+    let filmBuffer = [];
+    const MOBILE_INITIAL = 12;
+    const MOBILE_CHUNK = 8;
+    const DESKTOP_PAGE_SIZE = 20;
+
+    function isMobileView() {
+      try {
+        if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return true;
+      } catch (_) {}
+      var ua = navigator.userAgent || '';
+      if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return true;
+      // iPadOS 13+ reports as MacIntel with touch
+      if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+      return false;
+    }
+
     const content = document.getElementById('content');
     const loader = document.getElementById('loader');
     const filmGrid = document.getElementById('filmGrid');
@@ -1733,6 +1892,11 @@
         if (lang === 'en') ht.title = 'Cycle: dark → light → night → auto';
         else ht.title = 'Цикл: тёмная → светлая → ночная → авто';
       }
+      // Auto-translate any element with data-i18n attribute
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        if (key) el.textContent = t(key);
+      });
     }
     applyTranslations();
 
@@ -1923,6 +2087,7 @@
     function clearFilms() {
       filmGrid.innerHTML = '';
       filmGrid.classList.remove('centered');
+      filmBuffer = []; // reset mobile pagination buffer
     }
 
     function showEmptyState(msg) {
@@ -1967,7 +2132,15 @@
               ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
             </div>
           </div>`;
+        // Store film data on the card for long-press popup use
+        card.dataset.filmId = filmId || '';
+        card.dataset.title = title;
+        card.dataset.year = year;
+        card.dataset.rating = (rating !== 'Н/Д') ? rating : '';
+        card.dataset.poster = poster || '';
         card.onclick = () => openPlayer(filmId, title);
+        // Attach long-press handler for mobile info popup
+        attachLongPress(card);
         frag.appendChild(card);
       });
       filmGrid.appendChild(frag);
@@ -1976,6 +2149,179 @@
       if (forceCenter || films.length === 1) {
         filmGrid.classList.add('centered');
       }
+      // Show long-press hint once on first batch (touch devices only)
+      showLongPressHintOnce();
+    }
+
+    // ====== Long-press film info popup (mobile) ======
+    // On touch devices, :hover doesn't work so film-info is invisible.
+    // Long-press (touchstart + hold 500ms without significant move)
+    // opens a popup with film details. Inside the popup, text is
+    // SELECTABLE so users can copy the title/year (overriding the
+    // body-wide copy protection).
+    //
+    // Also works on desktop: right-click shows the same popup
+    // (since contextmenu is prevented globally outside the popup).
+    var LONGPRESS_DURATION = 500; // ms
+    var LONGPRESS_MOVE_TOLERANCE = 10; // px
+
+    function attachLongPress(card) {
+      var pressTimer = null;
+      var startX = 0, startY = 0;
+      var triggered = false;
+
+      function clearPress() {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      }
+
+      card.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        var touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        triggered = false;
+        clearPress();
+        pressTimer = setTimeout(function() {
+          triggered = true;
+          // Prevent the subsequent click (which would open the player)
+          // by calling preventDefault on the touchend.
+          showFilmInfoPopup(card);
+          // Haptic feedback if available (Telegram Mini App, supported browsers)
+          if (tg && tg.HapticFeedback) {
+            try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
+          } else if (navigator.vibrate) {
+            try { navigator.vibrate(15); } catch (_) {}
+          }
+        }, LONGPRESS_DURATION);
+      }, { passive: true });
+
+      card.addEventListener('touchmove', function(e) {
+        if (!pressTimer) return;
+        var touch = e.touches[0];
+        var dx = Math.abs(touch.clientX - startX);
+        var dy = Math.abs(touch.clientY - startY);
+        if (dx > LONGPRESS_MOVE_TOLERANCE || dy > LONGPRESS_MOVE_TOLERANCE) {
+          // User is scrolling — cancel the long-press
+          clearPress();
+        }
+      }, { passive: true });
+
+      card.addEventListener('touchend', function(e) {
+        if (triggered) {
+          // Long-press fired — prevent the click that follows touchend
+          e.preventDefault();
+          e.stopPropagation();
+          triggered = false;
+        }
+        clearPress();
+      }, { capture: true });
+
+      card.addEventListener('touchcancel', clearPress);
+
+      // Desktop: right-click also shows the popup (since context menu is
+      // blocked globally, right-click is otherwise a no-op).
+      card.addEventListener('contextmenu', function(e) {
+        // On touch devices, the contextmenu event fires AFTER the long-press
+        // already handled it — skip to avoid showing popup twice.
+        if (isMobileView()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        showFilmInfoPopup(card);
+      });
+    }
+
+    var filmInfoOverlay = document.getElementById('filmInfoOverlay');
+    var filmInfoPopup = document.getElementById('filmInfoPopup');
+    var fipPoster = document.getElementById('fipPoster');
+    var fipTitle = document.getElementById('fipTitle');
+    var fipMeta = document.getElementById('fipMeta');
+    var fipOpenBtn = document.getElementById('fipOpen');
+    var fipCloseBtn = document.getElementById('fipClose');
+    var pendingFilmId = null;
+    var pendingFilmTitle = null;
+
+    function showFilmInfoPopup(card) {
+      var filmId = card.dataset.filmId;
+      var title = card.dataset.title || 'Без названия';
+      var year = card.dataset.year || '';
+      var rating = card.dataset.rating || '';
+      var poster = card.dataset.poster || '';
+
+      pendingFilmId = filmId;
+      pendingFilmTitle = title;
+
+      if (poster) {
+        fipPoster.src = poster;
+        fipPoster.style.display = 'block';
+      } else {
+        fipPoster.style.display = 'none';
+      }
+      fipTitle.textContent = title;
+      // Build meta HTML
+      var metaHtml = '';
+      if (year) metaHtml += '<span>' + escapeHtml(year) + '</span>';
+      if (rating) metaHtml += '<span class="fip-rating">⭐ ' + escapeHtml(rating) + '</span>';
+      if (!metaHtml) metaHtml = '<span style="opacity:0.6;">—</span>';
+      fipMeta.innerHTML = metaHtml;
+
+      filmInfoOverlay.classList.add('visible');
+      // Haptic feedback
+      if (tg && tg.HapticFeedback) {
+        try { tg.HapticFeedback.impactOccurred('light'); } catch (_) {}
+      }
+    }
+
+    function hideFilmInfoPopup() {
+      filmInfoOverlay.classList.remove('visible');
+      pendingFilmId = null;
+      pendingFilmTitle = null;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Close on overlay click (outside popup)
+    filmInfoOverlay.addEventListener('click', function(e) {
+      if (e.target === filmInfoOverlay) hideFilmInfoPopup();
+    });
+    fipCloseBtn.addEventListener('click', hideFilmInfoPopup);
+    // "Смотреть" button → open player (same as clicking the card)
+    fipOpenBtn.addEventListener('click', function() {
+      if (pendingFilmId) {
+        hideFilmInfoPopup();
+        openPlayer(pendingFilmId, pendingFilmTitle);
+      }
+    });
+    // ESC closes popup (desktop)
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && filmInfoOverlay.classList.contains('visible')) {
+        hideFilmInfoPopup();
+      }
+    });
+
+    // Show the long-press hint once per session (touch devices only)
+    var longPressHintShown = false;
+    function showLongPressHintOnce() {
+      if (longPressHintShown) return;
+      if (!isMobileView()) return; // desktop uses hover
+      longPressHintShown = true;
+      var hint = document.getElementById('longpressHint');
+      if (!hint) return;
+      // Localize hint text via i18n
+      if (typeof t === 'function') {
+        hint.textContent = t('longpressHint');
+      }
+      hint.classList.add('visible');
+      setTimeout(function() { hint.classList.remove('visible'); }, 3500);
     }
 
     async function openPlayer(filmId, title) {
@@ -2083,6 +2429,26 @@
 
     async function loadMoreFilms() {
       if (isLoading || !hasMore || !currentCategory) return;
+
+      // Mobile pagination: drain the buffer first before fetching a new page.
+      // On desktop, the buffer is always empty (we display the whole page at
+      // once), so this branch is skipped and we proceed to fetch.
+      if (filmBuffer.length > 0) {
+        const chunk = filmBuffer.splice(0, MOBILE_CHUNK);
+        appendFilms(chunk);
+        // Schedule a check: if user is still near the bottom after the
+        // buffer drain, load more (prevents "stuck" when only 8 films are
+        // shown and screen is tall).
+        setTimeout(function() {
+          if (currentCategory && hasMore && !isLoading) {
+            var scrollPos = window.innerHeight + window.scrollY;
+            var threshold = document.documentElement.scrollHeight - 800;
+            if (scrollPos >= threshold) loadMoreFilms();
+          }
+        }, 100);
+        return;
+      }
+
       isLoading = true;
       try {
         let films = [];
@@ -2098,8 +2464,24 @@
             break;
         }
         if (films.length > 0) {
-          appendFilms(films);
           currentPage++;
+          if (isMobileView()) {
+            // Mobile: show MOBILE_INITIAL on first load (empty grid),
+            // otherwise MOBILE_CHUNK from this fresh page.
+            const isFirstLoad = filmGrid.children.length === 0 ||
+                                filmGrid.querySelector('.empty-state');
+            const showNow = isFirstLoad
+              ? films.slice(0, MOBILE_INITIAL)
+              : films.slice(0, MOBILE_CHUNK);
+            // Buffer the rest for subsequent scroll-loads.
+            filmBuffer = films.slice(showNow.length);
+            appendFilms(showNow);
+            // If buffer is empty (page had fewer films than initial), allow
+            // next scroll to fetch the next page.
+          } else {
+            // Desktop: show all 20, no buffering.
+            appendFilms(films);
+          }
         } else {
           hasMore = false;
           if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');

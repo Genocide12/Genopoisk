@@ -1,0 +1,121 @@
+# Sends a Telegram notification to admins on every push to main.
+#
+# Calls the /api/notify-commit endpoint on the deployed Vercel app with
+# the commit info (SHA, message, author, files changed).
+#
+# Required GitHub Secrets:
+#   NOTIFY_TOKEN    — same value as NOTIFY_TOKEN env var in Vercel
+#   NOTIFY_URL      — https://genopoisk.vercel.app/api/notify-commit
+#
+# The endpoint verifies the token before sending the message, so randoms
+# can't spam the bot even if they discover the URL.
+
+name: Notify Telegram on Push
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # allow manual trigger from Actions tab
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for diff stats
+
+      - name: Build commit payload
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the list of files changed in the latest commit
+          # (or commits, if multiple were pushed at once)
+          PREV_SHA=$(git rev-parse HEAD^1 2>/dev/null || echo "")
+          if [ -z "$PREV_SHA" ]; then
+            # First commit ever — just take this one
+            FILES_JSON=$(git show --stat --format='' HEAD | head -50 | jq -R -s -c 'split("\n") | map(select(length > 0)) | map(split("|")[0] | gsub("^\\s+|\\s+$";"")) | map({path: .})')
+          else
+            FILES_JSON=$(git diff --name-only $PREV_SHA HEAD | jq -R -s -c 'split("\n") | map(select(length > 0)) | map({path: .})')
+          fi
+          echo "files=$FILES_JSON" >> $GITHUB_OUTPUT
+
+          # Get additions/deletions stat
+          if [ -z "$PREV_SHA" ]; then
+            STATS=$(git show --shortstat --format='' HEAD | tail -1)
+          else
+            STATS=$(git diff --shortstat $PREV_SHA HEAD | tail -1)
+          fi
+          echo "stats<<EOF" >> $GITHUB_OUTPUT
+          echo "$STATS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Author of the commit
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+
+          # Commit message (first line)
+          MSG=$(git log -1 --pretty=format:'%s')
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "::debug::Files: $FILES_JSON"
+          echo "::debug::Stats: $STATS"
+
+      - name: Send Telegram notification
+        env:
+          NOTIFY_TOKEN: ${{ secrets.NOTIFY_TOKEN }}
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+          SHA: ${{ github.sha }}
+          MSG: ${{ steps.build.outputs.message }}
+          AUTHOR: ${{ steps.build.outputs.author }}
+          REPO: ${{ github.event.repository.name }}
+          BRANCH: ${{ github.ref_name }}
+          FILES: ${{ steps.build.outputs.files }}
+          STATS: ${{ steps.build.outputs.stats }}
+          URL: ${{ github.event.head_commit.url }}
+        run: |
+          # Parse the --shortstat output (" 5 files changed, 123 insertions(+), 45 deletions(-)")
+          FILES_COUNT=$(echo "$STATS" | grep -oP '\d+(?= file)' || echo "0")
+          ADD=$(echo "$STATS" | grep -oP '\d+(?= insertion)' || echo "0")
+          DEL=$(echo "$STATS" | grep -oP '\d+(?= deletion)' || echo "0")
+
+          # Build JSON payload (using jq for safe escaping)
+          PAYLOAD=$(jq -n \
+            --arg sha "$SHA" \
+            --arg message "$MSG" \
+            --arg author "$AUTHOR" \
+            --arg repo "$REPO" \
+            --arg branch "$BRANCH" \
+            --arg url "$URL" \
+            --argjson files "$FILES" \
+            --argjson total "$FILES_COUNT" \
+            --argjson additions "$ADD" \
+            --argjson deletions "$DEL" \
+            '{sha:$sha, message:$message, author:$author, repo:$repo, branch:$branch, url:$url, files:$files, stats:{total:$total, additions:$additions, deletions:$deletions}}')
+
+          echo "Sending notification to $NOTIFY_URL"
+          echo "Payload:"
+          echo "$PAYLOAD" | jq .
+
+          # POST with x-notify-token header
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-notify-token: $NOTIFY_TOKEN" \
+            -d "$PAYLOAD" \
+            "$NOTIFY_URL")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Notification failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ Notification sent successfully"

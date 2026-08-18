@@ -48,9 +48,39 @@ function formatBytes(n) {
 module.exports = async (req, res) => {
   // CORS (just in case)
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-notify-token');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // GET = health check (no token required, doesn't reveal secrets)
+  // Returns whether NOTIFY_TOKEN, ADMIN_IDS, TG_BOT_TOKEN are configured.
+  // Used by user to verify setup without making a commit.
+  if (req.method === 'GET') {
+    const hasToken = !!process.env.NOTIFY_TOKEN;
+    const hasBotToken = !!process.env.TG_BOT_TOKEN;
+    const adminIds = (process.env.ADMIN_IDS || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const hasAdminIds = adminIds.length > 0;
+    return res.status(200).json({
+      ok: true,
+      endpoint: 'notify-commit',
+      ready: hasToken && hasAdminIds && hasBotToken,
+      hasToken,
+      hasBotToken,
+      hasAdminIds,
+      adminCount: adminIds.length,
+      hint: !hasToken
+        ? 'NOTIFY_TOKEN not set in Vercel env vars'
+        : !hasAdminIds
+          ? 'ADMIN_IDS not set in Vercel env vars'
+          : !hasBotToken
+            ? 'TG_BOT_TOKEN not set in Vercel env vars'
+            : 'all configured — ready to receive commit notifications'
+    });
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Verify token

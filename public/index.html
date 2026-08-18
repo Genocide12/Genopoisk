@@ -520,6 +520,8 @@
       <a href="/lite.html" class="lite-link">Открыть Lite →</a>
       <button class="lite-close" id="liteBannerClose" title="Скрыть">✕</button>
     </div>
+    <!-- Hidden helper link for "save as projector" — used by lite.html -->
+    <a href="/?device=projector" id="saveAsProjectorLink" style="display:none">save</a>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто"><span id="premiumBadge" style="display:none;margin-right:6px;font-size:0.7em;vertical-align:middle;filter:none !important;">🔥</span>Genopoisk</h1>
       <p class="hero-subtitle" id="heroSubtitle" style="display:none;"></p>
@@ -2997,9 +2999,28 @@
       // Don't run inside Telegram Mini App
       if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) return;
 
-      // Check URL params — user might have requested full version explicitly
       var urlParams = new URLSearchParams(window.location.search);
+      // ?device=projector — user explicitly says "I'm on a projector".
+      // Saves to localStorage so future visits auto-redirect without URL param.
+      if (urlParams.get('device') === 'projector' || urlParams.get('device') === 'tv') {
+        try {
+          localStorage.setItem('genopoisk_device_type', 'projector');
+          console.log('[lite-redirect] Device type saved as projector (via ?device=projector)');
+        } catch (_) {}
+      }
+      // ?device=desktop — user explicitly says "I'm on a desktop, stop redirecting".
+      if (urlParams.get('device') === 'desktop' || urlParams.get('device') === 'phone') {
+        try {
+          localStorage.setItem('genopoisk_device_type', 'desktop');
+          sessionStorage.setItem('genopoisk_lite_dismissed', '1');
+        } catch (_) {}
+      }
+
+      // ?full=1 — same as ?device=desktop for backward compat
       var forceFull = urlParams.get('full') === '1' || urlParams.get('from') === 'lite';
+      if (forceFull) {
+        try { sessionStorage.setItem('genopoisk_lite_dismissed', '1'); } catch (_) {}
+      }
 
       // Check sessionStorage — user dismissed lite redirect this session
       var dismissed = sessionStorage.getItem('genopoisk_lite_dismissed');
@@ -3009,43 +3030,70 @@
       var isTV = false;
       var detectionReason = '';
 
-      // Check 1: known TV/projector UA keywords
-      var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
-                        'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
-                        'aftt', 'aftm', 'bento', 'googletv'];
-      for (var i = 0; i < tvPatterns.length; i++) {
-        if (ua.indexOf(tvPatterns[i]) !== -1) {
-          isTV = true;
-          detectionReason = 'UA keyword: ' + tvPatterns[i];
-          break;
+      // Check 0: user previously marked this device as a projector
+      var savedDevice = '';
+      try { savedDevice = localStorage.getItem('genopoisk_device_type') || ''; } catch (_) {}
+      if (savedDevice === 'projector') {
+        isTV = true;
+        detectionReason = 'saved preference: projector';
+      }
+
+      // Check 1: known TV/projector UA keywords — expanded with more brands
+      if (!isTV) {
+        var tvPatterns = [
+          // Generic TV keywords
+          'tv', 'television', 'smarttv', 'smart tv',
+          // TV platforms
+          'googletv', 'android tv', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+          'aftt', 'aftm', 'bento',
+          // TV manufacturers
+          'bravia', 'crystal',
+          // Projector brands (complete list)
+          'projector', 'thundeal', 'thundea', 'xgimi', 'wanbo', 'jmgo', 'dangbei',
+          'nebula', 'anker', 'epson', 'benq', 'optoma', 'viewsonic', 'acer',
+          'lg projector', 'casio', 'ricoh', 'infocus', 'vivitek', 'sharp',
+          'mitsubishi', 'panasonic projector', 'jvc', 'eiki', 'christie',
+          // Chinese Android TV box / projector brands
+          'magbox', 'minix', 'nanopc', 'hk1', 'x88', 't95', 'tx3', 'tx6',
+          'h96', 'a95x', 'rbox', 'kingbox', 'tanix', 'sunchip',
+          // Set-top box keywords
+          'settopbox', 'set-top', 'stb'
+        ];
+        for (var i = 0; i < tvPatterns.length; i++) {
+          if (ua.indexOf(tvPatterns[i]) !== -1) {
+            isTV = true;
+            detectionReason = 'UA keyword: ' + tvPatterns[i];
+            break;
+          }
         }
       }
 
-      // Check 2: Android (tablet-like) with large screen + no real touch
-      // Many Android projectors identify as Android tablets in UA but
-      // have a 100"+ display and only a remote (no real touch input).
-      // Heuristics: UA contains "android", viewport >= 1024px, AND
-      // maxTouchPoints === 0 (no multi-touch hardware).
+      // Check 2: Android device with large screen (projector or TV box)
+      // Chinese Android projectors (ThunderdeaL, Wanbo, XGIMI, etc.) usually
+      // identify as standard Android devices without brand-specific keywords.
+      // Strategy: any Android device with viewport >= 800px is very likely
+      // a projector, TV box, or large tablet — all benefit from lite version.
+      // Real Android phones have viewport <= 600px typically.
       if (!isTV) {
         var isAndroid = ua.indexOf('android') !== -1;
-        var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
-        var isLargeEnough = window.innerWidth >= 1024;
-        if (isAndroid && isLargeEnough && !hasRealTouch) {
+        var isLargeEnough = window.innerWidth >= 800;
+        if (isAndroid && isLargeEnough) {
           isTV = true;
-          detectionReason = 'Android + large screen + no touch (' + window.innerWidth + 'px)';
+          detectionReason = 'Android + large screen (' + window.innerWidth + 'px)';
         }
       }
 
-      // Check 3: REMOVED — was "no touch + viewport >= 1920px" but that
-      // matches typical desktop monitors (1920x1080 = Full HD is the most
-      // common resolution). Caused false positives — desktop Chrome users
-      // were being redirected to lite.
-      //
-      // Real TVs and projectors are detected by:
-      //   - Check 1: UA keywords (SmartTV, Tizen, WebOS, Bravia, etc.)
-      //   - Check 2: Android + large screen + no touch (Android projectors)
-      //   - Check 4: userAgentData.formFactors (Chromium 134+)
-      // Desktop browsers on large monitors should NOT be redirected.
+      // Check 3: very wide screen + no touch (HTPC, Mac mini attached to TV, etc.)
+      // Threshold 2560px to avoid false positives on desktop monitors (which
+      // max out at 1920-2560 for typical user setups).
+      if (!isTV) {
+        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        var isVeryLarge = window.innerWidth >= 2560;
+        if (!hasTouch && isVeryLarge) {
+          isTV = true;
+          detectionReason = 'No touch + very large screen (' + window.innerWidth + 'px)';
+        }
+      }
 
       // Check 4: userAgentData.formFactors (Chromium 134+)
       if (!isTV && uaData.formFactors) {
@@ -3058,7 +3106,10 @@
 
       console.log('[lite-redirect] isTV=' + isTV + ', reason=' + detectionReason +
                   ', forceFull=' + forceFull + ', dismissed=' + !!dismissed +
-                  ', UA=' + navigator.userAgent);
+                  ', savedDevice=' + savedDevice +
+                  ', UA=' + navigator.userAgent +
+                  ', viewport=' + window.innerWidth + 'x' + window.innerHeight +
+                  ', touchPoints=' + navigator.maxTouchPoints);
 
       if (!isTV) return;
 

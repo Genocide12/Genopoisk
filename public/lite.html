@@ -254,12 +254,81 @@
       font-size: 11px;
       font-weight: 600;
       z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .lite-badge a { color: #007AFF; text-decoration: none; }
+    .lite-badge .saved-indicator {
+      background: #34C759;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    /* "Is this a projector?" prompt — shown once per device if auto-detection
+       is uncertain (e.g., Android tablet that might be a projector). */
+    .projector-prompt {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.95);
+      border: 1px solid #007AFF;
+      border-radius: 12px;
+      padding: 14px 18px;
+      color: #f5f5f5;
+      font-size: 14px;
+      z-index: 200;
+      display: none;
+      max-width: 480px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+    }
+    .projector-prompt.visible { display: block; }
+    .projector-prompt .prompt-text {
+      margin-bottom: 10px;
+    }
+    .projector-prompt .prompt-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .projector-prompt button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .projector-prompt .btn-yes {
+      background: #007AFF;
+      color: #fff;
+    }
+    .projector-prompt .btn-no {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+    }
   </style>
 </head>
 <body>
-  <div class="lite-badge">Lite · <a href="/">полная</a></div>
+  <div class="lite-badge" id="liteBadge">
+    Lite · <a href="/?device=desktop">полная</a>
+    <span class="saved-indicator" id="savedIndicator" style="display:none">✓ проектор</span>
+  </div>
+
+  <!-- "Is this a projector?" prompt — shown if device is Android and not
+       yet saved as projector. User can confirm or dismiss. -->
+  <div class="projector-prompt" id="projectorPrompt">
+    <div class="prompt-text">📺 Это проектор или телевизор?<br><small style="color:#888">Запомним устройство, чтобы всегда открывать Lite-версию.</small></div>
+    <div class="prompt-buttons">
+      <button class="btn-no" id="promptNo">Нет</button>
+      <button class="btn-yes" id="promptYes">Да, это проектор</button>
+    </div>
+  </div>
 
   <div class="container">
     <!-- Hero -->
@@ -972,6 +1041,79 @@
       document.body.style.color = theme === 'light' ? '#000' : '#f5f5f5';
     }
 
+    // ====== Projector prompt + saved device indicator ======
+    // If the device looks like a projector/TV (Android + large screen) but
+    // the user hasn't explicitly confirmed yet — show a small prompt asking
+    // "Is this a projector?". On "Yes" → save to localStorage so future
+    // visits auto-redirect without asking.
+    function setupProjectorPrompt() {
+      var prompt = document.getElementById('projectorPrompt');
+      var btnYes = document.getElementById('promptYes');
+      var btnNo = document.getElementById('promptNo');
+      var savedIndicator = document.getElementById('savedIndicator');
+      if (!prompt) return;
+
+      // Check URL params first — ?device=projector saves immediately
+      var urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('device') === 'projector' || urlParams.get('device') === 'tv') {
+        try { localStorage.setItem('genopoisk_device_type', 'projector'); } catch (_) {}
+        if (savedIndicator) savedIndicator.style.display = 'inline-block';
+        // Clean URL
+        try { window.history.replaceState({}, document.title, '/lite.html'); } catch (_) {}
+        return;
+      }
+
+      // Check if already saved as projector
+      var savedDevice = '';
+      try { savedDevice = localStorage.getItem('genopoisk_device_type') || ''; } catch (_) {}
+      if (savedDevice === 'projector') {
+        if (savedIndicator) savedIndicator.style.display = 'inline-block';
+        return;
+      }
+
+      // Check if user already dismissed the prompt (per session)
+      var promptDismissed = '';
+      try { promptDismissed = sessionStorage.getItem('genopoisk_projector_prompt_dismissed'); } catch (_) {}
+      if (promptDismissed === '1') return;
+
+      // Don't show inside Telegram Mini App
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram) return;
+
+      // Heuristic: should we ask? Yes if:
+      //   - UA contains Android (any version)
+      //   - OR screen is very large (>= 1920px)
+      //   - OR no touch support
+      var ua = (navigator.userAgent || '').toLowerCase();
+      var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      var isAndroid = ua.indexOf('android') !== -1;
+      var isLarge = window.innerWidth >= 1024;
+      var shouldAsk = isAndroid || (isLarge && !hasTouch);
+
+      if (!shouldAsk) return;
+
+      // Show prompt after 2 seconds (let user see the page first)
+      setTimeout(function() {
+        prompt.classList.add('visible');
+      }, 2000);
+
+      btnYes.addEventListener('click', function() {
+        try { localStorage.setItem('genopoisk_device_type', 'projector'); } catch (_) {}
+        prompt.classList.remove('visible');
+        if (savedIndicator) savedIndicator.style.display = 'inline-block';
+        console.log('[lite] Device saved as projector');
+      });
+
+      btnNo.addEventListener('click', function() {
+        try {
+          localStorage.setItem('genopoisk_device_type', 'desktop');
+          sessionStorage.setItem('genopoisk_projector_prompt_dismissed', '1');
+        } catch (_) {}
+        prompt.classList.remove('visible');
+        console.log('[lite] Device saved as desktop');
+      });
+    }
+
     // ====== Init ======
     function init() {
       handleTgLoginRedirect();
@@ -979,6 +1121,7 @@
       setupEventListeners();
       setupKeyboardNav();
       setupInfiniteScroll();
+      setupProjectorPrompt();
       bustServiceWorkerCache();
 
       // Telegram WebApp setup

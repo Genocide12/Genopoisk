@@ -652,8 +652,22 @@
       // Hide/show fixed bottom Telegram button
       var fixedBtn = document.getElementById('fixedTelegramBtn');
       var fixedText = document.getElementById('fixedTelegramText');
+      // Detect TV/projector/large non-touch screen — hide the fixed Telegram
+      // button there (it clutters the bottom of the screen and gets in the
+      // way of D-pad navigation). User can still open Telegram via the top
+      // login bar or the lite-banner link.
+      var isTVDevice = (function() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
+                          'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv'];
+        for (var i = 0; i < tvPatterns.length; i++) {
+          if (ua.indexOf(tvPatterns[i]) !== -1) return true;
+        }
+        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        return !hasTouch && window.innerWidth >= 1280;
+      })();
       if (fixedBtn) {
-        if (isInTelegram) {
+        if (isInTelegram || isTVDevice) {
           fixedBtn.classList.add('hidden');
         } else {
           fixedBtn.classList.remove('hidden');
@@ -2826,6 +2840,19 @@
       tg.BackButton.hide();
     }
 
+    // Auto-focus the hero title on TV/projector/desktop so user sees the
+    // focus ring immediately and knows arrow keys work. Skipped inside
+    // Telegram Mini App (would be confusing on mobile).
+    if (!(tg && tg.initData)) {
+      var hasTouchScreen = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      if (!hasTouchScreen) {
+        setTimeout(function() {
+          var heroTitleEl = document.querySelector('.hero-title');
+          if (heroTitleEl) heroTitleEl.focus();
+        }, 600);
+      }
+    }
+
     // ====== Lite version banner — show on TV / projector / large non-touch screens ======
     // Detection heuristics (any one triggers the banner):
     //   - User-Agent contains "TV", "GoogleTV", "AndroidTV", "SmartTV", "projector", "Bravia", "WebOS", "Tizen"
@@ -2885,6 +2912,175 @@
         });
       }
       console.log('[lite-banner] TV/projector detected — banner shown. UA:', navigator.userAgent);
+    })();
+
+    // ====== D-pad / keyboard navigation for TV / projector / desktop ======
+    // Enables arrow-key navigation between clickable elements:
+    //   ArrowUp/Down/Left/Right = move focus to nearest element in that direction
+    //   Enter / Space = click focused element
+    //   Escape / Backspace = back to top (scroll up + focus hero title)
+    //
+    // All clickable elements need tabindex="0" to be focusable via keyboard.
+    // The hero title, search input, action cards, and film cards are
+    // auto-tagged below. Existing onclick handlers fire on Enter naturally
+    // for elements with tabindex.
+    //
+    // Does NOT interfere with typing in search input — arrows there move
+    // the text cursor as usual. The handler bails out when the active
+    // element is the search input.
+    (function setupDpadNav() {
+      // Don't enable inside Telegram Mini App (touch-first environment)
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram) return;
+
+      // Make key elements focusable if they aren't already
+      var heroTitle = document.querySelector('.hero-title');
+      if (heroTitle && !heroTitle.hasAttribute('tabindex')) {
+        heroTitle.setAttribute('tabindex', '0');
+      }
+      var searchInput = document.getElementById('searchInput');
+      // searchInput is already focusable (it's an <input>)
+      // Action cards
+      document.querySelectorAll('.action-card').forEach(function(card) {
+        if (!card.hasAttribute('tabindex')) card.setAttribute('tabindex', '0');
+      });
+      // Film cards (added dynamically, so we use a MutationObserver)
+      var filmGridObserver = new MutationObserver(function() {
+        document.querySelectorAll('.film-card:not([tabindex])').forEach(function(card) {
+          card.setAttribute('tabindex', '0');
+        });
+      });
+      var filmGrid = document.getElementById('filmGrid');
+      if (filmGrid) {
+        filmGridObserver.observe(filmGrid, { childList: true, subtree: true });
+      }
+      // Resume card
+      var resumeCard = document.getElementById('resumeCard');
+      if (resumeCard && !resumeCard.hasAttribute('tabindex')) {
+        resumeCard.setAttribute('tabindex', '0');
+      }
+
+      // Focus ring — visible only when navigating with keyboard
+      var styleEl = document.createElement('style');
+      styleEl.textContent =
+        '.hero-title:focus-visible, .action-card:focus-visible, .film-card:focus-visible, ' +
+        '.resume-card:focus-visible, .search-input:focus-visible, .lite-link:focus-visible, ' +
+        '.lite-close:focus-visible, #tgLoginBtn:focus-visible, #tgLoginBarClose:focus-visible {' +
+        '  outline: 3px solid #007AFF !important;' +
+        '  outline-offset: 2px !important;' +
+        '  border-radius: 8px !important;' +
+        '}' +
+        // Make focus visible even on elements that use :hover for styling
+        '.action-card:focus-visible { background: rgba(0, 122, 255, 0.1) !important; }' +
+        '.film-card:focus-visible { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4); }';
+      document.head.appendChild(styleEl);
+
+      // Compute distance between two elements' centers
+      function getCenter(el) {
+        var r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }
+
+      // Find the nearest focusable element in a given direction
+      function findNearestFocusable(direction) {
+        var focusables = Array.from(document.querySelectorAll(
+          '.hero-title, .action-card, .film-card, .resume-card, .search-input, #tgLoginBtn, .lite-link'
+        )).filter(function(el) {
+          // Skip hidden elements
+          return el.offsetParent !== null || el === document.activeElement;
+        });
+        if (focusables.length === 0) return null;
+
+        var active = document.activeElement;
+        if (!active || active === document.body) return focusables[0];
+
+        var activeCenter = getCenter(active);
+        var best = null;
+        var bestScore = Infinity;
+
+        for (var i = 0; i < focusables.length; i++) {
+          var el = focusables[i];
+          if (el === active) continue;
+          var c = getCenter(el);
+          var dx = c.x - activeCenter.x;
+          var dy = c.y - activeCenter.y;
+
+          // Filter by direction
+          if (direction === 'up' && dy >= -5) continue;
+          if (direction === 'down' && dy <= 5) continue;
+          if (direction === 'left' && dx >= -5) continue;
+          if (direction === 'right' && dx <= 5) continue;
+
+          // Score: weighted distance (perpendicular axis weighs more)
+          var score;
+          if (direction === 'up' || direction === 'down') {
+            score = Math.abs(dy) + Math.abs(dx) * 2.5;
+          } else {
+            score = Math.abs(dx) + Math.abs(dy) * 2.5;
+          }
+          if (score < bestScore) {
+            bestScore = score;
+            best = el;
+          }
+        }
+        return best;
+      }
+
+      document.addEventListener('keydown', function(e) {
+        // Don't intercept arrows when typing in search input
+        var active = document.activeElement;
+        var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+
+        if (isTyping) {
+          // Only intercept Escape (to blur search)
+          if (e.key === 'Escape') {
+            active.blur();
+            e.preventDefault();
+          }
+          return;
+        }
+
+        var target = null;
+        switch (e.key) {
+          case 'ArrowUp':    target = findNearestFocusable('up');    break;
+          case 'ArrowDown':  target = findNearestFocusable('down');  break;
+          case 'ArrowLeft':  target = findNearestFocusable('left');  break;
+          case 'ArrowRight': target = findNearestFocusable('right'); break;
+          case 'Escape':
+          case 'Backspace':
+            // Back button on Android TV remote — scroll to top + focus hero
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (heroTitle) heroTitle.focus();
+            // If we were in a category, return to categories view
+            if (typeof currentCategory !== 'undefined' && currentCategory) {
+              if (typeof clearFilms === 'function') clearFilms();
+              if (content && content.classList) content.classList.add('hidden');
+              currentCategory = null;
+            }
+            return;
+          case 'Enter':
+          case ' ':
+            // Let native click fire on focused element
+            if (active && typeof active.click === 'function' && active !== document.body) {
+              e.preventDefault();
+              active.click();
+            }
+            return;
+          default:
+            return;
+        }
+        if (target) {
+          e.preventDefault();
+          target.focus();
+          // Scroll target into view smoothly
+          try {
+            target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          } catch (_) {}
+        }
+      });
+
+      console.log('[dpad-nav] Keyboard navigation enabled');
     })();
   </script>
 </body>

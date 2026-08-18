@@ -155,22 +155,36 @@ module.exports = async (req, res) => {
 
   // Realistic browser headers — Kinopoisk's edge (Cloudflare) returns 403
   // for bot-like User-Agents such as "Mozilla/5.0 (compatible; ...)".
-  const BROWSER_HEADERS = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    'Referer': 'https://kinopoisk.ru/',
-    'Origin': 'https://kinopoisk.ru'
-  };
+  // We have multiple UA variants — if Cloudflare flags one as bot-like,
+  // a different UA on retry may pass. Used by the third retry attempt.
+  const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
+  ];
 
-  // Helper: race a batch of keys, return first successful or null on all-fail
-  async function raceBatch(keys) {
+  function makeBrowserHeaders(uaIndex) {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'User-Agent': USER_AGENTS[uaIndex % USER_AGENTS.length],
+      'Referer': 'https://kinopoisk.ru/',
+      'Origin': 'https://kinopoisk.ru'
+    };
+  }
+
+  // Helper: race a batch of keys, return first successful or null on all-fail.
+  // uaIndex optional — for retry with a different User-Agent on 403.
+  async function raceBatch(keys, uaIndex) {
+    if (typeof uaIndex !== 'number') uaIndex = 0;
     if (keys.length === 0) return null;
     const controllers = keys.map(() => new AbortController());
+    const baseHeaders = makeBrowserHeaders(uaIndex);
     const promises = keys.map((apiKey, idx) => {
-      const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
+      const headers = Object.assign({}, baseHeaders, { 'X-API-KEY': apiKey });
       const ctrl = controllers[idx];
       const timeoutId = setTimeout(() => {
         try { ctrl.abort(); } catch (_) {}
@@ -192,9 +206,9 @@ module.exports = async (req, res) => {
 
         if (!upstream.ok) {
           const text = await upstream.text();
-          console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
+          console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status} (UA#${uaIndex}): ${text.slice(0, 200)}`);
           if (upstream.status === 403) {
-            throw new Error(`Key ${apiKey.slice(0, 8)} IP blocked (403)`);
+            throw new Error(`Key ${apiKey.slice(0, 8)} IP blocked (403) UA#${uaIndex}`);
           }
           throw new Error(`Key ${apiKey.slice(0, 8)} HTTP ${upstream.status}`);
         }
@@ -215,7 +229,7 @@ module.exports = async (req, res) => {
     } catch (aggErr) {
       // All promises in this batch rejected
       controllers.forEach(c => { try { c.abort(); } catch (_) {} });
-      console.warn('[kinopoisk] Batch failed:',
+      console.warn('[kinopoisk] Batch failed (UA#' + uaIndex + '):',
         (aggErr.errors || []).map(e => e.message).join(' | '));
       return null;
     }
@@ -235,15 +249,40 @@ module.exports = async (req, res) => {
     });
   }
 
-  let winner = await raceBatch(firstBatch);
+  let winner = await raceBatch(firstBatch, 0);
 
-  // Fallback: if first batch failed, try the remaining keys
+  // Fallback 1: if first batch failed, try the remaining keys with same UA
   if (!winner) {
     const usedSet = new Set(firstBatch);
     const remainingKeys = API_KEYS.filter(k => !usedSet.has(k) && !exhaustedKeys.has(k));
     if (remainingKeys.length > 0) {
       console.warn('[kinopoisk] First batch of ' + firstBatch.length + ' keys failed, trying ' + remainingKeys.length + ' remaining keys as fallback');
-      winner = await raceBatch(remainingKeys.slice(0, 3));
+      winner = await raceBatch(remainingKeys.slice(0, 3), 0);
+    }
+  }
+
+  // Fallback 2: if all keys failed (likely 403 IP block from Cloudflare),
+  // wait 1.5s and retry ALL keys with a DIFFERENT User-Agent. Cloudflare
+  // sometimes blocks specific UAs as "bot-like" — switching UA can bypass.
+  // We retry up to 2 times with different UAs (1.5s + 2s delays).
+  if (!winner) {
+    console.warn('[kinopoisk] All keys failed with UA#0. Retrying with different User-Agents...');
+    for (var retryIdx = 1; retryIdx <= 2; retryIdx++) {
+      await new Promise(function(resolve) { setTimeout(resolve, retryIdx === 1 ? 1500 : 2000); });
+      // Reset exhausted keys for the retry — 403 doesn't really mean key is bad,
+      // it means IP/UA combo is blocked. Try all keys again.
+      var allKeysForRetry = API_KEYS.slice();
+      // Shuffle to distribute load
+      for (var i = allKeysForRetry.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = allKeysForRetry[i]; allKeysForRetry[i] = allKeysForRetry[j]; allKeysForRetry[j] = tmp;
+      }
+      console.warn('[kinopoisk] Retry #' + retryIdx + ' with UA#' + retryIdx);
+      winner = await raceBatch(allKeysForRetry.slice(0, 3), retryIdx);
+      if (winner) {
+        console.log('[kinopoisk] Retry #' + retryIdx + ' succeeded with UA#' + retryIdx);
+        break;
+      }
     }
   }
 
@@ -251,8 +290,9 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.status(429).json({
       error: 'Kinopoisk API unavailable',
-      message: 'Попробуйте позже — все ключи вернули ошибку. ' +
-               'Возможно, Кинопоиск заблокировал IP — отключите VPN или попробуйте через минуту.',
+      message: 'Не удалось загрузить фильмы — Кинопоиск заблокировал запрос (403). ' +
+               'Что попробовать: отключите VPN, попробуйте через минуту, или откройте Lite-версию — она легче и иногда работает через блокировки.',
+      hint: 'lite',
       tried: API_KEYS.length,
       total: API_KEYS.length
     });

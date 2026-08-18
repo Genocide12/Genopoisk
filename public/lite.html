@@ -451,15 +451,50 @@
     }
 
     // ====== API helpers ======
+    // apiGet with automatic retry on 429/403 (Cloudflare IP block).
+    // The server already retries with different User-Agents, but if it still
+    // fails, we wait 2s and try once more on the client side — by then the
+    // Cloudflare rate-limit window may have passed.
     async function apiGet(url) {
-      var res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
-      if (!res.ok) {
-        var errData = null;
-        try { errData = await res.json(); } catch (_) {}
-        if (errData && errData.message) throw new Error(errData.message);
-        throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+      var lastErr = null;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          var res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+          if (res.ok) return await res.json();
+
+          var errData = null;
+          try { errData = await res.json(); } catch (_) {}
+
+          // 429 = server tried all keys and failed (likely 403 IP block).
+          // 403 = direct block (shouldn't happen through our proxy, but just in case).
+          // On these — wait and retry once.
+          if ((res.status === 429 || res.status === 403) && attempt === 0) {
+            var msg = (errData && errData.message) || ('HTTP ' + res.status);
+            lastErr = new Error(msg);
+            console.warn('[apiGet] Got ' + res.status + ', retrying in 2s...', msg);
+            // Show a friendly hint to the user
+            if (filmGrid.children.length === 0) {
+              showEmptyState('⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...');
+            }
+            await new Promise(function(r) { setTimeout(r, 2000); });
+            continue;
+          }
+
+          // Other errors — throw immediately
+          if (errData && errData.message) throw new Error(errData.message);
+          throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        } catch (e) {
+          // Network error — retry once
+          lastErr = e;
+          if (attempt === 0) {
+            console.warn('[apiGet] Network error, retrying in 2s:', e.message);
+            await new Promise(function(r) { setTimeout(r, 2000); });
+            continue;
+          }
+          throw e;
+        }
       }
-      return await res.json();
+      throw lastErr || new Error('Request failed');
     }
 
     function extractFilms(data) {
@@ -1010,8 +1045,11 @@
       loadResumeCard();
       checkPremiumStatus();
 
-      // Show fixed bottom CTA only on mobile (projector/TV doesn't need it)
-      if ('ontouchstart' in window && window.innerWidth < 768) {
+      // Show fixed bottom CTA only on mobile phones (small touch screens).
+      // Projectors / TVs / desktops never see it — it just clutters the screen
+      // and gets in the way of D-pad navigation.
+      var isMobilePhone = ('ontouchstart' in window) && window.innerWidth < 768;
+      if (isMobilePhone) {
         fixedBottom.classList.add('visible');
       }
 

@@ -1,15 +1,17 @@
-// Check if user still exists (after "logout all devices")
-// Uses telegram_id (Bot API user.id) as the canonical key.
+// Check if user still exists (after "logout all devices").
 //
-// Both Mini App and Browser now use the same telegram_id, so a single lookup
-// is sufficient. Legacy fallbacks via oidc_sub are kept for safety.
+// Auth:
+//   - Mini App: initData signature is VERIFIED via api/_lib/auth.js.
+//     If initData is valid, user is logged in — never force reauth.
+//   - Browser: body.userId is accepted (must NOT start with "web_").
 //
-// IMPORTANT: this endpoint is what powers "logout all devices". When the admin
-// deletes all users, every browser that calls this endpoint must detect that
-// its user is gone and clear localStorage. So we MUST return reauth: true
-// when the user is truly missing — no exceptions.
+// IMPORTANT: this endpoint is what powers "logout all devices". When the
+// admin deletes all users, every browser that calls this endpoint must
+// detect that its user is gone and clear localStorage. So we MUST return
+// reauth: true when the user is truly missing — no exceptions.
 
 const { getUser, getUserByOidcSub } = require('./_lib/supabase');
+const { extractVerifiedUser } = require('./_lib/auth');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,22 +19,21 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.body || {};
-    const userId = body.userId;
-    const hasInitData = !!body.initData;
+    const auth = extractVerifiedUser(body, process.env.TG_BOT_TOKEN);
 
     // No identifiers at all → not logged in, nothing to clear
-    if (!userId) return res.status(200).json({ reauth: false });
+    if (!auth.telegramId) return res.status(200).json({ reauth: false });
 
     // Mini App initData is always valid (signed by Telegram) — don't log out
-    if (hasInitData) return res.status(200).json({ reauth: false });
+    if (auth.source === 'miniapp') return res.status(200).json({ reauth: false });
 
     // Try by telegram_id (Bot API ID — canonical key after auth fix)
     let user = null;
-    if (userId) user = await getUser(userId);
+    if (auth.telegramId) user = await getUser(auth.telegramId);
 
     // Legacy fallback: userId might be a long OIDC sub from an old session
-    if (!user && userId && userId.length > 12) {
-      const resolved = await getUserByOidcSub(userId);
+    if (!user && auth.telegramId && auth.telegramId.length > 12) {
+      const resolved = await getUserByOidcSub(auth.telegramId);
       if (resolved) user = resolved;
     }
 

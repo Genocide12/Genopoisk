@@ -1,8 +1,15 @@
-// Returns the user's watched films list, favorites, and search history
-// Uses telegram_id (Bot API user.id) as the canonical key — same for both
-// Mini App (initData → user.id) and Browser OIDC (id_token.id stored as tg_id).
+// Returns the user's watched films list, favorites, and search history.
+//
+// Auth:
+//   - Mini App: initData signature is VERIFIED via api/_lib/auth.js.
+//     Invalid signatures are rejected — no fallback to body.userId.
+//   - Browser: body.userId is accepted (must NOT start with "web_").
+//     This path is still vulnerable to IDOR (an attacker who knows a
+//     telegram_id can read the victim's data). A session-cookie system
+//     would be needed to fully close this — deferred to a later commit.
 
 const { getUser, getUserByOidcSub } = require('./_lib/supabase');
+const { extractVerifiedUser } = require('./_lib/auth');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,24 +18,13 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
-    let telegramId = null;
+    const auth = extractVerifiedUser(body, process.env.TG_BOT_TOKEN);
 
-    // 1) Mini App: parse initData → user.id (Bot API ID)
-    if (body.initData) {
-      try {
-        const params = new URLSearchParams(body.initData);
-        const userJson = params.get('user');
-        if (userJson) telegramId = String(JSON.parse(userJson).id);
-      } catch (_) {}
-    }
+    let telegramId = auth.telegramId;
 
-    // 2) Browser: use body.userId (Bot API ID, set by OIDC callback)
-    if (!telegramId && body.userId) {
-      telegramId = String(body.userId);
-    }
-
-    // 3) Legacy fallback: if userId is a long OIDC sub, resolve via oidc_sub
-    if (telegramId && telegramId.length > 12) {
+    // Legacy fallback: if userId is a long OIDC sub, resolve via oidc_sub.
+    // This is for old browser sessions created before the auth migration.
+    if (telegramId && telegramId.length > 12 && auth.source === 'browser') {
       const resolved = await getUserByOidcSub(telegramId);
       if (resolved) telegramId = resolved.telegram_id;
     }

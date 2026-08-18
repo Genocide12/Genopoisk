@@ -6,10 +6,11 @@
 //   - API endpoints: network-only (always need live data)
 //   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
 
-const CACHE_NAME = 'genopoisk-v2';
+const CACHE_NAME = 'genopoisk-v3';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/lite.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -58,7 +59,7 @@ self.addEventListener('fetch', function(event) {
   if (url.pathname.startsWith('/api/')) return;
 
   // Skip player.html — it always needs fresh code
-  if (url.pathname === '/player.html' || url.pathname === '/debug-player.html') {
+  if (url.pathname === '/player.html' || url.pathname === '/lite-player.html' || url.pathname === '/debug-player.html') {
     event.respondWith(
       fetch(req).catch(function() {
         return caches.match(req);

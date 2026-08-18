@@ -383,6 +383,46 @@
       white-space: nowrap;
     }
     .longpress-hint.visible { opacity: 1; }
+
+    /* ====== Lite version banner (shown on TV / projector / large screens) ====== */
+    .lite-banner {
+      display: none;
+      background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 14px;
+      box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+    }
+    .lite-banner.visible { display: flex; }
+    .lite-banner .lite-text {
+      display: flex; align-items: center; gap: 10px; flex: 1;
+    }
+    .lite-banner .lite-icon { font-size: 22px; }
+    .lite-banner .lite-link {
+      background: #fff;
+      color: #007AFF;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .lite-banner .lite-close {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: #fff;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      font-size: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -403,6 +443,15 @@
         </a>
         <button id="tgLoginBarClose" title="Скрыть" style="background:rgba(255,255,255,0.15);border:none;color:var(--text-primary);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;-webkit-tap-highlight-color:transparent;">✕</button>
       </div>
+    </div>
+    <!-- Lite version banner — shown on TV / projector / large non-touch screens -->
+    <div class="lite-banner" id="liteBanner">
+      <div class="lite-text">
+        <span class="lite-icon">📺</span>
+        <span>Обнаружено TV/проектор — <b>Lite-версия</b> работает быстрее и поддерживает пульт</span>
+      </div>
+      <a href="/lite.html" class="lite-link">Открыть Lite →</a>
+      <button class="lite-close" id="liteBannerClose" title="Скрыть">✕</button>
     </div>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто"><span id="premiumBadge" style="display:none;margin-right:6px;font-size:0.7em;vertical-align:middle;filter:none !important;">🔥</span>Genopoisk</h1>
@@ -2776,6 +2825,67 @@
     if (tg && tg.BackButton) {
       tg.BackButton.hide();
     }
+
+    // ====== Lite version banner — show on TV / projector / large non-touch screens ======
+    // Detection heuristics (any one triggers the banner):
+    //   - User-Agent contains "TV", "GoogleTV", "AndroidTV", "SmartTV", "projector", "Bravia", "WebOS", "Tizen"
+    //   - No touch support ('ontouchstart' not in window) AND viewport width >= 1280px
+    //     (large screen + no touch = likely a TV/projector/HTPC)
+    //   - navigator.userAgentData.brand has "TV" hints (Android TV)
+    //
+    // Banner is dismissible — dismissal stored in sessionStorage so it
+    // doesn't pop back up on every page load.
+    (function setupLiteBanner() {
+      // Don't show inside Telegram Mini App (already lightweight, has its own UI)
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) return;
+      // Don't show if dismissed this session
+      if (sessionStorage.getItem('genopoisk_lite_banner_dismissed')) return;
+
+      var ua = (navigator.userAgent || '').toLowerCase();
+      var uaData = navigator.userAgentData || {};
+      var isTV = false;
+
+      // Check 1: known TV/projector UA strings
+      var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
+                        'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+                        'aftt', 'aftm', 'bento'];
+      for (var i = 0; i < tvPatterns.length; i++) {
+        if (ua.indexOf(tvPatterns[i]) !== -1) { isTV = true; break; }
+      }
+
+      // Check 2: large screen + no touch
+      var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      var isLargeScreen = window.innerWidth >= 1280;
+      if (!isTV && !hasTouch && isLargeScreen) {
+        // Could also be a desktop PC — but desktop users can dismiss it.
+        // The banner is non-intrusive (top of page, dismissible).
+        isTV = true;
+      }
+
+      // Check 3: userAgentData.formFactors (Chromium 134+)
+      if (!isTV && uaData.formFactors) {
+        var ff = uaData.formFactors.map(function(f) { return String(f).toLowerCase(); });
+        if (ff.some(function(f) { return f.indexOf('tv') !== -1 || f.indexOf('large') !== -1; })) {
+          isTV = true;
+        }
+      }
+
+      if (!isTV) return;
+
+      // Show banner
+      var banner = document.getElementById('liteBanner');
+      var closeBtn = document.getElementById('liteBannerClose');
+      if (banner) {
+        banner.classList.add('visible');
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+          banner.classList.remove('visible');
+          sessionStorage.setItem('genopoisk_lite_banner_dismissed', '1');
+        });
+      }
+      console.log('[lite-banner] TV/projector detected — banner shown. UA:', navigator.userAgent);
+    })();
   </script>
 </body>
 </html>

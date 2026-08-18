@@ -5,7 +5,9 @@
     }
   },
   "rewrites": [
-    { "source": "/api/kinopoisk/(.*)", "destination": "/api/kinopoisk?q=$1" }
+    { "source": "/api/kinopoisk/(.*)", "destination": "/api/kinopoisk?q=$1" },
+    { "source": "/lite", "destination": "/lite.html" },
+    { "source": "/lite-player", "destination": "/lite-player.html" }
   ],
   "headers": [
     {

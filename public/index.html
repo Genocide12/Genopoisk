@@ -747,9 +747,10 @@
         var isAndroid = ua.indexOf('android') !== -1;
         var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
         if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
-        // Very large screen + no touch (projector / 4K TV)
-        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        return !hasTouch && window.innerWidth >= 1920;
+        // Removed: "no touch + large screen" check — caused false positives
+        // on desktop monitors (1920px+ is common for Full HD/2K/4K monitors).
+        // Real TVs/projectors are caught by UA keywords above.
+        return false;
       })();
       if (fixedBtn) {
         if (isInTelegram || isTVDevice) {
@@ -2270,26 +2271,54 @@
       }
     } catch (_) {}
 
+    // apiGet with automatic retry on 429/403 (Cloudflare IP block from VPN).
+    // The server already retries with different User-Agents, but if it still
+    // fails, we wait 2s and try once more on the client side — by then the
+    // Cloudflare rate-limit window may have passed.
     async function apiGet(url) {
-      try {
-        const res = await fetch(url, {
-          headers: { 'Content-Type': 'application/json' }
-        });
-        if (!res.ok) {
-          // Try to parse JSON error response — our backend returns helpful
-          // messages for known errors (e.g. 403 = VPN blocked).
+      let lastErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (res.ok) return await res.json();
+
+          // Try to parse JSON error response
           let errData = null;
           try { errData = await res.json(); } catch (_) {}
-          if (errData && errData.message) {
-            throw new Error(errData.message);
+
+          // 429 = server tried all keys and failed (likely 403 IP block).
+          // 403 = direct block (shouldn't happen through our proxy, but just in case).
+          // On these — wait and retry once.
+          if ((res.status === 429 || res.status === 403) && attempt === 0) {
+            const msg = (errData && errData.message) || ('HTTP ' + res.status);
+            lastErr = new Error(msg);
+            console.warn('[apiGet] Got ' + res.status + ', retrying in 2s...', msg);
+            // Show a friendly hint to the user
+            const filmGrid = document.getElementById('filmGrid');
+            if (filmGrid && filmGrid.children.length === 0) {
+              filmGrid.innerHTML = '<div class="empty-state">⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...</div>';
+            }
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
           }
+
+          // Other errors — throw immediately
+          if (errData && errData.message) throw new Error(errData.message);
           throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        } catch (e) {
+          // Network error — retry once
+          lastErr = e;
+          if (attempt === 0) {
+            console.warn('[apiGet] Network error, retrying in 2s:', e.message);
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          throw e;
         }
-        return await res.json();
-      } catch (e) {
-        console.error('API Error:', e);
-        throw e;
       }
+      throw lastErr || new Error('Request failed');
     }
 
     function extractFilms(data) {
@@ -3007,18 +3036,16 @@
         }
       }
 
-      // Check 3: any device with no touch + VERY large screen (>= 1920px)
-      // Only triggers on really big screens — typical desktop monitors are
-      // 1280-1920px and shouldn't be redirected. Projectors and 4K TVs
-      // are usually >= 1920px.
-      if (!isTV) {
-        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        var isVeryLarge = window.innerWidth >= 1920;
-        if (!hasTouch && isVeryLarge) {
-          isTV = true;
-          detectionReason = 'No touch + very large screen (' + window.innerWidth + 'px)';
-        }
-      }
+      // Check 3: REMOVED — was "no touch + viewport >= 1920px" but that
+      // matches typical desktop monitors (1920x1080 = Full HD is the most
+      // common resolution). Caused false positives — desktop Chrome users
+      // were being redirected to lite.
+      //
+      // Real TVs and projectors are detected by:
+      //   - Check 1: UA keywords (SmartTV, Tizen, WebOS, Bravia, etc.)
+      //   - Check 2: Android + large screen + no touch (Android projectors)
+      //   - Check 4: userAgentData.formFactors (Chromium 134+)
+      // Desktop browsers on large monitors should NOT be redirected.
 
       // Check 4: userAgentData.formFactors (Chromium 134+)
       if (!isTV && uaData.formFactors) {
@@ -3265,9 +3292,9 @@
         var isAndroid = ua.indexOf('android') !== -1;
         var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
         if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
-        // Very large screen + no touch (projector / 4K TV)
-        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        return !hasTouch && window.innerWidth >= 1920;
+        // Removed: "no touch + large screen" check — caused false positives
+        // on desktop monitors. Real TVs/projectors are caught by UA keywords.
+        return false;
       }
 
       var shouldShow = false;

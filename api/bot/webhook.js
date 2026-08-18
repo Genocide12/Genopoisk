@@ -5,6 +5,7 @@ const {
   getProjectInfo,
   getLatestDeployments,
   triggerRedeploy,
+  rollbackToPreviousDeployment,
   formatDeployment
 } = require('../_lib/vercel');
 
@@ -124,7 +125,8 @@ function deployMenuKeyboard() {
         { text: '📜 Логи', callback_data: 'deploy_logs' }
       ],
       [
-        { text: '🔄 Redeploy', callback_data: 'deploy_redeploy' }
+        { text: '🔄 Redeploy', callback_data: 'deploy_redeploy' },
+        { text: '↩️ Откатиться', callback_data: 'deploy_rollback' }
       ],
       [{ text: '🏠 На главную', callback_data: 'menu_main' }]
     ]
@@ -475,6 +477,11 @@ async function cmdStart(chatId, user, text) {
 function buildUserHelpText() {
   return `<b>❓ Помощь по Genopoisk</b>
 
+<b>🎬 Что это такое</b>
+Genopoisk — это кинотеатр прямо в Telegram. Смотрите фильмы в хорошем качестве, ищите по названию, оценивайте звёздами, собирайте коллекцию. Без рекламы, без подписок, без регистрации — вы входите автоматически через свой Telegram-аккаунт.
+
+Профиль один для всех устройств: начните смотреть фильм на телефоне в дороге, продолжите на компьютере дома — позиция просмотра синхронизируется сама.
+
 <b>🎞️ Как смотреть фильмы</b>
 1. Нажмите «🎞️ Открыть Genopoisk» — откроется приложение прямо в Telegram.
 2. На главной введите название фильма в поиске или выберите категорию (Популярные, Топ 250, Новинки, Случайный, Коллекция).
@@ -482,7 +489,7 @@ function buildUserHelpText() {
 4. В плеере используйте кнопки управления: пауза, перемотка, полноэкранный режим.
 
 <b>🔍 Поиск фильмов в любом чате</b>
-Введите <code>@Genopoiskbot</code> и название фильма в любом чате Telegram — появится выпадающий список с постерами, годами и рейтингами. Нажмите на фильм — отправится сообщение со ссылкой на просмотр.
+Введите <code>@Genopoiskbot</code> и название фильма в любом чате Telegram — появится выпадающий список с постерами, годами и рейтингами. Нажмите на фильм — отправится сообщение со ссылкой на просмотр. Работает в личных чатах, группах, каналах.
 
 <b>📱 Как установить как приложение</b>
 • <b>Android</b>: откройте genopoisk.vercel.app в Chrome → меню ⋮ → «Установить приложение».
@@ -491,19 +498,19 @@ function buildUserHelpText() {
 После установки приложение открывается в отдельном окне — как настоящее.
 
 <b>⏯ Продолжение просмотра</b>
-Если вы не досмотрели фильм, на главной появится карточка «Продолжить просмотр» с позицией, на которой вы остановились. Позиция синхронизируется между всеми устройствами — начните на телефоне, продолжите на компьютере.
+Если вы не досмотрели фильм, на главной появится карточка «Продолжить просмотр» с позицией, на которой вы остановились. Позиция синхронизируется между всеми устройствами — начните на телефоне, продолжите на компьютере. Карточка хранит последние 48 часов — старее очищаются автоматически.
 
 <b>❤️ Коллекция</b>
-В плеере нажмите ❤️ — фильм добавится в коллекцию. Список доступен в боте (кнопка «❤️ Коллекция») и на сайте (карточка «❤️ Коллекция» на главной).
+В плеере нажмите ❤️ — фильм добавится в коллекцию. Список доступен в боте (кнопка «❤️ Коллекция») и на сайте (карточка «❤️ Коллекция» на главной). В коллекции до 100 фильмов.
 
 <b>📀 Мои фильмы</b>
-История всех просмотренных фильмов. Откройте бота → «📀 Мои фильмы». Можно оценить фильм звёздами ⭐ (от 1 до 5), поделиться с другом и снова открыть плеер.
+История всех просмотренных фильмов. Откройте бота → «📀 Мои фильмы». Можно оценить фильм звёздами ⭐ (от 1 до 5), поделиться с другом и снова открыть плеер. Хранятся последние 50 фильмов.
 
 <b>📤 Поделиться фильмом</b>
-В карточке фильма нажмите «📤 Поделиться» — Telegram предложит выбрать чат. Получатель увидит название фильма и ссылку на просмотр.
+В карточке фильма нажмите «📤 Поделиться» — Telegram предложит выбрать чат. Получатель увидит название фильма и ссылку на просмотр. Если у него нет нашего бота — ссылка откроется в браузере.
 
 <b>⭐ Оценка фильма</b>
-После просмотра фильма появится предложение оценить его звёздами (1-5). Оценка сохраняется в вашем профиле и видна в «📀 Мои фильмы».
+После просмотра фильма появится предложение оценить его звёздами (1-5). Оценка сохраняется в вашем профиле и видна в «📀 Мои фильмы». Оценку можно изменить в любой момент — просто нажмите другую звезду.
 
 <b>🔥 Premium</b>
 Поддержите проект — купите Premium за 5 звёзд Telegram. Бейдж 🔥 появится в шапке сайта. Если передумаете — звёзды можно вернуть через кнопку «💸 Вернуть звёзды» (с подтверждением администратора).
@@ -512,7 +519,7 @@ function buildUserHelpText() {
 Нажмите на заголовок «Genopoisk» на сайте для смены темы: 🌙 Тёмная → ☀️ Светлая → 🌌 Ночная → 🔄 Авто (по времени суток).
 
 <b>🔐 Аккаунт</b>
-Вы входите автоматически через Telegram — никаких логинов и паролей. Ваш профиль единый для всех устройств: Mini App в Telegram, браузер, установленное приложение.
+Вы входите автоматически через Telegram — никаких логинов и паролей. Ваш профиль единый для всех устройств: Mini App в Telegram, браузер, установленное приложение. Данные хранятся в защищённой базе Supabase, доступ только у вас.
 
 <b>🌐 Сайт</b>
 Адрес: <code>genopoisk.vercel.app</code>
@@ -521,6 +528,9 @@ function buildUserHelpText() {
 <b>🤖 Бот</b>
 Команды: /start — главное меню, /help — эта справка.
 Inline-поиск: введите @Genopoiskbot в любом чате.
+
+<b>📊 Для администратора</b>
+В боте доступна админ-панель: статистика просмотров, список пользователей, управление деплоями (статус / пересборка / <b>откат</b> к предыдущему рабочему коммиту — если что-то сломалось, можно вернуться назад одной кнопкой). Обычным пользователям эти функции не видны.
 
 Если что-то не работает — напишите разработчику.`;
 }
@@ -547,6 +557,7 @@ async function cmdHelp(chatId, user) {
 /status — статус Vercel
 /logs — логи деплоев
 /redeploy — пересборка
+/rollback — откат к предыдущему рабочему коммиту
 
 <b>Уведомления:</b>
 Вы получаете сообщения при:
@@ -867,6 +878,38 @@ async function cmdRedeploy(chatId, user) {
   }
 }
 
+// /rollback — admin command to roll back to the previous working commit.
+// Same as the ↩️ Откатиться button, but accessible via text command.
+async function cmdRollback(chatId, user) {
+  if (!isAdmin(user.id)) {
+    await sendMessage(chatId, '⚠️ Доступ только для администратора.');
+    return;
+  }
+  try {
+    await sendMessage(chatId, '⏳ Ищу предыдущий рабочий деплой...');
+    const result = await rollbackToPreviousDeployment();
+    const deployId = result.id || result.uid;
+    const deployUrl = result.url || '...';
+    const shortSha = (result.commitSha || '').slice(0, 7);
+    const commitMsg = result.commitMsg || '—';
+    const githubCommitLink = result.commitSha
+      ? `https://github.com/Genocide12/Genopoisk/commit/${result.commitSha}`
+      : '';
+
+    let text = '↩️ <b>Откат запущен</b>\n\n';
+    text += `Создаю новый production-деплой из коммита <code>${shortSha}</code>\n`;
+    text += `📝 ${commitMsg}\n`;
+    if (githubCommitLink) text += `🐙 <a href="${githubCommitLink}">GitHub</a>\n\n`;
+    text += `ID: <code>${deployId}</code>\n`;
+    text += `🌐 <a href="https://${deployUrl}">${deployUrl}</a>\n`;
+    text += `🔗 <a href="https://vercel.com/genocide12s-projects/genopoisk/${deployId}">Vercel Dashboard</a>`;
+    await sendMessage(chatId, text, { reply_markup: deployMenuKeyboard() });
+    notifyDeployStatus(String(user.id), deployId, deployUrl);
+  } catch (e) {
+    await sendMessage(chatId, `❌ <b>Откат не удался</b>\n\n${e.message}`, { reply_markup: deployMenuKeyboard() });
+  }
+}
+
 async function cmdBroadcast(chatId, user, text) {
   if (!isAdmin(user.id)) {
     await sendMessage(chatId, '⚠️ Доступ только для администратора.');
@@ -975,6 +1018,7 @@ async function handleMessage(update) {
     if (text.startsWith('/status')) return sendMessage(chatId, await buildStatusText(), { reply_markup: deployMenuKeyboard() });
     if (text.startsWith('/logs')) return sendMessage(chatId, await buildLogsText(), { reply_markup: deployMenuKeyboard() });
     if (text.startsWith('/redeploy')) return cmdRedeploy(chatId, user);
+    if (text.startsWith('/rollback')) return cmdRollback(chatId, user);
     if (text.startsWith('/clear')) return cmdClear(chatId, user);
   }
 
@@ -1454,6 +1498,47 @@ async function handleCallback(update) {
         notifyDeployStatus(String(fromId), deployId, deployUrl);
       } catch (e) {
         await edit(`❌ Ошибка: ${e.message}`, deployMenuKeyboard());
+      }
+      return;
+    }
+
+    // ---- Rollback to previous working commit ----
+    // Finds the latest READY deployment that is NOT the current production
+    // one, and creates a new production deployment from its git commit SHA.
+    // Non-destructive: git history is untouched, we just deploy an older
+    // commit on top. Useful when a bad commit breaks production.
+    if (data === 'deploy_rollback') {
+      try {
+        // First show "working..." so admin knows something is happening
+        await edit('⏳ <b>Ищу предыдущий рабочий деплой...</b>', deployMenuKeyboard());
+        await answerCallback(cq.id, 'Запускаю откат...');
+
+        const result = await rollbackToPreviousDeployment();
+        const deployId = result.id || result.uid;
+        const deployUrl = result.url || '...';
+        const shortSha = (result.commitSha || '').slice(0, 7);
+        const commitMsg = result.commitMsg || '—';
+        const githubOrg = 'Genocide12';
+        const githubRepo = 'Genopoisk';
+        const githubCommitLink = result.commitSha
+          ? `https://github.com/${githubOrg}/${githubRepo}/commit/${result.commitSha}`
+          : '';
+
+        let text = '↩️ <b>Откат запущен</b>\n\n';
+        text += 'Создаю новый production-деплой из предыдущего рабочего коммита:\n';
+        text += `🔢 Commit: <code>${shortSha}</code>\n`;
+        if (githubCommitLink) text += `🐙 <a href="${githubCommitLink}">Открыть на GitHub</a>\n`;
+        text += `📝 ${commitMsg}\n\n`;
+        text += `ID: <code>${deployId}</code>\n`;
+        text += `🌐 <a href="https://${deployUrl}">${deployUrl}</a>\n`;
+        text += `🔗 <a href="https://vercel.com/genocide12s-projects/genopoisk/${deployId}">Vercel Dashboard</a>\n\n`;
+        text += '<i>Git-история не меняется — поверх текущего коммита создаётся новый деплой со старым кодом.</i>';
+        await sendMessage(Number(fromId), text, { reply_markup: deployMenuKeyboard() });
+
+        // Poll for completion — same mechanism as redeploy
+        notifyDeployStatus(String(fromId), deployId, deployUrl);
+      } catch (e) {
+        await sendMessage(Number(fromId), `❌ <b>Откат не удался</b>\n\n${e.message}`, { reply_markup: deployMenuKeyboard() });
       }
       return;
     }

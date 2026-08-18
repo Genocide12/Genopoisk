@@ -1732,6 +1732,20 @@ module.exports = async (req, res) => {
     });
   }
 
+  // Verify Telegram webhook secret token (if configured).
+  // When WEBHOOK_SECRET is set in env, Telegram must send the matching
+  // token in X-Telegram-Bot-Api-Secret-Token header. If env var is not
+  // set, validation is skipped (backward-compat — keeps working until
+  // you configure setWebhook with secret_token).
+  const __webhookSecret = process.env.WEBHOOK_SECRET;
+  if (__webhookSecret) {
+    const __gotSecret = req.headers['x-telegram-bot-api-secret-token'];
+    if (__gotSecret !== __webhookSecret) {
+      console.warn('[bot] Webhook rejected: invalid or missing X-Telegram-Bot-Api-Secret-Token');
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+  }
+
   // Register bot command list (only /start and /help) on first request after
   // cold start. This removes legacy commands (/stats, /users, /status, /logs,
   // /redeploy, /user, /broadcast, /clear) that were previously registered

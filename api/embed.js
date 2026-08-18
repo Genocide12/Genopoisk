@@ -54,7 +54,11 @@ module.exports = async (req, res) => {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600');
-    res.setHeader('X-Frame-Options', 'ALLOWALL');
+    // Note: we do NOT set X-Frame-Options. ALLOWALL is non-standard and
+    // browsers ignore it. Allowing the iframe to be embedded cross-origin
+    // is the explicit purpose of this proxy — the iframe is loaded by
+    // genopoisk.vercel.app/player.html. CSP frame-ancestors on the parent
+    // is the right tool if restriction is ever needed.
     res.status(200).send(html);
   } catch (e) {
     console.error('Embed proxy error:', e.message);

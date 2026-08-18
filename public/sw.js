@@ -6,14 +6,15 @@
 //   - API endpoints: network-only (always need live data)
 //   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
 
-const CACHE_NAME = 'genopoisk-v1';
+const CACHE_NAME = 'genopoisk-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/bridge.js'
+  '/bridge.js',
+  '/i18n.js'
 ];
 
 // Install: pre-cache the app shell

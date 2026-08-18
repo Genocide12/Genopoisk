@@ -4,6 +4,12 @@ const PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_ciGBivwgLXsUTYT1ZwODeme
 const TEAM_ID = process.env.VERCEL_TEAM_ID || 'team_popvin5WoD8lnax8NEcA5nQA';
 const VERCEL_API = 'https://api.vercel.com';
 
+// Warn once if env vars are missing — fallback to hardcoded production IDs
+// is convenient but silently points dev/preview builds at production.
+if (!process.env.VERCEL_PROJECT_ID || !process.env.VERCEL_TEAM_ID) {
+  console.warn('[vercel] WARNING: VERCEL_PROJECT_ID or VERCEL_TEAM_ID not set in env — using hardcoded production fallback.');
+}
+
 async function vc(path, opts = {}) {
   if (!VERCEL_TOKEN) throw new Error('VERCEL_TOKEN not set');
   const url = `${VERCEL_API}${path}${path.includes('?') ? '&' : '?'}teamId=${TEAM_ID}`;

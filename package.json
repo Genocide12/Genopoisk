@@ -4,6 +4,6 @@
   "private": true,
   "description": "Genopoisk — Telegram Mini App for movie search and playback",
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   }
 }

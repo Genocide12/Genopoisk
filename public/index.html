@@ -606,7 +606,28 @@
   </div>
 
   <script>
-    // Защита от копирования / инспектора
+    // ====== Global error handler — surface JS errors to user ======
+    // If any JS error occurs (especially on old Chrome versions on
+    // projectors), show it in a small banner so the user knows what's
+    // wrong instead of seeing a dead page.
+    window.addEventListener('error', function(e) {
+      console.error('[global-error]', e.message, e.filename + ':' + e.lineno);
+      // Show error to user (but only if it's not a network resource error)
+      if (e.message && e.message.indexOf('Script error') === -1) {
+        try {
+          var errBanner = document.createElement('div');
+          errBanner.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;background:#8B0000;color:#fff;padding:10px;border-radius:8px;font-size:12px;z-index:9999;font-family:monospace;max-height:120px;overflow:auto';
+          errBanner.textContent = 'JS Error: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')';
+          document.body.appendChild(errBanner);
+        } catch (_) {}
+      }
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var reason = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+      console.error('[unhandled-rejection]', reason);
+    });
+
+    // ====== Copy/inspect protection ======
     // EXCEPT inside the long-press film info popup — there users CAN select
     // and copy the title/year/rating (that's the whole point of the popup).
     function isInsideFilmInfoPopup(el) {
@@ -2274,35 +2295,37 @@
     } catch (_) {}
 
     // apiGet with automatic retry on 429/403 (Cloudflare IP block from VPN).
-    // The server already retries with different User-Agents, but if it still
-    // fails, we wait 2s and try once more on the client side — by then the
-    // Cloudflare rate-limit window may have passed.
+    // Uses ES5 syntax (var, function) for compatibility with old Chrome
+    // versions on Android projectors (some run Chrome 50-70 which doesn't
+    // support let/const/arrow functions).
     async function apiGet(url) {
-      let lastErr = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
+      var lastErr = null;
+      for (var attempt = 0; attempt < 2; attempt++) {
         try {
-          const res = await fetch(url, {
+          var res = await fetch(url, {
             headers: { 'Content-Type': 'application/json' }
           });
           if (res.ok) return await res.json();
 
           // Try to parse JSON error response
-          let errData = null;
+          var errData = null;
           try { errData = await res.json(); } catch (_) {}
 
-          // 429 = server tried all keys and failed (likely 403 IP block).
-          // 403 = direct block (shouldn't happen through our proxy, but just in case).
-          // On these — wait and retry once.
-          if ((res.status === 429 || res.status === 403) && attempt === 0) {
-            const msg = (errData && errData.message) || ('HTTP ' + res.status);
+          // Retry on 429, 403, 5xx — all could be transient (VPN block,
+          // Cloudflare rate-limit, lambda cold start, etc.)
+          var isRetryable = (res.status === 429 || res.status === 403 ||
+                             res.status === 500 || res.status === 502 ||
+                             res.status === 503 || res.status === 504);
+          if (isRetryable && attempt === 0) {
+            var msg = (errData && errData.message) || ('HTTP ' + res.status);
             lastErr = new Error(msg);
             console.warn('[apiGet] Got ' + res.status + ', retrying in 2s...', msg);
             // Show a friendly hint to the user
-            const filmGrid = document.getElementById('filmGrid');
-            if (filmGrid && filmGrid.children.length === 0) {
-              filmGrid.innerHTML = '<div class="empty-state">⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...</div>';
+            var filmGridEl = document.getElementById('filmGrid');
+            if (filmGridEl && filmGridEl.children.length === 0) {
+              filmGridEl.innerHTML = '<div class="empty-state">⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...</div>';
             }
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
             continue;
           }
 
@@ -2314,7 +2337,7 @@
           lastErr = e;
           if (attempt === 0) {
             console.warn('[apiGet] Network error, retrying in 2s:', e.message);
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
             continue;
           }
           throw e;
@@ -2940,15 +2963,18 @@
       }, 100);
     });
 
-    if (window.Telegram?.WebApp) {
-      const themeParams = window.Telegram.WebApp.themeParams;
-      if (themeParams?.bg_color) {
-        const metaTheme = document.querySelector('meta[name="theme-color"]');
+    // Note: avoid optional chaining (?.) here — old Chrome on Android
+    // projectors (Chrome 50-70) doesn't support ES2020 syntax and the
+    // entire script will fail with SyntaxError, breaking all buttons.
+    if (window.Telegram && window.Telegram.WebApp) {
+      var themeParams = window.Telegram.WebApp.themeParams;
+      if (themeParams && themeParams.bg_color) {
+        var metaTheme = document.querySelector('meta[name="theme-color"]');
         if (metaTheme) metaTheme.content = themeParams.bg_color;
       }
       // Apply Telegram theme to body
-      if (themeParams?.text_color) document.documentElement.style.setProperty('--text-primary', themeParams.text_color);
-      if (themeParams?.bg_color) document.documentElement.style.setProperty('--bg-primary', themeParams.bg_color);
+      if (themeParams && themeParams.text_color) document.documentElement.style.setProperty('--text-primary', themeParams.text_color);
+      if (themeParams && themeParams.bg_color) document.documentElement.style.setProperty('--bg-primary', themeParams.bg_color);
     }
 
     // Main button for Mini App back navigation
@@ -2956,12 +2982,32 @@
       tg.BackButton.hide();
     }
 
-    // Auto-focus the hero title on TV/projector/desktop so user sees the
-    // focus ring immediately and knows arrow keys work. Skipped inside
-    // Telegram Mini App (would be confusing on mobile).
+    // Auto-focus the hero title ONLY on detected TV/projector devices.
+    // Previously this fired on any non-touch device (including desktop PCs),
+    // causing an unwanted focus ring around "Genopoisk" title on desktop.
+    // Now we only auto-focus if the device matches TV/projector heuristics.
     if (!(tg && tg.initData)) {
-      var hasTouchScreen = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-      if (!hasTouchScreen) {
+      var uaLower = (navigator.userAgent || '').toLowerCase();
+      var isDetectedTV = false;
+      var tvKw = ['tv','television','smarttv','googletv','android tv','webos','tizen',
+                  'hbbtv','roku','firetv','aftt','aftm','bento','projector','thundeal',
+                  'thundea','xgimi','wanbo','jmgo','dangbei','nebula','epson','benq',
+                  'optoma','magbox','minix','hk1','x88','t95','tx3','tx6','h96','a95x'];
+      for (var ti = 0; ti < tvKw.length; ti++) {
+        if (uaLower.indexOf(tvKw[ti]) !== -1) { isDetectedTV = true; break; }
+      }
+      // Also auto-focus if user previously saved device as projector
+      if (!isDetectedTV) {
+        try {
+          if (localStorage.getItem('genopoisk_device_type') === 'projector') isDetectedTV = true;
+        } catch (_) {}
+      }
+      // Also auto-focus on Android + large screen (likely projector)
+      if (!isDetectedTV) {
+        var isAndroidUA = uaLower.indexOf('android') !== -1;
+        if (isAndroidUA && window.innerWidth >= 800) isDetectedTV = true;
+      }
+      if (isDetectedTV) {
         setTimeout(function() {
           var heroTitleEl = document.querySelector('.hero-title');
           if (heroTitleEl) heroTitleEl.focus();
@@ -3113,6 +3159,10 @@
 
       if (!isTV) return;
 
+      // Mark this device as a TV/projector — used by CSS to enable focus
+      // rings only on TV devices (see setupDpadNav focus-ring styles).
+      try { document.body.classList.add('tv-device'); } catch (_) {}
+
       // If user explicitly asked for full version OR dismissed lite this
       // session — just show the banner (don't auto-redirect)
       if (forceFull || dismissed) {
@@ -3183,19 +3233,33 @@
         resumeCard.setAttribute('tabindex', '0');
       }
 
-      // Focus ring — visible only when navigating with keyboard
+      // Focus ring — visible ONLY on TV/projector devices (body.tv-device).
+      // On desktop/mobile we DON'T want a focus ring around "Genopoisk" or
+      // category cards — it looks broken. On TV/projector, the focus ring
+      // is essential for D-pad navigation feedback.
+      // The body.tv-device class is set by setupLiteAutoRedirect() below
+      // when the device is detected as a TV/projector.
       var styleEl = document.createElement('style');
       styleEl.textContent =
-        '.hero-title:focus-visible, .action-card:focus-visible, .film-card:focus-visible, ' +
-        '.resume-card:focus-visible, .search-input:focus-visible, .lite-link:focus-visible, ' +
-        '.lite-close:focus-visible, #tgLoginBtn:focus-visible, #tgLoginBarClose:focus-visible {' +
+        'body.tv-device .hero-title:focus, body.tv-device .hero-title:focus-visible, ' +
+        'body.tv-device .action-card:focus, body.tv-device .action-card:focus-visible, ' +
+        'body.tv-device .film-card:focus, body.tv-device .film-card:focus-visible, ' +
+        'body.tv-device .resume-card:focus, body.tv-device .resume-card:focus-visible, ' +
+        'body.tv-device .search-input:focus, body.tv-device .search-input:focus-visible, ' +
+        'body.tv-device .lite-link:focus, body.tv-device .lite-link:focus-visible, ' +
+        'body.tv-device .lite-close:focus, body.tv-device .lite-close:focus-visible, ' +
+        'body.tv-device #tgLoginBtn:focus, body.tv-device #tgLoginBtn:focus-visible, ' +
+        'body.tv-device #tgLoginBarClose:focus, body.tv-device #tgLoginBarClose:focus-visible {' +
         '  outline: 3px solid #007AFF !important;' +
         '  outline-offset: 2px !important;' +
         '  border-radius: 8px !important;' +
         '}' +
-        // Make focus visible even on elements that use :hover for styling
-        '.action-card:focus-visible { background: rgba(0, 122, 255, 0.1) !important; }' +
-        '.film-card:focus-visible { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4); }';
+        'body.tv-device .action-card:focus, body.tv-device .action-card:focus-visible { background: rgba(0, 122, 255, 0.1) !important; }' +
+        'body.tv-device .film-card:focus, body.tv-device .film-card:focus-visible { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4); }' +
+        // On non-TV devices, suppress programmatic focus ring entirely
+        'body:not(.tv-device) .hero-title:focus, body:not(.tv-device) .hero-title:focus-visible {' +
+        '  outline: none !important;' +
+        '}';
       document.head.appendChild(styleEl);
 
       // Compute distance between two elements' centers

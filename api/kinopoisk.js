@@ -141,23 +141,25 @@ module.exports = async (req, res) => {
     return res.status(200).json(cached.data);
   }
 
-  // Try each available key until one works or all are exhausted.
-  // For 403 errors, we retry up to 3 times PER KEY with progressively
-  // longer delays (300ms, 600ms, 1200ms). This gives Vercel time to route
-  // to a different serverless instance with a different egress IP that
-  // Kinopoisk hasn't blocked. The previous 200ms flat delay was too short
-  // to actually trigger IP rotation on Vercel's side.
-  const triedKeys = new Set();
-  let lastError = null;
-  const MAX_RETRIES_PER_KEY = 3;
-  const RETRY_DELAYS = [300, 600, 1200, 2400];
+  // ====== Multi-threaded parallel key racing ======
+  // Fire up to N=3 API requests in PARALLEL with different keys, take the
+  // FIRST successful response (Promise.any) and abort the losers.
+  // This dramatically reduces 403 errors (only one needs to succeed) and
+  // cuts latency (slowest of 3 ≈ same as before, fastest wins).
+  //
+  // Why this works: even though all parallel requests come from the same
+  // Vercel egress IP, they hit Kinopoisk's edge with different API keys,
+  // and Cloudflare's per-key rate limit is independent. If one key is
+  // rate-limited (429/402), the others likely aren't.
+  //
+  // Per-request timeout: 6s. If a key hangs (network issue), we don't
+  // wait — Promise.any returns as soon as one resolves.
+  const PARALLEL_KEYS = Math.min(3, API_KEYS.length);
+  const REQUEST_TIMEOUT_MS = 6000;
 
   // Realistic browser headers — Kinopoisk's edge (Cloudflare) returns 403
   // for bot-like User-Agents such as "Mozilla/5.0 (compatible; ...)".
-  // Using a real Chrome UA + Accept-Language + Referer dramatically reduces
-  // the 403 rate from Vercel egress IPs.
   const BROWSER_HEADERS = {
-    'X-API-KEY': '', // filled per-iteration below
     'Content-Type': 'application/json',
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -167,82 +169,98 @@ module.exports = async (req, res) => {
     'Origin': 'https://kinopoisk.ru'
   };
 
-  for (let attempt = 0; attempt < API_KEYS.length * MAX_RETRIES_PER_KEY; attempt++) {
-    const apiKey = pickNextAvailableKey();
-    if (!apiKey) break;
+  // Pick N available keys (round-robin, skipping exhausted)
+  const raceKeys = [];
+  for (let i = 0; i < PARALLEL_KEYS; i++) {
+    const k = pickNextAvailableKey();
+    if (k) raceKeys.push(k);
+  }
+  if (raceKeys.length === 0) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.status(429).json({
+      error: 'All API keys exhausted',
+      message: 'Попробуйте позже — все ключи исчерпаны.'
+    });
+  }
 
-    try {
-      const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
-      const upstream = await fetch(targetUrl, { headers });
+  // Build per-key fetch promises with abort + timeout
+  const controllers = raceKeys.map(() => new AbortController());
+  const racePromises = raceKeys.map((apiKey, idx) => {
+    const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
+    const ctrl = controllers[idx];
+    // Timeout abort
+    const timeoutId = setTimeout(() => {
+      try { ctrl.abort(); } catch (_) {}
+    }, REQUEST_TIMEOUT_MS);
 
-      // If the key is rate-limited, mark it and try the next one
+    return fetch(targetUrl, {
+      headers,
+      signal: ctrl.signal
+    }).then(async (upstream) => {
+      clearTimeout(timeoutId);
+
+      // Rate-limited or payment required → mark key exhausted, throw
       if (isExhaustionStatus(upstream.status)) {
         const body = await upstream.text();
         console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${body.slice(0, 200)}`);
         markKeyExhausted(apiKey);
-        lastError = { status: upstream.status, message: body.slice(0, 200) };
-        continue;
+        throw new Error(`Key ${apiKey.slice(0, 8)} exhausted (${upstream.status})`);
       }
 
       if (!upstream.ok) {
         const text = await upstream.text();
-        console.error(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
-
-        // 403 — Kinopoisk blocks the IP (VPN, proxy, or rate-limit).
-        // Don't mark key as exhausted (key is fine, IP is the problem).
-        // Wait progressively longer before retry — Vercel may route to a
-        // different instance with a different IP that Kinopoisk hasn't blocked.
+        console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
+        // 403 — IP blocked; don't mark key exhausted (key is fine)
         if (upstream.status === 403) {
-          console.warn(`[kinopoisk] 403 from Kinopoisk (IP blocked), attempt ${attempt + 1}`);
-          lastError = { status: 403, message: 'Kinopoisk API 403 (IP blocked or rate-limited)' };
-          // Don't mark key as exhausted — it's an IP issue, not a key issue
-          // Progressive delay: 300ms, 600ms, 1200ms, 2400ms...
-          const delayIdx = Math.min(attempt, RETRY_DELAYS.length - 1);
-          await new Promise(r => setTimeout(r, RETRY_DELAYS[delayIdx]));
-          continue;
+          throw new Error(`Key ${apiKey.slice(0, 8)} IP blocked (403)`);
         }
-
-        // Other errors (404, 500, etc.) — return to client, don't try other keys
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        return res.status(upstream.status).json({
-          error: `Kinopoisk API ${upstream.status}`,
-          message: upstream.statusText
-        });
+        // Other errors (404, 500) — throw, let other keys try
+        throw new Error(`Key ${apiKey.slice(0, 8)} HTTP ${upstream.status}`);
       }
 
       const data = await upstream.json();
+      return { data, winnerIdx: idx, key: apiKey };
+    }).catch((e) => {
+      clearTimeout(timeoutId);
+      throw e;
+    });
+  });
 
-      // Save to cache (limit cache size)
-      if (cache.size > 100) {
-        const oldest = cache.keys().next().value;
-        cache.delete(oldest);
-      }
-      cache.set(cacheKey, { data, ts: Date.now() });
-
-      res.setHeader('X-Cache', 'MISS');
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
-      return res.status(200).json(data);
-    } catch (e) {
-      console.error(`[kinopoisk] Key ${apiKey.slice(0, 8)}... fetch error:`, e.message);
-      lastError = { status: 502, message: e.message };
-      // Network error — try next key
-      continue;
-    }
+  let winner = null;
+  let lastError = null;
+  try {
+    winner = await Promise.any(racePromises);
+  } catch (aggErr) {
+    // Promise.any rejects with AggregateError when ALL promises reject
+    lastError = aggErr;
+    console.error('[kinopoisk] All parallel keys failed:',
+      (aggErr.errors || []).map(e => e.message).join(' | '));
   }
 
-  // All keys exhausted or all returned 403
-  console.error('[kinopoisk] All API keys failed. tried:', triedKeys.size, 'of', API_KEYS.length, 'lastError:', lastError);
+  // Abort any still-pending losers (Promise.any already resolved or all failed)
+  controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+
+  if (!winner) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.status(429).json({
+      error: 'Kinopoisk API unavailable',
+      message: 'Попробуйте позже — все ключи вернули ошибку. ' +
+               'Возможно, Кинопоиск заблокировал IP — отключите VPN или попробуйте через минуту.',
+      tried: raceKeys.length,
+      total: API_KEYS.length
+    });
+  }
+
+  // Save to cache (limit cache size)
+  if (cache.size > 100) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+  cache.set(cacheKey, { data: winner.data, ts: Date.now() });
+
+  res.setHeader('X-Cache', 'MISS');
+  res.setHeader('X-Race-Winner', winner.key.slice(0, 8));
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // If last error was 403, return 403 (IP blocked); otherwise 429 (rate limit)
-  const finalStatus = (lastError && lastError.status === 403) ? 403 : 429;
-  const finalMessage = (finalStatus === 403)
-    ? 'Кинопоиск заблокировал запрос. Попробуйте позже или отключите VPN.'
-    : 'Попробуйте позже — лимит запросов исчерпан. ' + API_KEYS.length + ' ключ(ей) были использованы.';
-  return res.status(finalStatus).json({
-    error: 'Kinopoisk API unavailable',
-    message: finalMessage,
-    tried: triedKeys.size,
-    total: API_KEYS.length
-  });
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+  return res.status(200).json(winner.data);
 };

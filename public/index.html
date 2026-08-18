@@ -15,6 +15,12 @@
   <link rel="preconnect" href="https://genopoisk.vercel.app">
   <link rel="dns-prefetch" href="https://genopoisk.vercel.app">
   <script src="/i18n.js"></script>
+  <!-- Vercel Analytics + Speed Insights (auto-enabled on Vercel deployments) -->
+  <!-- These scripts are served from Vercel's CDN and only fire when deployed
+       to Vercel. On localhost they 404 silently. Enable in Vercel dashboard:
+       https://vercel.com/genocide12s-projects/genopoisk/analytics -->
+  <script defer src="/_vercel/insights/script.js"></script>
+  <script defer src="/_vercel/speed-insights/script.js"></script>
   <title>Genopoisk</title>
   <script>
     // ====== Performance & error logging ======
@@ -98,7 +104,7 @@
       90%, 100% { transform: perspective(120px) rotateY(180deg);  opacity: 0; }
     }
 
-    /* Holographic action cards — repel from cursor */
+    /* Holographic action cards — repel from cursor + touch */
     .action-card {
       position: relative;
       overflow: hidden;
@@ -117,8 +123,20 @@
       padding: 24px 16px;
       text-align: center;
       cursor: pointer;
-      transition: transform 0.2s ease-out, border-color 0.3s, box-shadow 0.3s;
+      /* Smooth spring return when NOT tracking (touch release / mouseleave).
+         Cubic-bezier with overshoot gives a satisfying settle-to-neutral. */
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  border-color 0.3s, box-shadow 0.3s;
       transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateX(var(--tx)) translateY(var(--ty));
+      /* Prevent text selection on long press */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    /* When finger/cursor is actively tracking the card — use a faster,
+       near-instant transition so movement feels 1:1 with the cursor. */
+    .action-card.tracking {
+      transition: transform 0.08s linear, border-color 0.2s, box-shadow 0.2s;
     }
     .action-card::before {
       content: "";
@@ -135,12 +153,14 @@
       transition: opacity 0.3s ease;
       z-index: -1;
     }
-    .action-card:hover::before { opacity: 1; }
-    .action-card:hover {
+    .action-card:hover::before,
+    .action-card.tracking::before { opacity: 1; }
+    .action-card:hover,
+    .action-card.tracking {
       border-color: var(--ios-blue);
       box-shadow: 0 12px 40px rgba(0,122,255,0.3);
     }
-    .action-card:active { transform: perspective(800px) scale(0.96); }
+    .action-card:active { transform: perspective(800px) scale(0.94); }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;position:relative;z-index:1;}
 
@@ -1900,6 +1920,104 @@
     }
     applyTranslations();
 
+    // ====== Action card holographic tracking (cursor + touch) ======
+    // Cards ONLY move when touched (no entrance animation on page load).
+    // On release, they smoothly settle back to neutral via CSS spring
+    // transition (cubic-bezier with overshoot).
+    function setupActionCardEffects() {
+      var cards = document.querySelectorAll('.action-card');
+      cards.forEach(function(card) {
+        var raf = null;
+        var isTracking = false;
+
+        function updateFromPoint(clientX, clientY) {
+          var rect = card.getBoundingClientRect();
+          var x = clientX - rect.left;
+          var y = clientY - rect.top;
+          // Clamp to [0, 100] in case touch is slightly outside
+          var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
+          // Tilt: -12 to 12 degrees (subtle, not nauseating)
+          var rx = ((y / rect.height) - 0.5) * -20;
+          var ry = ((x / rect.width) - 0.5) * 20;
+          card.style.setProperty('--mx', px + '%');
+          card.style.setProperty('--my', py + '%');
+          card.style.setProperty('--rx', rx.toFixed(2) + 'deg');
+          card.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+        }
+
+        function startTracking() {
+          if (isTracking) return;
+          isTracking = true;
+          card.classList.add('tracking');
+        }
+
+        function stopTracking() {
+          if (!isTracking) return;
+          isTracking = false;
+          card.classList.remove('tracking');
+          // Reset to neutral — CSS handles the spring-back animation
+          card.style.setProperty('--mx', '50%');
+          card.style.setProperty('--my', '50%');
+          card.style.setProperty('--rx', '0deg');
+          card.style.setProperty('--ry', '0deg');
+        }
+
+        // === Mouse (desktop) ===
+        card.addEventListener('mousemove', function(e) {
+          startTracking();
+          if (raf) cancelAnimationFrame(raf);
+          var x = e.clientX, y = e.clientY;
+          raf = requestAnimationFrame(function() {
+            updateFromPoint(x, y);
+          });
+        });
+        card.addEventListener('mouseenter', function(e) {
+          startTracking();
+          updateFromPoint(e.clientX, e.clientY);
+        });
+        card.addEventListener('mouseleave', stopTracking);
+
+        // === Touch (mobile, Telegram Mini App) ===
+        // touchstart → start tracking + initial position
+        // touchmove → update position (1:1 with finger)
+        // touchend → settle back to neutral
+        // touchmove is passive=true so it doesn't block scrolling — but we
+        // only track the FIRST touch, and the card effect is purely visual
+        // (no preventDefault), so scrolling still works.
+        card.addEventListener('touchstart', function(e) {
+          if (e.touches.length !== 1) return;
+          startTracking();
+          updateFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+          // Haptic feedback on first touch
+          if (tg && tg.HapticFeedback) {
+            try { tg.HapticFeedback.impactOccurred('light'); } catch (_) {}
+          }
+        }, { passive: true });
+        card.addEventListener('touchmove', function(e) {
+          if (e.touches.length !== 1) return;
+          if (raf) cancelAnimationFrame(raf);
+          var t = e.touches[0];
+          raf = requestAnimationFrame(function() {
+            updateFromPoint(t.clientX, t.clientY);
+          });
+        }, { passive: true });
+        card.addEventListener('touchend', stopTracking);
+        card.addEventListener('touchcancel', stopTracking);
+      });
+    }
+
+    // Run after DOM is ready (cards must exist before attaching handlers)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupActionCardEffects);
+    } else {
+      setupActionCardEffects();
+    }
+    // Also re-run after translations apply (in case cards were re-rendered)
+    window.addEventListener('load', function() {
+      setTimeout(setupActionCardEffects, 100);
+    });
+
     // Check premium status and show crown badge if premium
     async function checkPremiumStatus() {
       try {
@@ -2117,7 +2235,11 @@
         const poster = filmId ? `/api/poster?id=${filmId}&size=small` : '';
         // First 6 posters: high priority, no lazy loading (visible immediately)
         // Rest: lazy + async (load when scrolled into view)
-        const isAboveFold = index < 6;
+        // Mobile pagination initial batch is 12 — eager-load all of them
+        // so they fire in parallel (multiple /api/poster lambdas at once,
+        // each racing 3 API keys = up to 36 parallel requests to Kinopoisk).
+        // Subsequent chunks (8 films) lazy-load when scrolled into view.
+        const isAboveFold = index < 12;
         const loadingAttr = isAboveFold ? 'eager' : 'lazy';
         const fetchPriority = isAboveFold ? 'fetchpriority="high"' : '';
         const card = document.createElement('div');

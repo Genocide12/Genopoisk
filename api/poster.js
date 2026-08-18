@@ -40,14 +40,6 @@ function loadApiKeys() {
 const API_KEYS = loadApiKeys();
 let nextKeyIdx = 0;
 
-function pickApiKey() {
-  if (API_KEYS.length === 0) return null;
-  // Round-robin
-  const key = API_KEYS[nextKeyIdx % API_KEYS.length];
-  nextKeyIdx++;
-  return key;
-}
-
 // In-memory cache (per lambda instance). Vercel also caches at the edge
 // via Cache-Control headers, so this is a secondary cache for warm instances.
 const cache = new Map();
@@ -90,11 +82,14 @@ module.exports = async (req, res) => {
     return res.status(200).send(cached.buffer);
   }
 
-  // Try fetching — attempt up to 3 times with different API keys
-  // to handle 403/IP blocks
-  const maxAttempts = Math.min(3, Math.max(1, API_KEYS.length));
-  // Realistic browser headers — same rationale as kinopoisk.js.
-  // Bot-like UA ("Mozilla/5.0 (compatible; ...)") gets 403 from Cloudflare.
+  // ====== Multi-threaded parallel key racing ======
+  // Same strategy as kinopoisk.js: fire N=3 requests in parallel with
+  // different keys, take first successful (Promise.any), abort losers.
+  // Dramatically speeds up poster loading and reduces 403 errors.
+  const PARALLEL_KEYS = Math.min(3, Math.max(1, API_KEYS.length));
+  const REQUEST_TIMEOUT_MS = 6000;
+
+  // Realistic browser headers — bot-like UA gets 403 from Cloudflare.
   const BROWSER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
@@ -105,53 +100,65 @@ module.exports = async (req, res) => {
     'Sec-Fetch-Mode': 'no-cors',
     'Sec-Fetch-Site': 'cross-site'
   };
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const apiKey = pickApiKey();
-    const headers = Object.assign({}, BROWSER_HEADERS);
-    // Include API key if available — helps avoid 403 from rate limiting
-    if (apiKey) {
-      headers['X-API-KEY'] = apiKey;
+
+  // Pick N keys round-robin
+  const raceKeys = [];
+  for (let i = 0; i < PARALLEL_KEYS; i++) {
+    if (API_KEYS.length > 0) {
+      raceKeys.push(API_KEYS[(nextKeyIdx + i) % API_KEYS.length]);
     }
+  }
+  nextKeyIdx = (nextKeyIdx + PARALLEL_KEYS) % Math.max(1, API_KEYS.length);
 
-    try {
-      const upstream = await fetch(upstreamUrl, {
-        headers: headers,
-        redirect: 'follow'
-      });
+  const controllers = raceKeys.map(() => new AbortController());
+  const racePromises = raceKeys.map((apiKey, idx) => {
+    const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
+    const ctrl = controllers[idx];
+    const timeoutId = setTimeout(() => {
+      try { ctrl.abort(); } catch (_) {}
+    }, REQUEST_TIMEOUT_MS);
 
-      if (upstream.ok) {
-        const buffer = Buffer.from(await upstream.arrayBuffer());
-
-        // Save to in-memory cache (limit cache size to 500 posters ~50MB)
-        if (cache.size > 500) {
-          const oldest = cache.keys().next().value;
-          cache.delete(oldest);
-        }
-        cache.set(cacheKey, { buffer, ts: Date.now() });
-
-        // Set aggressive caching
-        res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
-        res.setHeader('X-Cache', 'MISS');
-        return res.status(200).send(buffer);
+    return fetch(upstreamUrl, {
+      headers,
+      redirect: 'follow',
+      signal: ctrl.signal
+    }).then(async (upstream) => {
+      clearTimeout(timeoutId);
+      if (!upstream.ok) {
+        throw new Error(`Key ${apiKey.slice(0, 6)} HTTP ${upstream.status}`);
       }
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      return { buffer, winnerIdx: idx };
+    }).catch((e) => {
+      clearTimeout(timeoutId);
+      throw e;
+    });
+  });
 
-      if (upstream.status === 403) {
-        // IP blocked — wait progressively longer and try next key.
-        const delays = [300, 600, 1200];
-        const delay = delays[Math.min(attempt, delays.length - 1)];
-        console.warn('[poster] 403 attempt', attempt + 1, 'of', maxAttempts, 'waiting', delay + 'ms');
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
+  let winner = null;
+  try {
+    winner = await Promise.any(racePromises);
+  } catch (aggErr) {
+    console.error('[poster] All parallel keys failed for', filmId,
+      ':', (aggErr.errors || []).map(e => e.message).join(' | '));
+  }
 
-      // Other errors — return fallback immediately
-      break;
-    } catch (e) {
-      console.warn('[poster] fetch error attempt', attempt + 1, ':', e.message);
-      // Try next key
-      continue;
+  // Abort any still-pending losers
+  controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+
+  if (winner) {
+    // Save to in-memory cache (limit cache size to 500 posters ~50MB)
+    if (cache.size > 500) {
+      const oldest = cache.keys().next().value;
+      cache.delete(oldest);
     }
+    cache.set(cacheKey, { buffer: winner.buffer, ts: Date.now() });
+
+    // Set aggressive caching
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+    res.setHeader('X-Cache', 'MISS');
+    return res.status(200).send(winner.buffer);
   }
 
   // All attempts failed — return 1x1 transparent pixel

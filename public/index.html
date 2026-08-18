@@ -149,13 +149,17 @@
       transition: opacity 0.3s ease;
       z-index: -1;
     }
-    /* Only .tracking (mousedown/touchstart active) triggers the glow.
-       Plain :hover does NOT — cards are completely inert until pressed. */
+    /* Glow + border on hover (desktop only — JS detects mobile and
+       doesn't attach handlers there, so these rules are inert on mobile).
+       Subtle reaction — only border-color change + soft shadow. */
+    .action-card:hover::before,
     .action-card.tracking::before { opacity: 1; }
+    .action-card:hover,
     .action-card.tracking {
       border-color: var(--ios-blue);
-      box-shadow: 0 12px 40px rgba(0,122,255,0.3);
+      box-shadow: 0 8px 28px rgba(0,122,255,0.22);
     }
+    /* .tracking is what JS adds for active mouse-following tilt */
     .action-card:active { transform: perspective(800px) scale(0.94); }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;position:relative;z-index:1;}
@@ -178,10 +182,13 @@
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    /* Hero title holographic glow */
+    /* Hero title holographic glow — base animated layer */
     .hero-title {
       position: relative;
       isolation: isolate;
+      --cursor-x: 50%;
+      --cursor-y: 50%;
+      --cursor-strength: 0;
     }
     .hero-title::after {
       content: '';
@@ -197,6 +204,25 @@
       filter: blur(20px);
       z-index: -1;
       animation: hero-holo 6s ease-in-out infinite alternate;
+    }
+    /* Cursor-following glow layer (PC only — JS adds .cursor-glow class
+       on mousemove over the hero). This sits ON TOP of the base animation
+       and intensifies the glow at the cursor's position. */
+    .hero-title.cursor-glow::before {
+      content: '';
+      position: absolute;
+      inset: -30px -50px;
+      background: radial-gradient(
+        circle at var(--cursor-x) var(--cursor-y),
+        rgba(0,122,255,calc(0.5 * var(--cursor-strength))),
+        rgba(88,86,214,calc(0.35 * var(--cursor-strength))),
+        rgba(255,45,85,calc(0.2 * var(--cursor-strength))),
+        transparent 60%
+      );
+      filter: blur(24px);
+      z-index: -1;
+      pointer-events: none;
+      transition: --cursor-strength 0.3s ease;
     }
     @keyframes hero-holo {
       0% { background: radial-gradient(ellipse at 30% 50%, rgba(0,122,255,0.2), rgba(88,86,214,0.1), transparent 70%); }
@@ -1916,28 +1942,36 @@
     }
     applyTranslations();
 
-    // ====== Action card holographic tracking (cursor + touch) ======
-    // Cards ONLY move when actively PRESSED (mousedown on desktop,
-    // touchstart on mobile). On release, they smoothly settle back to
-    // neutral via CSS spring transition. Plain hover does nothing —
-    // the cards are completely inert until you press them.
+    // ====== Action card holographic tracking (DESKTOP ONLY) ======
+    // Cards ONLY move when:
+    //   - Desktop: cursor hovers DIRECTLY over the card (no press needed)
+    //     Mousemove within card bounds updates tilt + glow.
+    //     Mouseleave → spring back to neutral.
+    //   - Mobile (Telegram Mini App, phones, tablets, any touch device):
+    //     cards are COMPLETELY STATIC. Touch does nothing — no tilt,
+    //     no glow, no tracking. This matches the user's request:
+    //     "remove finger-tracking on mobile".
+    //
+    // Detection: isMobileView() (same helper used for pagination).
     function setupActionCardEffects() {
+      // MOBILE = no effects at all on action cards
+      if (isMobileView()) {
+        return;
+      }
+
       var cards = document.querySelectorAll('.action-card');
       cards.forEach(function(card) {
         var raf = null;
-        var isTracking = false;
-        var isMouseDown = false; // desktop: track whether mouse button is held
 
         function updateFromPoint(clientX, clientY) {
           var rect = card.getBoundingClientRect();
           var x = clientX - rect.left;
           var y = clientY - rect.top;
-          // Clamp to [0, 100] in case touch is slightly outside
           var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
           var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
-          // Tilt: -10 to 10 degrees (subtle, not nauseating)
-          var rx = ((y / rect.height) - 0.5) * -20;
-          var ry = ((x / rect.width) - 0.5) * 20;
+          // Reduced tilt: ±6° instead of ±10° — subtler reaction
+          var rx = ((y / rect.height) - 0.5) * -12;
+          var ry = ((x / rect.width) - 0.5) * 12;
           card.style.setProperty('--mx', px + '%');
           card.style.setProperty('--my', py + '%');
           card.style.setProperty('--rx', rx.toFixed(2) + 'deg');
@@ -1945,94 +1979,100 @@
         }
 
         function startTracking() {
-          if (isTracking) return;
-          isTracking = true;
           card.classList.add('tracking');
         }
-
         function stopTracking() {
-          if (!isTracking) return;
-          isTracking = false;
-          isMouseDown = false;
           card.classList.remove('tracking');
-          // Reset to neutral — CSS handles the spring-back animation
           card.style.setProperty('--mx', '50%');
           card.style.setProperty('--my', '50%');
           card.style.setProperty('--rx', '0deg');
           card.style.setProperty('--ry', '0deg');
         }
 
-        // === Mouse (desktop) — ONLY when mouse button is PRESSED ===
-        // mousedown starts tracking; mousemove only updates if button
-        // is held; mouseup anywhere on the page stops tracking.
-        // This means hovering over a card does NOTHING — user must
-        // click and hold to see the holo effect.
-        card.addEventListener('mousedown', function(e) {
-          // Only left mouse button
-          if (e.button !== 0) return;
-          isMouseDown = true;
+        // Desktop: hover-tracking (no button press needed).
+        // mousemove over the card itself updates position 1:1.
+        card.addEventListener('mouseenter', function(e) {
           startTracking();
           updateFromPoint(e.clientX, e.clientY);
         });
         card.addEventListener('mousemove', function(e) {
-          // Only update if mouse button is held down (user is pressing)
-          if (!isMouseDown) return;
           if (raf) cancelAnimationFrame(raf);
           var x = e.clientX, y = e.clientY;
           raf = requestAnimationFrame(function() {
             updateFromPoint(x, y);
           });
         });
-        // Stop tracking when mouse button is released ANYWHERE on page
-        // (not just on the card — user may drag cursor off card while
-        // holding button, then release)
-        document.addEventListener('mouseup', function() {
-          if (isMouseDown) {
-            stopTracking();
-          }
-        });
-        // If mouse leaves the card while button is held, keep tracking
-        // but clamp position to card edges (handled by updateFromPoint).
-        // If mouse leaves without button held, nothing to clean up.
+        card.addEventListener('mouseleave', stopTracking);
+      });
+    }
 
-        // === Touch (mobile, Telegram Mini App) ===
-        // touchstart = press → start tracking
-        // touchmove = drag → update position (1:1 with finger)
-        // touchend = release → settle back to neutral
-        // touchmove is passive=true so it doesn't block scrolling —
-        // if user is scrolling vertically and finger crosses a card,
-        // the card briefly tracks then releases on touchend.
-        card.addEventListener('touchstart', function(e) {
-          if (e.touches.length !== 1) return;
-          startTracking();
-          updateFromPoint(e.touches[0].clientX, e.touches[0].clientY);
-          // Haptic feedback on first touch
-          if (tg && tg.HapticFeedback) {
-            try { tg.HapticFeedback.impactOccurred('light'); } catch (_) {}
+    // ====== Hero title cursor-following glow (DESKTOP ONLY) ======
+    // On desktop, the Genopoisk hero title glows brighter where the
+    // cursor is. The .cursor-glow class is added on mouseenter over
+    // the hero (or any ancestor), and the --cursor-x/y/--cursor-strength
+    // CSS vars update on mousemove. On mobile: no effect, just the
+    // base animated glow.
+    function setupHeroTitleGlow() {
+      if (isMobileView()) return;
+      var heroTitle = document.querySelector('.hero-title');
+      var hero = document.querySelector('.hero');
+      if (!heroTitle || !hero) return;
+      var raf = null;
+
+      hero.addEventListener('mouseenter', function() {
+        heroTitle.classList.add('cursor-glow');
+        heroTitle.style.setProperty('--cursor-strength', '1');
+      });
+      hero.addEventListener('mousemove', function(e) {
+        if (raf) cancelAnimationFrame(raf);
+        var x = e.clientX, y = e.clientY;
+        raf = requestAnimationFrame(function() {
+          var rect = heroTitle.getBoundingClientRect();
+          // Position relative to hero-title's bounding box
+          var px = ((x - rect.left) / rect.width) * 100;
+          var py = ((y - rect.top) / rect.height) * 100;
+          // Clamp to [-20, 120] so glow extends slightly beyond title
+          px = Math.max(-20, Math.min(120, px));
+          py = Math.max(-20, Math.min(120, py));
+          heroTitle.style.setProperty('--cursor-x', px + '%');
+          heroTitle.style.setProperty('--cursor-y', py + '%');
+          // Strength = 1 when cursor is near the title, fades to 0.3
+          // when cursor is at the edge of the hero section
+          var cx = (rect.left + rect.width / 2);
+          var cy = (rect.top + rect.height / 2);
+          var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+          var maxDist = 400; // pixels
+          var strength = Math.max(0.3, 1 - dist / maxDist);
+          heroTitle.style.setProperty('--cursor-strength', strength.toFixed(2));
+        });
+      });
+      hero.addEventListener('mouseleave', function() {
+        heroTitle.style.setProperty('--cursor-strength', '0');
+        // Keep .cursor-glow class so the fade-out is visible
+        setTimeout(function() {
+          if (heroTitle.style.getPropertyValue('--cursor-strength') === '0') {
+            heroTitle.classList.remove('cursor-glow');
           }
-        }, { passive: true });
-        card.addEventListener('touchmove', function(e) {
-          if (e.touches.length !== 1) return;
-          if (raf) cancelAnimationFrame(raf);
-          var t = e.touches[0];
-          raf = requestAnimationFrame(function() {
-            updateFromPoint(t.clientX, t.clientY);
-          });
-        }, { passive: true });
-        card.addEventListener('touchend', stopTracking);
-        card.addEventListener('touchcancel', stopTracking);
+        }, 400);
       });
     }
 
     // Run after DOM is ready (cards must exist before attaching handlers)
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', setupActionCardEffects);
+      document.addEventListener('DOMContentLoaded', function() {
+        setupActionCardEffects();
+        setupHeroTitleGlow();
+      });
     } else {
       setupActionCardEffects();
+      setupHeroTitleGlow();
     }
     // Also re-run after translations apply (in case cards were re-rendered)
     window.addEventListener('load', function() {
-      setTimeout(setupActionCardEffects, 100);
+      setTimeout(function() {
+        setupActionCardEffects();
+        setupHeroTitleGlow();
+      }, 100);
     });
 
     // Check premium status and show crown badge if premium

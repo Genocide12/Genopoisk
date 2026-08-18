@@ -159,11 +159,30 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'ADMIN_IDS not configured' });
   }
 
+  // Admin panel inline keyboard — added under the commit message so
+  // admin can act on the new commit directly from the notification:
+  //   - 🚀 Redeploy: trigger fresh Vercel deploy from latest main commit
+  //   - 📊 Статистика: open bot admin stats panel
+  //   - 👥 Пользователи: open bot users list
+  //   - 🏠 Главная: open bot main menu
+  // Same callback_data values the bot already handles in webhook.js
+  const adminKeyboard = {
+    inline_keyboard: [
+      [{ text: '🚀 Redeploy', callback_data: 'menu_deploy' }],
+      [
+        { text: '📊 Статистика', callback_data: 'menu_stats' },
+        { text: '👥 Пользователи', callback_data: 'menu_users' }
+      ],
+      [{ text: '🏠 Главная', callback_data: 'menu_main' }]
+    ]
+  };
+
   const results = [];
   for (const adminId of adminIds) {
     try {
       const msg = await sendMessage(Number(adminId), text, {
-        disable_web_page_preview: true
+        disable_web_page_preview: true,
+        reply_markup: adminKeyboard
       });
       results.push({ adminId, ok: true, messageId: msg && msg.message_id });
     } catch (e) {

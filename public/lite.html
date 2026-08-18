@@ -248,21 +248,46 @@
        cursor, the element receives focus and the ring must be visible
        so user knows where focus is. */
     *:focus {
-      outline: 2px solid #007AFF;
-      outline-offset: 2px;
+      outline: 4px solid #007AFF !important;
+      outline-offset: 4px !important;
+      box-shadow: 0 0 0 6px rgba(0, 122, 255, 0.3) !important;
     }
-    /* But don't show outline on the body itself (only on real focusable
-       elements like buttons, links, inputs, [tabindex]) */
-    body:focus { outline: none; }
-    /* Stronger outline for elements with explicit tabindex */
+    body:focus { outline: none !important; box-shadow: none !important; }
     [tabindex]:focus, button:focus, a:focus, input:focus {
-      outline: 3px solid #007AFF;
-      outline-offset: 2px;
+      outline: 5px solid #007AFF !important;
+      outline-offset: 4px !important;
+      box-shadow: 0 0 0 8px rgba(0, 122, 255, 0.4), 0 0 24px rgba(0, 122, 255, 0.6) !important;
     }
 
-    /* ====== Focus-follows-mouse for projector remotes ====== */
-    /* No cursor hiding (doesn't work on old WebView), no two-click pattern.
-       Just a VERY visible focus ring that follows the mouse position. */
+    /* ====== Cursor overlay — big bright ring that follows the mouse ====== */
+    /* On old Android WebView (projectors), cursor: none doesn't work —
+       the system cursor is always visible. Instead of fighting it, we
+       put a BIG BRIGHT RING on top of the cursor position. This ring
+       is much larger and more visible than the small system arrow,
+       so the user's eye is drawn to our ring, not the system cursor.
+       The blue focus ring on the element is the real indicator. */
+    .cursor-overlay {
+      position: fixed;
+      pointer-events: none;
+      z-index: 99999;
+      width: 60px; height: 60px;
+      margin-left: -30px; margin-top: -30px;
+      border-radius: 50%;
+      border: 4px solid #007AFF;
+      background: rgba(0, 122, 255, 0.2);
+      box-shadow: 0 0 20px rgba(0, 122, 255, 0.8), inset 0 0 10px rgba(0, 122, 255, 0.3);
+      transition: transform 0.05s ease-out;
+      display: none;
+    }
+    .cursor-overlay.visible { display: block; }
+    /* Pulse animation to make it even more noticeable */
+    @keyframes cursorPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.8; }
+    }
+    .cursor-overlay.visible {
+      animation: cursorPulse 1.5s ease-in-out infinite;
+    }
 
     /* Lite version badge — small indicator in corner */
     .lite-badge {
@@ -337,6 +362,12 @@
   </style>
 </head>
 <body>
+  <!-- Big bright cursor overlay — covers the small system cursor with
+       a much larger, more visible blue ring. The system cursor is
+       still technically visible underneath, but our ring dominates
+       visually so the user focuses on the blue ring. -->
+  <div class="cursor-overlay" id="cursorOverlay"></div>
+
   <div class="lite-badge" id="liteBadge">
     Lite · <a href="/?device=desktop">полная</a>
     <span class="saved-indicator" id="savedIndicator" style="display:none">✓ проектор</span>
@@ -1063,6 +1094,7 @@
       // No two-click pattern, no stopPropagation, no hidden cursor.
 
       var lastMoveTime = 0;
+      var cursorOverlay = document.getElementById('cursorOverlay');
 
       // Helper: find closest focusable element
       function findClosestFocusable(target) {
@@ -1071,7 +1103,15 @@
       }
 
       document.addEventListener('mousemove', function(e) {
-        // Throttle: only process every 80ms
+        // Move the big cursor overlay to the mouse position — this runs
+        // on EVERY mousemove (no throttle) so the overlay tracks smoothly
+        if (cursorOverlay) {
+          cursorOverlay.style.left = e.clientX + 'px';
+          cursorOverlay.style.top = e.clientY + 'px';
+          cursorOverlay.classList.add('visible');
+        }
+
+        // Throttle focus changes: only process every 80ms
         var now = Date.now();
         if (now - lastMoveTime < 80) return;
         lastMoveTime = now;
@@ -1080,6 +1120,14 @@
         if (target && target !== document.activeElement) {
           try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
         }
+      });
+
+      // Hide overlay when mouse leaves the window
+      document.addEventListener('mouseleave', function() {
+        if (cursorOverlay) cursorOverlay.classList.remove('visible');
+      });
+      document.addEventListener('mouseenter', function() {
+        if (cursorOverlay) cursorOverlay.classList.add('visible');
       });
 
       // On click, make sure the clicked element has focus (for visual ring)

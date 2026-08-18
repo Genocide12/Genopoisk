@@ -293,6 +293,65 @@
       z-index: 50;
     }
     .lite-badge a { color: #007AFF; text-decoration: none; }
+
+    /* ====== On-screen D-pad for projectors without keyboard ====== */
+    .on-screen-dpad {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 180px;
+      height: 180px;
+      z-index: 998;
+      display: none;
+    }
+    .on-screen-dpad.visible { display: block; }
+    .on-screen-dpad .dpad-btn {
+      position: absolute;
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, 0.92);
+      color: #fff;
+      border: 2px solid rgba(0, 122, 255, 0.6);
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .on-screen-dpad .dpad-btn:hover, .on-screen-dpad .dpad-btn:focus-visible {
+      background: rgba(0, 122, 255, 0.3);
+      outline: 2px solid #007AFF;
+      outline-offset: 2px;
+    }
+    .on-screen-dpad .dpad-btn:active { transform: scale(0.92); }
+    .on-screen-dpad .dpad-up    { top: 0; left: 50%; transform: translateX(-50%); }
+    .on-screen-dpad .dpad-down  { bottom: 0; left: 50%; transform: translateX(-50%); }
+    .on-screen-dpad .dpad-left  { left: 0; top: 50%; transform: translateY(-50%); }
+    .on-screen-dpad .dpad-right { right: 0; top: 50%; transform: translateY(-50%); }
+    .on-screen-dpad .dpad-ok {
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 64px; height: 64px;
+      background: rgba(0, 122, 255, 0.85);
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .on-screen-dpad .dpad-toggle {
+      position: absolute;
+      top: -38px; right: 0;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, 0.92);
+      color: #888;
+      border: 1px solid #333;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   </style>
 </head>
 <body>
@@ -372,6 +431,16 @@
   <!-- Fixed bottom CTA -->
   <a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener"
      class="fixed-bottom" id="fixedBottom">🤖 Открыть в Telegram</a>
+
+  <!-- On-screen D-pad for projectors / TVs without keyboard -->
+  <div class="on-screen-dpad" id="onScreenDpad">
+    <button class="dpad-toggle" id="dpadToggle" title="Скрыть D-pad">✕</button>
+    <button class="dpad-btn dpad-up"    data-dir="up"    title="Вверх">▲</button>
+    <button class="dpad-btn dpad-down"  data-dir="down"  title="Вниз">▼</button>
+    <button class="dpad-btn dpad-left"  data-dir="left"  title="Влево">◀</button>
+    <button class="dpad-btn dpad-right" data-dir="right" title="Вправо">▶</button>
+    <button class="dpad-btn dpad-ok"    data-dir="ok"    title="OK / Выбрать">OK</button>
+  </div>
 
   <script>
     // ============================================================
@@ -1032,7 +1101,9 @@
       checkTgLoginBar();
       setupEventListeners();
       setupKeyboardNav();
+      setupOnScreenDpad();
       setupInfiniteScroll();
+      bustServiceWorkerCache();
 
       // Telegram WebApp setup
       if (window.Telegram && window.Telegram.WebApp) {
@@ -1064,6 +1135,113 @@
           }
         }
       }, 500);
+    }
+
+    // ====== On-screen D-pad (for projectors without keyboard) ======
+    // Many Android projectors' remotes emulate a MOUSE, not a keyboard.
+    // For those, we show an on-screen D-pad with clickable buttons that
+    // dispatch synthetic keydown events to reuse setupKeyboardNav() above.
+    function setupOnScreenDpad() {
+      var dpad = document.getElementById('onScreenDpad');
+      var toggle = document.getElementById('dpadToggle');
+      if (!dpad) return;
+
+      // Detect TV/projector
+      function detectTV() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var patterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
+                        'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+                        'aftt', 'aftm', 'bento'];
+        for (var i = 0; i < patterns.length; i++) {
+          if (ua.indexOf(patterns[i]) !== -1) return true;
+        }
+        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        return !hasTouch && window.innerWidth >= 1280;
+      }
+
+      // Check URL params and sessionStorage
+      var urlParams = new URLSearchParams(window.location.search);
+      var dpadParam = urlParams.get('dpad');
+      var dismissed = sessionStorage.getItem('genopoisk_dpad_dismissed');
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+
+      var shouldShow = false;
+      if (dpadParam === '1') shouldShow = true;
+      else if (dpadParam === '0' || dismissed || isInTelegram) shouldShow = false;
+      else shouldShow = detectTV();
+
+      if (shouldShow) {
+        dpad.classList.add('visible');
+      }
+
+      // Close button
+      toggle.addEventListener('click', function() {
+        dpad.classList.remove('visible');
+        sessionStorage.setItem('genopoisk_dpad_dismissed', '1');
+      });
+
+      // Toggle with 'D' key
+      document.addEventListener('keydown', function(e) {
+        if ((e.key === 'd' || e.key === 'D') &&
+            !/INPUT|TEXTAREA/.test((document.activeElement || {}).tagName)) {
+          dpad.classList.toggle('visible');
+        }
+      });
+
+      // Wire up buttons — dispatch synthetic KeyboardEvent
+      var buttons = dpad.querySelectorAll('.dpad-btn');
+      var keyMap = {
+        up: 'ArrowUp', down: 'ArrowDown',
+        left: 'ArrowLeft', right: 'ArrowRight', ok: 'Enter'
+      };
+      buttons.forEach(function(btn) {
+        var keyName = keyMap[btn.dataset.dir];
+        if (!keyName) return;
+        function fire(e) {
+          e.preventDefault();
+          var keyCode = keyName === 'Enter' ? 13 :
+            keyName === 'ArrowUp' ? 38 :
+            keyName === 'ArrowDown' ? 40 :
+            keyName === 'ArrowLeft' ? 37 :
+            keyName === 'ArrowRight' ? 39 : 0;
+          var ev = new KeyboardEvent('keydown', {
+            key: keyName, code: keyName, keyCode: keyCode,
+            bubbles: true, cancelable: true, view: window
+          });
+          document.dispatchEvent(ev);
+        }
+        btn.addEventListener('click', fire);
+        btn.addEventListener('touchend', function(e) { e.preventDefault(); fire(e); });
+      });
+    }
+
+    // ====== Service Worker cache busting ======
+    // Bump SW version detection — if /sw.js version changed since last visit,
+    // unregister all SWs and clear caches so the new code takes over immediately.
+    function bustServiceWorkerCache() {
+      if (!('serviceWorker' in navigator)) return;
+      fetch('/sw.js', { cache: 'no-store' })
+        .then(function(res) { return res.ok ? res.text() : null; })
+        .then(function(text) {
+          if (!text) return;
+          var m = text.match(/CACHE_NAME\s*=\s*['"]([^'"]+)['"]/);
+          if (!m) return;
+          var currentVersion = m[1];
+          var lastSeen = localStorage.getItem('genopoisk_sw_version_seen');
+          if (lastSeen && lastSeen !== currentVersion) {
+            console.log('[sw-bust] SW version changed:', lastSeen, '→', currentVersion);
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(reg) { reg.unregister(); });
+            });
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                names.forEach(function(n) { caches.delete(n); });
+              });
+            }
+          }
+          localStorage.setItem('genopoisk_sw_version_seen', currentVersion);
+        })
+        .catch(function() {});
     }
 
     if (document.readyState === 'loading') {

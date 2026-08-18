@@ -423,6 +423,73 @@
       cursor: pointer;
       flex-shrink: 0;
     }
+
+    /* ====== On-screen D-pad for projectors / TVs (no keyboard) ====== */
+    /* Many Android projectors' remotes emulate a MOUSE, not a keyboard.
+       Their arrow keys move the on-screen cursor — there's no `keydown`
+       event we can intercept. For those devices, we show a fixed on-screen
+       D-pad that the cursor (or finger on touch) can click directly. */
+    .on-screen-dpad {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 180px;
+      height: 180px;
+      z-index: 998;
+      display: none;
+      pointer-events: auto;
+    }
+    .on-screen-dpad.visible { display: block; }
+    .on-screen-dpad .dpad-btn {
+      position: absolute;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, 0.92);
+      color: #fff;
+      border: 2px solid rgba(0, 122, 255, 0.6);
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s, background 0.15s;
+    }
+    .on-screen-dpad .dpad-btn:hover, .on-screen-dpad .dpad-btn:focus-visible {
+      background: rgba(0, 122, 255, 0.3);
+      outline: 2px solid #007AFF;
+      outline-offset: 2px;
+    }
+    .on-screen-dpad .dpad-btn:active { transform: scale(0.92); }
+    .on-screen-dpad .dpad-up    { top: 0; left: 50%; transform: translateX(-50%); }
+    .on-screen-dpad .dpad-down  { bottom: 0; left: 50%; transform: translateX(-50%); }
+    .on-screen-dpad .dpad-left  { left: 0; top: 50%; transform: translateY(-50%); }
+    .on-screen-dpad .dpad-right { right: 0; top: 50%; transform: translateY(-50%); }
+    .on-screen-dpad .dpad-ok {
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 64px; height: 64px;
+      background: rgba(0, 122, 255, 0.85);
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .on-screen-dpad .dpad-toggle {
+      position: absolute;
+      top: -38px;
+      right: 0;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, 0.92);
+      color: #888;
+      border: 1px solid #333;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   </style>
 </head>
 <body>
@@ -524,6 +591,18 @@
     </div>
   </div>
   <div class="longpress-hint" id="longpressHint" data-i18n="longpressHint">💡 Зажмите карточку для информации</div>
+
+  <!-- On-screen D-pad for projectors / TVs without keyboard -->
+  <!-- Shown automatically on TV/projector/large non-touch screens, or toggleable via ?dpad=1 -->
+  <div class="on-screen-dpad" id="onScreenDpad">
+    <button class="dpad-toggle" id="dpadToggle" title="Скрыть D-pad">✕</button>
+    <button class="dpad-btn dpad-up"    data-dir="up"    title="Вверх">▲</button>
+    <button class="dpad-btn dpad-down"  data-dir="down"  title="Вниз">▼</button>
+    <button class="dpad-btn dpad-left"  data-dir="left"  title="Влево">◀</button>
+    <button class="dpad-btn dpad-right" data-dir="right" title="Вправо">▶</button>
+    <button class="dpad-btn dpad-ok"    data-dir="ok"    title="OK / Выбрать">OK</button>
+  </div>
+
   <script>
     // Защита от копирования / инспектора
     // EXCEPT inside the long-press film info popup — there users CAN select
@@ -3081,6 +3160,159 @@
       });
 
       console.log('[dpad-nav] Keyboard navigation enabled');
+    })();
+
+    // ====== On-screen D-pad (for projectors / TVs without keyboard) ======
+    // Many Android projectors' remotes emulate a MOUSE, not a keyboard.
+    // The arrow keys on such remotes move the on-screen cursor instead of
+    // firing `keydown` events. For those devices, we show an on-screen D-pad
+    // that the cursor (or finger on touch) can click directly.
+    //
+    // Visibility rules:
+    //   - Auto-shown on TV/projector/large non-touch screens
+    //   - Force-shown via ?dpad=1 URL param (for testing on desktop)
+    //   - Force-hidden via ?dpad=0 URL param
+    //   - Can be toggled by pressing 'D' key
+    //   - Can be closed via the ✕ button (remembered in sessionStorage)
+    (function setupOnScreenDpad() {
+      var dpad = document.getElementById('onScreenDpad');
+      var toggle = document.getElementById('dpadToggle');
+      if (!dpad) return;
+
+      // Check URL params
+      var urlParams = new URLSearchParams(window.location.search);
+      var dpadParam = urlParams.get('dpad');
+
+      // Check sessionStorage (user dismissed this session)
+      var dismissed = sessionStorage.getItem('genopoisk_dpad_dismissed');
+
+      // Detect TV/projector (same logic as lite-banner)
+      function detectTV() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var patterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
+                        'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+                        'aftt', 'aftm', 'bento'];
+        for (var i = 0; i < patterns.length; i++) {
+          if (ua.indexOf(patterns[i]) !== -1) return true;
+        }
+        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        return !hasTouch && window.innerWidth >= 1280;
+      }
+
+      var shouldShow = false;
+      if (dpadParam === '1') shouldShow = true;
+      else if (dpadParam === '0') shouldShow = false;
+      else if (dismissed) shouldShow = false;
+      else shouldShow = detectTV();
+
+      // Don't show inside Telegram Mini App
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram) shouldShow = false;
+
+      if (shouldShow) {
+        dpad.classList.add('visible');
+        console.log('[on-screen-dpad] Shown (TV/projector detected or ?dpad=1)');
+      }
+
+      // Close button
+      toggle.addEventListener('click', function() {
+        dpad.classList.remove('visible');
+        sessionStorage.setItem('genopoisk_dpad_dismissed', '1');
+      });
+
+      // Toggle with 'D' key (for desktop testing)
+      document.addEventListener('keydown', function(e) {
+        if ((e.key === 'd' || e.key === 'D') && !/INPUT|TEXTAREA/.test((document.activeElement || {}).tagName)) {
+          dpad.classList.toggle('visible');
+        }
+      });
+
+      // D-pad button clicks → simulate keyboard arrow / Enter
+      // We dispatch a real KeyboardEvent so all existing keydown handlers
+      // (setupDpadNav above) fire normally. This means both physical
+      // keyboard AND on-screen D-pad use the same code path.
+      var buttons = dpad.querySelectorAll('.dpad-btn');
+      buttons.forEach(function(btn) {
+        var dir = btn.dataset.dir;
+        var keyName;
+        switch (dir) {
+          case 'up':    keyName = 'ArrowUp';    break;
+          case 'down':  keyName = 'ArrowDown';  break;
+          case 'left':  keyName = 'ArrowLeft';  break;
+          case 'right': keyName = 'ArrowRight'; break;
+          case 'ok':    keyName = 'Enter';      break;
+          default: return;
+        }
+        function fire(event) {
+          event.preventDefault();
+          // Find currently focused element, or document.body
+          var target = document.activeElement || document.body;
+          // Dispatch a synthetic KeyboardEvent on document so the setupDpadNav
+          // handler picks it up. We use bubbling so any handler attached to
+          // document or window will receive it.
+          var syntheticEvent = new KeyboardEvent('keydown', {
+            key: keyName,
+            code: keyName,
+            keyCode: keyName === 'Enter' ? 13 : (
+              keyName === 'ArrowUp' ? 38 :
+              keyName === 'ArrowDown' ? 40 :
+              keyName === 'ArrowLeft' ? 37 :
+              keyName === 'ArrowRight' ? 39 : 0
+            ),
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+          document.dispatchEvent(syntheticEvent);
+        }
+        // Click = fire once (mouse)
+        btn.addEventListener('click', fire);
+        // Touch = fire once (mobile / some projectors with touch)
+        btn.addEventListener('touchend', function(e) {
+          e.preventDefault();
+          fire(e);
+        });
+      });
+    })();
+
+    // ====== Service Worker cache busting ======
+    // The old SW (v1, v2) cached index.html. After we update to v3+,
+    // users on the old SW keep getting the stale index.html from cache.
+    // This code forces the SW to skip caching for the next navigation
+    // and unregisters any old SW so the new one takes over immediately.
+    (function bustServiceWorkerCache() {
+      if (!('serviceWorker' in navigator)) return;
+
+      // Read the current SW version from /sw.js (network, not cache)
+      fetch('/sw.js', { cache: 'no-store' })
+        .then(function(res) {
+          if (!res.ok) return null;
+          return res.text();
+        })
+        .then(function(text) {
+          if (!text) return;
+          // Extract CACHE_NAME
+          var m = text.match(/CACHE_NAME\s*=\s*['"]([^'"]+)['"]/);
+          if (!m) return;
+          var currentVersion = m[1];
+          // Check what version we last saw
+          var lastSeen = localStorage.getItem('genopoisk_sw_version_seen');
+          if (lastSeen && lastSeen !== currentVersion) {
+            // Version changed — unregister all SWs to force fresh start
+            console.log('[sw-bust] SW version changed:', lastSeen, '→', currentVersion, '— unregistering');
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(reg) { reg.unregister(); });
+            });
+            // Clear all caches too
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                names.forEach(function(n) { caches.delete(n); });
+              });
+            }
+          }
+          localStorage.setItem('genopoisk_sw_version_seen', currentVersion);
+        })
+        .catch(function() {});
     })();
   </script>
 </body>

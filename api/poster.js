@@ -82,11 +82,9 @@ module.exports = async (req, res) => {
     return res.status(200).send(cached.buffer);
   }
 
-  // ====== Multi-threaded parallel key racing ======
-  // Same strategy as kinopoisk.js: fire N=3 requests in parallel with
-  // different keys, take first successful (Promise.any), abort losers.
-  // Dramatically speeds up poster loading and reduces 403 errors.
-  const PARALLEL_KEYS = Math.min(3, Math.max(1, API_KEYS.length));
+  // ====== Multi-threaded parallel key racing with fallback ======
+  // Same strategy as kinopoisk.js: race 3 keys in parallel, fall back to
+  // remaining 3 keys if first batch fails. Reduces poster load failures.
   const REQUEST_TIMEOUT_MS = 6000;
 
   // Realistic browser headers — bot-like UA gets 403 from Cloudflare.
@@ -101,50 +99,66 @@ module.exports = async (req, res) => {
     'Sec-Fetch-Site': 'cross-site'
   };
 
-  // Pick N keys round-robin
-  const raceKeys = [];
-  for (let i = 0; i < PARALLEL_KEYS; i++) {
-    if (API_KEYS.length > 0) {
-      raceKeys.push(API_KEYS[(nextKeyIdx + i) % API_KEYS.length]);
+  // Helper: race a batch of keys, return first successful or null on all-fail
+  async function raceBatch(keys) {
+    if (keys.length === 0) return null;
+    const controllers = keys.map(() => new AbortController());
+    const promises = keys.map((apiKey, idx) => {
+      const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
+      const ctrl = controllers[idx];
+      const timeoutId = setTimeout(() => {
+        try { ctrl.abort(); } catch (_) {}
+      }, REQUEST_TIMEOUT_MS);
+
+      return fetch(upstreamUrl, {
+        headers,
+        redirect: 'follow',
+        signal: ctrl.signal
+      }).then(async (upstream) => {
+        clearTimeout(timeoutId);
+        if (!upstream.ok) {
+          throw new Error(`Key ${apiKey.slice(0, 6)} HTTP ${upstream.status}`);
+        }
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        return { buffer, winnerIdx: idx };
+      }).catch((e) => {
+        clearTimeout(timeoutId);
+        throw e;
+      });
+    });
+
+    try {
+      const w = await Promise.any(promises);
+      controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+      return w;
+    } catch (aggErr) {
+      controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+      console.warn('[poster] Batch failed for', filmId, ':',
+        (aggErr.errors || []).map(e => e.message).join(' | '));
+      return null;
     }
   }
-  nextKeyIdx = (nextKeyIdx + PARALLEL_KEYS) % Math.max(1, API_KEYS.length);
 
-  const controllers = raceKeys.map(() => new AbortController());
-  const racePromises = raceKeys.map((apiKey, idx) => {
-    const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
-    const ctrl = controllers[idx];
-    const timeoutId = setTimeout(() => {
-      try { ctrl.abort(); } catch (_) {}
-    }, REQUEST_TIMEOUT_MS);
-
-    return fetch(upstreamUrl, {
-      headers,
-      redirect: 'follow',
-      signal: ctrl.signal
-    }).then(async (upstream) => {
-      clearTimeout(timeoutId);
-      if (!upstream.ok) {
-        throw new Error(`Key ${apiKey.slice(0, 6)} HTTP ${upstream.status}`);
-      }
-      const buffer = Buffer.from(await upstream.arrayBuffer());
-      return { buffer, winnerIdx: idx };
-    }).catch((e) => {
-      clearTimeout(timeoutId);
-      throw e;
-    });
-  });
-
-  let winner = null;
-  try {
-    winner = await Promise.any(racePromises);
-  } catch (aggErr) {
-    console.error('[poster] All parallel keys failed for', filmId,
-      ':', (aggErr.errors || []).map(e => e.message).join(' | '));
+  // First batch: pick 3 keys round-robin
+  const firstBatch = [];
+  for (let i = 0; i < Math.min(3, API_KEYS.length); i++) {
+    if (API_KEYS.length > 0) {
+      firstBatch.push(API_KEYS[(nextKeyIdx + i) % API_KEYS.length]);
+    }
   }
+  nextKeyIdx = (nextKeyIdx + firstBatch.length) % Math.max(1, API_KEYS.length);
 
-  // Abort any still-pending losers
-  controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+  let winner = await raceBatch(firstBatch);
+
+  // Fallback: if first batch failed, try remaining keys
+  if (!winner && API_KEYS.length > firstBatch.length) {
+    const usedSet = new Set(firstBatch);
+    const remainingKeys = API_KEYS.filter(k => !usedSet.has(k));
+    if (remainingKeys.length > 0) {
+      console.warn('[poster] First batch failed for', filmId, ', trying', remainingKeys.length, 'remaining keys');
+      winner = await raceBatch(remainingKeys.slice(0, 3));
+    }
+  }
 
   if (winner) {
     // Save to in-memory cache (limit cache size to 500 posters ~50MB)

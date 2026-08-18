@@ -141,20 +141,16 @@ module.exports = async (req, res) => {
     return res.status(200).json(cached.data);
   }
 
-  // ====== Multi-threaded parallel key racing ======
-  // Fire up to N=3 API requests in PARALLEL with different keys, take the
-  // FIRST successful response (Promise.any) and abort the losers.
-  // This dramatically reduces 403 errors (only one needs to succeed) and
-  // cuts latency (slowest of 3 ≈ same as before, fastest wins).
+  // ====== Multi-threaded parallel key racing with fallback ======
+  // First batch: race 3 keys in parallel via Promise.any.
+  // If ALL 3 fail → fall back to second batch with the remaining keys.
+  // This handles both failure modes:
+  //   - 429 (rate-limit): different keys have independent quotas, so
+  //     remaining keys likely still work
+  //   - 403 (IP block): all keys share the same Vercel egress IP, so
+  //     second batch may also fail — but at least we tried
   //
-  // Why this works: even though all parallel requests come from the same
-  // Vercel egress IP, they hit Kinopoisk's edge with different API keys,
-  // and Cloudflare's per-key rate limit is independent. If one key is
-  // rate-limited (429/402), the others likely aren't.
-  //
-  // Per-request timeout: 6s. If a key hangs (network issue), we don't
-  // wait — Promise.any returns as soon as one resolves.
-  const PARALLEL_KEYS = Math.min(3, API_KEYS.length);
+  // Per-request timeout: 6s. Promise.any returns as soon as one resolves.
   const REQUEST_TIMEOUT_MS = 6000;
 
   // Realistic browser headers — Kinopoisk's edge (Cloudflare) returns 403
@@ -169,13 +165,69 @@ module.exports = async (req, res) => {
     'Origin': 'https://kinopoisk.ru'
   };
 
-  // Pick N available keys (round-robin, skipping exhausted)
-  const raceKeys = [];
-  for (let i = 0; i < PARALLEL_KEYS; i++) {
-    const k = pickNextAvailableKey();
-    if (k) raceKeys.push(k);
+  // Helper: race a batch of keys, return first successful or null on all-fail
+  async function raceBatch(keys) {
+    if (keys.length === 0) return null;
+    const controllers = keys.map(() => new AbortController());
+    const promises = keys.map((apiKey, idx) => {
+      const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
+      const ctrl = controllers[idx];
+      const timeoutId = setTimeout(() => {
+        try { ctrl.abort(); } catch (_) {}
+      }, REQUEST_TIMEOUT_MS);
+
+      return fetch(targetUrl, {
+        headers,
+        signal: ctrl.signal
+      }).then(async (upstream) => {
+        clearTimeout(timeoutId);
+
+        // Rate-limited or payment required → mark key exhausted, throw
+        if (isExhaustionStatus(upstream.status)) {
+          const body = await upstream.text();
+          console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${body.slice(0, 200)}`);
+          markKeyExhausted(apiKey);
+          throw new Error(`Key ${apiKey.slice(0, 8)} exhausted (${upstream.status})`);
+        }
+
+        if (!upstream.ok) {
+          const text = await upstream.text();
+          console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
+          if (upstream.status === 403) {
+            throw new Error(`Key ${apiKey.slice(0, 8)} IP blocked (403)`);
+          }
+          throw new Error(`Key ${apiKey.slice(0, 8)} HTTP ${upstream.status}`);
+        }
+
+        const data = await upstream.json();
+        return { data, winnerIdx: idx, key: apiKey };
+      }).catch((e) => {
+        clearTimeout(timeoutId);
+        throw e;
+      });
+    });
+
+    try {
+      const w = await Promise.any(promises);
+      // Abort any still-pending losers
+      controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+      return w;
+    } catch (aggErr) {
+      // All promises in this batch rejected
+      controllers.forEach(c => { try { c.abort(); } catch (_) {} });
+      console.warn('[kinopoisk] Batch failed:',
+        (aggErr.errors || []).map(e => e.message).join(' | '));
+      return null;
+    }
   }
-  if (raceKeys.length === 0) {
+
+  // First batch: pick 3 available keys (round-robin, skipping exhausted)
+  const firstBatch = [];
+  for (let i = 0; i < Math.min(3, API_KEYS.length); i++) {
+    const k = pickNextAvailableKey();
+    if (k) firstBatch.push(k);
+  }
+  if (firstBatch.length === 0) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.status(429).json({
       error: 'All API keys exhausted',
@@ -183,62 +235,17 @@ module.exports = async (req, res) => {
     });
   }
 
-  // Build per-key fetch promises with abort + timeout
-  const controllers = raceKeys.map(() => new AbortController());
-  const racePromises = raceKeys.map((apiKey, idx) => {
-    const headers = Object.assign({}, BROWSER_HEADERS, { 'X-API-KEY': apiKey });
-    const ctrl = controllers[idx];
-    // Timeout abort
-    const timeoutId = setTimeout(() => {
-      try { ctrl.abort(); } catch (_) {}
-    }, REQUEST_TIMEOUT_MS);
+  let winner = await raceBatch(firstBatch);
 
-    return fetch(targetUrl, {
-      headers,
-      signal: ctrl.signal
-    }).then(async (upstream) => {
-      clearTimeout(timeoutId);
-
-      // Rate-limited or payment required → mark key exhausted, throw
-      if (isExhaustionStatus(upstream.status)) {
-        const body = await upstream.text();
-        console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${body.slice(0, 200)}`);
-        markKeyExhausted(apiKey);
-        throw new Error(`Key ${apiKey.slice(0, 8)} exhausted (${upstream.status})`);
-      }
-
-      if (!upstream.ok) {
-        const text = await upstream.text();
-        console.warn(`[kinopoisk] Key ${apiKey.slice(0, 8)}... got ${upstream.status}: ${text.slice(0, 200)}`);
-        // 403 — IP blocked; don't mark key exhausted (key is fine)
-        if (upstream.status === 403) {
-          throw new Error(`Key ${apiKey.slice(0, 8)} IP blocked (403)`);
-        }
-        // Other errors (404, 500) — throw, let other keys try
-        throw new Error(`Key ${apiKey.slice(0, 8)} HTTP ${upstream.status}`);
-      }
-
-      const data = await upstream.json();
-      return { data, winnerIdx: idx, key: apiKey };
-    }).catch((e) => {
-      clearTimeout(timeoutId);
-      throw e;
-    });
-  });
-
-  let winner = null;
-  let lastError = null;
-  try {
-    winner = await Promise.any(racePromises);
-  } catch (aggErr) {
-    // Promise.any rejects with AggregateError when ALL promises reject
-    lastError = aggErr;
-    console.error('[kinopoisk] All parallel keys failed:',
-      (aggErr.errors || []).map(e => e.message).join(' | '));
+  // Fallback: if first batch failed, try the remaining keys
+  if (!winner) {
+    const usedSet = new Set(firstBatch);
+    const remainingKeys = API_KEYS.filter(k => !usedSet.has(k) && !exhaustedKeys.has(k));
+    if (remainingKeys.length > 0) {
+      console.warn('[kinopoisk] First batch of ' + firstBatch.length + ' keys failed, trying ' + remainingKeys.length + ' remaining keys as fallback');
+      winner = await raceBatch(remainingKeys.slice(0, 3));
+    }
   }
-
-  // Abort any still-pending losers (Promise.any already resolved or all failed)
-  controllers.forEach(c => { try { c.abort(); } catch (_) {} });
 
   if (!winner) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -246,7 +253,7 @@ module.exports = async (req, res) => {
       error: 'Kinopoisk API unavailable',
       message: 'Попробуйте позже — все ключи вернули ошибку. ' +
                'Возможно, Кинопоиск заблокировал IP — отключите VPN или попробуйте через минуту.',
-      tried: raceKeys.length,
+      tried: API_KEYS.length,
       total: API_KEYS.length
     });
   }

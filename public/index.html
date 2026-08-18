@@ -149,9 +149,9 @@
       transition: opacity 0.3s ease;
       z-index: -1;
     }
-    .action-card:hover::before,
+    /* Only .tracking (mousedown/touchstart active) triggers the glow.
+       Plain :hover does NOT — cards are completely inert until pressed. */
     .action-card.tracking::before { opacity: 1; }
-    .action-card:hover,
     .action-card.tracking {
       border-color: var(--ios-blue);
       box-shadow: 0 12px 40px rgba(0,122,255,0.3);
@@ -1917,14 +1917,16 @@
     applyTranslations();
 
     // ====== Action card holographic tracking (cursor + touch) ======
-    // Cards ONLY move when touched (no entrance animation on page load).
-    // On release, they smoothly settle back to neutral via CSS spring
-    // transition (cubic-bezier with overshoot).
+    // Cards ONLY move when actively PRESSED (mousedown on desktop,
+    // touchstart on mobile). On release, they smoothly settle back to
+    // neutral via CSS spring transition. Plain hover does nothing —
+    // the cards are completely inert until you press them.
     function setupActionCardEffects() {
       var cards = document.querySelectorAll('.action-card');
       cards.forEach(function(card) {
         var raf = null;
         var isTracking = false;
+        var isMouseDown = false; // desktop: track whether mouse button is held
 
         function updateFromPoint(clientX, clientY) {
           var rect = card.getBoundingClientRect();
@@ -1933,7 +1935,7 @@
           // Clamp to [0, 100] in case touch is slightly outside
           var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
           var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
-          // Tilt: -12 to 12 degrees (subtle, not nauseating)
+          // Tilt: -10 to 10 degrees (subtle, not nauseating)
           var rx = ((y / rect.height) - 0.5) * -20;
           var ry = ((x / rect.width) - 0.5) * 20;
           card.style.setProperty('--mx', px + '%');
@@ -1951,6 +1953,7 @@
         function stopTracking() {
           if (!isTracking) return;
           isTracking = false;
+          isMouseDown = false;
           card.classList.remove('tracking');
           // Reset to neutral — CSS handles the spring-back animation
           card.style.setProperty('--mx', '50%');
@@ -1959,28 +1962,46 @@
           card.style.setProperty('--ry', '0deg');
         }
 
-        // === Mouse (desktop) ===
-        card.addEventListener('mousemove', function(e) {
+        // === Mouse (desktop) — ONLY when mouse button is PRESSED ===
+        // mousedown starts tracking; mousemove only updates if button
+        // is held; mouseup anywhere on the page stops tracking.
+        // This means hovering over a card does NOTHING — user must
+        // click and hold to see the holo effect.
+        card.addEventListener('mousedown', function(e) {
+          // Only left mouse button
+          if (e.button !== 0) return;
+          isMouseDown = true;
           startTracking();
+          updateFromPoint(e.clientX, e.clientY);
+        });
+        card.addEventListener('mousemove', function(e) {
+          // Only update if mouse button is held down (user is pressing)
+          if (!isMouseDown) return;
           if (raf) cancelAnimationFrame(raf);
           var x = e.clientX, y = e.clientY;
           raf = requestAnimationFrame(function() {
             updateFromPoint(x, y);
           });
         });
-        card.addEventListener('mouseenter', function(e) {
-          startTracking();
-          updateFromPoint(e.clientX, e.clientY);
+        // Stop tracking when mouse button is released ANYWHERE on page
+        // (not just on the card — user may drag cursor off card while
+        // holding button, then release)
+        document.addEventListener('mouseup', function() {
+          if (isMouseDown) {
+            stopTracking();
+          }
         });
-        card.addEventListener('mouseleave', stopTracking);
+        // If mouse leaves the card while button is held, keep tracking
+        // but clamp position to card edges (handled by updateFromPoint).
+        // If mouse leaves without button held, nothing to clean up.
 
         // === Touch (mobile, Telegram Mini App) ===
-        // touchstart → start tracking + initial position
-        // touchmove → update position (1:1 with finger)
-        // touchend → settle back to neutral
-        // touchmove is passive=true so it doesn't block scrolling — but we
-        // only track the FIRST touch, and the card effect is purely visual
-        // (no preventDefault), so scrolling still works.
+        // touchstart = press → start tracking
+        // touchmove = drag → update position (1:1 with finger)
+        // touchend = release → settle back to neutral
+        // touchmove is passive=true so it doesn't block scrolling —
+        // if user is scrolling vertically and finger crosses a card,
+        // the card briefly tracks then releases on touchend.
         card.addEventListener('touchstart', function(e) {
           if (e.touches.length !== 1) return;
           startTracking();

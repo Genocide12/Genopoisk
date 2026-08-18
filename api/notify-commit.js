@@ -93,7 +93,7 @@ module.exports = async (req, res) => {
       const path = escapeHtml(f.path);
       const a = f.additions || 0;
       const d = f.deletions || 0;
-      return '  <code>' + path + '</code>  <font color="#34c759">+' + a + '</font> <font color="#ff453a">-' + d + '</font>';
+      return '  <code>' + path + '</code>  <b>+' + a + '</b> <i>-' + d + '</i>';
     }).join('\n');
     if (sorted.length > 10) {
       filesBlock += '\n  <i>…и ещё ' + (sorted.length - 10) + ' файл(ов)</i>';
@@ -111,8 +111,8 @@ module.exports = async (req, res) => {
     '📝 ' + escapeHtml(message) + '\n' +
     '🔢 SHA: <code>' + sha + '</code>\n' +
     '📊 Файлов: <b>' + totalFiles + '</b>  ' +
-    '<font color="#34c759">+' + totalAdd + '</font> ' +
-    '<font color="#ff453a">-' + totalDel + '</font>\n';
+    '+<b>' + totalAdd + '</b> ' +
+    '-<i>' + totalDel + '</i>\n';
 
   if (filesBlock) {
     text += '\n<b>Изменения:</b>\n' + filesBlock + '\n';

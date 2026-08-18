@@ -34,38 +34,6 @@
     }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px 100px; }
 
-    /* Telegram login bar */
-    .tg-login-bar {
-      display: none;
-      background: linear-gradient(135deg, #229ED9 0%, #2AABEE 100%);
-      color: #fff;
-      padding: 12px 16px;
-      border-radius: 12px;
-      margin-bottom: 16px;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .tg-login-bar.visible { display: flex; }
-    .tg-login-bar a {
-      color: #fff;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 15px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .tg-login-bar .close-btn {
-      background: rgba(255,255,255,0.2);
-      border: none;
-      color: #fff;
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
     /* Hero */
     .hero { text-align: center; padding: 20px 0 16px; }
     .hero-title {
@@ -78,6 +46,17 @@
       -webkit-text-fill-color: transparent;
       cursor: pointer;
       user-select: none;
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      outline-offset: 4px;
+    }
+    .hero-title:focus-visible {
+      outline: 3px solid #007AFF;
+      background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .hero-subtitle {
       color: #888;
@@ -257,22 +236,6 @@
     }
     .premium-badge.visible { display: inline; }
 
-    /* Fixed bottom bar */
-    .fixed-bottom {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: #007AFF;
-      color: #fff;
-      text-align: center;
-      padding: 14px 20px;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 15px;
-      z-index: 100;
-      display: none;
-    }
-    .fixed-bottom.visible { display: block; }
-
     /* D-pad focus ring — visible only when navigating with keyboard */
     .dpad-focused {
       outline: 3px solid #007AFF !important;
@@ -293,80 +256,15 @@
       z-index: 50;
     }
     .lite-badge a { color: #007AFF; text-decoration: none; }
-
-    /* ====== On-screen D-pad for projectors without keyboard ====== */
-    .on-screen-dpad {
-      position: fixed;
-      right: 20px;
-      bottom: 20px;
-      width: 180px;
-      height: 180px;
-      z-index: 998;
-      display: none;
-    }
-    .on-screen-dpad.visible { display: block; }
-    .on-screen-dpad .dpad-btn {
-      position: absolute;
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      background: rgba(20, 20, 20, 0.92);
-      color: #fff;
-      border: 2px solid rgba(0, 122, 255, 0.6);
-      font-size: 24px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .on-screen-dpad .dpad-btn:hover, .on-screen-dpad .dpad-btn:focus-visible {
-      background: rgba(0, 122, 255, 0.3);
-      outline: 2px solid #007AFF;
-      outline-offset: 2px;
-    }
-    .on-screen-dpad .dpad-btn:active { transform: scale(0.92); }
-    .on-screen-dpad .dpad-up    { top: 0; left: 50%; transform: translateX(-50%); }
-    .on-screen-dpad .dpad-down  { bottom: 0; left: 50%; transform: translateX(-50%); }
-    .on-screen-dpad .dpad-left  { left: 0; top: 50%; transform: translateY(-50%); }
-    .on-screen-dpad .dpad-right { right: 0; top: 50%; transform: translateY(-50%); }
-    .on-screen-dpad .dpad-ok {
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 64px; height: 64px;
-      background: rgba(0, 122, 255, 0.85);
-      font-weight: 700;
-      font-size: 14px;
-    }
-    .on-screen-dpad .dpad-toggle {
-      position: absolute;
-      top: -38px; right: 0;
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      background: rgba(20, 20, 20, 0.92);
-      color: #888;
-      border: 1px solid #333;
-      font-size: 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
   </style>
 </head>
 <body>
   <div class="lite-badge">Lite · <a href="/">полная</a></div>
 
   <div class="container">
-    <!-- Telegram login bar -->
-    <div class="tg-login-bar" id="tgLoginBar">
-      <a href="/api/auth/telegram/login" id="tgLoginBtn">🤖 Войти через Telegram</a>
-      <button class="close-btn" id="tgLoginBarClose" title="Скрыть">✕</button>
-    </div>
-
     <!-- Hero -->
     <div class="hero">
-      <h1 class="hero-title" id="heroTitle">
+      <h1 class="hero-title" id="heroTitle" tabindex="0">
         <span class="premium-badge" id="premiumBadge">🔥</span>Genopoisk
       </h1>
       <p class="hero-subtitle" id="heroSubtitle"></p>
@@ -428,20 +326,6 @@
     </div>
   </div>
 
-  <!-- Fixed bottom CTA -->
-  <a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener"
-     class="fixed-bottom" id="fixedBottom">🤖 Открыть в Telegram</a>
-
-  <!-- On-screen D-pad for projectors / TVs without keyboard -->
-  <div class="on-screen-dpad" id="onScreenDpad">
-    <button class="dpad-toggle" id="dpadToggle" title="Скрыть D-pad">✕</button>
-    <button class="dpad-btn dpad-up"    data-dir="up"    title="Вверх">▲</button>
-    <button class="dpad-btn dpad-down"  data-dir="down"  title="Вниз">▼</button>
-    <button class="dpad-btn dpad-left"  data-dir="left"  title="Влево">◀</button>
-    <button class="dpad-btn dpad-right" data-dir="right" title="Вправо">▶</button>
-    <button class="dpad-btn dpad-ok"    data-dir="ok"    title="OK / Выбрать">OK</button>
-  </div>
-
   <script>
     // ============================================================
     // Genopoisk Lite — main JS
@@ -463,9 +347,9 @@
     var heroTitle = document.getElementById('heroTitle');
     var heroSubtitle = document.getElementById('heroSubtitle');
     var premiumBadge = document.getElementById('premiumBadge');
-    var tgLoginBar = document.getElementById('tgLoginBar');
-    var tgLoginBarClose = document.getElementById('tgLoginBarClose');
-    var fixedBottom = document.getElementById('fixedBottom');
+    // Note: tgLoginBar and fixedBottom Telegram CTAs were removed from lite
+    // version — projectors don't need them. User can still log in via the
+    // main site (lite-badge → "полная") if needed.
 
     var currentCategory = null;
     var currentPage = 1;
@@ -838,29 +722,10 @@
       } catch (e) {}
     }
 
-    // ====== Telegram login bar ======
-    function checkTgLoginBar() {
-      var tgId = localStorage.getItem('genopoisk_tg_user_id');
-      var dismissed = sessionStorage.getItem('genopoisk_tg_login_dismissed');
-      var isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
-      if (isMiniApp || dismissed) {
-        tgLoginBar.classList.remove('visible');
-        return;
-      }
-      if (tgId) {
-        // Logged in — change content to "Open in Telegram"
-        tgLoginBar.innerHTML =
-          '<a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener">🤖 Открыть в Telegram</a>' +
-          '<button class="close-btn" id="tgLoginBarClose" title="Скрыть">✕</button>';
-        document.getElementById('tgLoginBarClose').onclick = function() {
-          sessionStorage.setItem('genopoisk_tg_login_dismissed', '1');
-          tgLoginBar.classList.remove('visible');
-        };
-      }
-      tgLoginBar.classList.add('visible');
-    }
-
-    // Parse URL params from OIDC callback (?telegram_login=success&tg_id=...&tg_name=...)
+    // ====== Telegram login redirect handler (URL params from OIDC callback) ======
+    // We still parse the redirect params to save the user ID in localStorage,
+    // so the user is "logged in" for tracking purposes — but we no longer
+    // show any Telegram UI on lite.html itself.
     function handleTgLoginRedirect() {
       var params = new URLSearchParams(window.location.search);
       if (params.get('telegram_login') === 'success') {
@@ -879,10 +744,13 @@
 
     // ====== D-pad navigation (for projectors / TV remotes / keyboards) ======
     // Listen for arrow keys, Enter, Escape, Backspace.
-    // Maintain a list of focusable elements: action cards, film cards, search input.
+    // Maintain a list of focusable elements in DOM order:
+    //   hero-title → search-input → action-cards → film-cards
+    // This way pressing ArrowDown from hero-title naturally lands on search,
+    // then on categories, then on films — exactly what user described.
     function refreshFocusableList() {
       focusableElements = Array.from(document.querySelectorAll(
-        '.action-card, .film-card, .resume-card, .search-input, .search-clear, #tgLoginBtn'
+        '.hero-title, .action-card, .film-card, .resume-card, .search-input, .search-clear'
       )).filter(function(el) {
         return el.offsetParent !== null; // visible
       });
@@ -939,12 +807,15 @@
 
     function setupKeyboardNav() {
       document.addEventListener('keydown', function(e) {
-        // Don't intercept if user is typing in search and not pressing arrow keys
-        // that would move focus out of the input
+        // If user is typing in search input — only intercept Escape (to blur)
+        // and Enter (to blur/done). Arrows move the text cursor as usual.
         if (e.target === searchInput) {
           if (e.key === 'Escape') {
             searchInput.blur();
             e.preventDefault();
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            searchInput.blur();
           }
           return;
         }
@@ -955,31 +826,44 @@
           case 'ArrowDown':  target = findNearestFocusable('down');  break;
           case 'ArrowLeft':  target = findNearestFocusable('left');  break;
           case 'ArrowRight': target = findNearestFocusable('right'); break;
+          case 'Enter':
+          case ' ':
+            // Click the currently focused element (button, card, hero-title)
+            var active = document.activeElement;
+            if (active && typeof active.click === 'function' && active !== document.body) {
+              e.preventDefault();
+              active.click();
+            }
+            return;
           case 'Escape':
           case 'Backspace':
-            // Back button on Android TV remote usually sends Backspace or Escape
-            // If on a film card, scroll to top; if at top, go back to categories
+            // Back button on Android TV remote usually sends Backspace or Escape.
+            // If on a film card or in a category — return to categories view.
             if (currentCategory || filmGrid.children.length > 0) {
               currentCategory = null;
               clearFilms();
               content.classList.add('hidden');
-              var firstCard = actions.querySelector('.action-card');
-              if (firstCard) firstCard.focus();
-              // Remove active highlight
               var cards = actions.querySelectorAll('.action-card');
               cards.forEach(function(c) { c.classList.remove('active'); });
+              // Focus first category card
+              var firstCard = actions.querySelector('.action-card');
+              if (firstCard) firstCard.focus();
               e.preventDefault();
+            } else {
+              // Already at categories — focus the hero title (top of page)
+              if (heroTitle) {
+                heroTitle.focus();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                e.preventDefault();
+              }
             }
-            return;
-          case 'Enter':
-            // Let native click fire on focused element
             return;
           default:
             return;
         }
         if (target) {
           target.focus();
-          target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          try { target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
           e.preventDefault();
         }
       });
@@ -1081,12 +965,6 @@
         localStorage.setItem('genopoisk_theme', next);
         applyTheme(next);
       });
-
-      // Telegram login bar close (initial state)
-      tgLoginBarClose.addEventListener('click', function() {
-        sessionStorage.setItem('genopoisk_tg_login_dismissed', '1');
-        tgLoginBar.classList.remove('visible');
-      });
     }
 
     function applyTheme(theme) {
@@ -1098,10 +976,8 @@
     function init() {
       handleTgLoginRedirect();
       applyTheme(localStorage.getItem('genopoisk_theme') || 'dark');
-      checkTgLoginBar();
       setupEventListeners();
       setupKeyboardNav();
-      setupOnScreenDpad();
       setupInfiniteScroll();
       bustServiceWorkerCache();
 
@@ -1116,103 +992,19 @@
       loadResumeCard();
       checkPremiumStatus();
 
-      // Show fixed bottom CTA only on mobile phones (small touch screens).
-      // Projectors / TVs / desktops never see it — it just clutters the screen
-      // and gets in the way of D-pad navigation.
-      var isMobilePhone = ('ontouchstart' in window) && window.innerWidth < 768;
-      if (isMobilePhone) {
-        fixedBottom.classList.add('visible');
-      }
-
-      // Auto-focus first category for D-pad users
+      // Auto-focus the hero title on page load — this is the entry point
+      // for D-pad navigation. User presses ArrowDown to move to search input,
+      // ArrowDown again to move to category cards.
+      // Skipped inside Telegram Mini App (would pop keyboard on mobile) and
+      // on touch devices (no D-pad).
       setTimeout(function() {
-        var firstCard = actions.querySelector('.action-card');
-        if (firstCard && !window.Telegram) {
-          // Don't auto-focus inside Telegram Mini App (would pop keyboard on mobile)
-          // but DO auto-focus on projector/TV (no touch, has keyboard/remote)
-          if (!('ontouchstart' in window)) {
-            firstCard.focus();
-          }
-        }
-      }, 500);
-    }
-
-    // ====== On-screen D-pad (for projectors without keyboard) ======
-    // Many Android projectors' remotes emulate a MOUSE, not a keyboard.
-    // For those, we show an on-screen D-pad with clickable buttons that
-    // dispatch synthetic keydown events to reuse setupKeyboardNav() above.
-    function setupOnScreenDpad() {
-      var dpad = document.getElementById('onScreenDpad');
-      var toggle = document.getElementById('dpadToggle');
-      if (!dpad) return;
-
-      // Detect TV/projector
-      function detectTV() {
-        var ua = (navigator.userAgent || '').toLowerCase();
-        var patterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
-                        'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
-                        'aftt', 'aftm', 'bento'];
-        for (var i = 0; i < patterns.length; i++) {
-          if (ua.indexOf(patterns[i]) !== -1) return true;
-        }
+        var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
         var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        return !hasTouch && window.innerWidth >= 1280;
-      }
-
-      // Check URL params and sessionStorage
-      var urlParams = new URLSearchParams(window.location.search);
-      var dpadParam = urlParams.get('dpad');
-      var dismissed = sessionStorage.getItem('genopoisk_dpad_dismissed');
-      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
-
-      var shouldShow = false;
-      if (dpadParam === '1') shouldShow = true;
-      else if (dpadParam === '0' || dismissed || isInTelegram) shouldShow = false;
-      else shouldShow = detectTV();
-
-      if (shouldShow) {
-        dpad.classList.add('visible');
-      }
-
-      // Close button
-      toggle.addEventListener('click', function() {
-        dpad.classList.remove('visible');
-        sessionStorage.setItem('genopoisk_dpad_dismissed', '1');
-      });
-
-      // Toggle with 'D' key
-      document.addEventListener('keydown', function(e) {
-        if ((e.key === 'd' || e.key === 'D') &&
-            !/INPUT|TEXTAREA/.test((document.activeElement || {}).tagName)) {
-          dpad.classList.toggle('visible');
+        if (!isInTelegram && !hasTouch && heroTitle) {
+          heroTitle.focus();
+          console.log('[lite] Auto-focused hero title for D-pad navigation');
         }
-      });
-
-      // Wire up buttons — dispatch synthetic KeyboardEvent
-      var buttons = dpad.querySelectorAll('.dpad-btn');
-      var keyMap = {
-        up: 'ArrowUp', down: 'ArrowDown',
-        left: 'ArrowLeft', right: 'ArrowRight', ok: 'Enter'
-      };
-      buttons.forEach(function(btn) {
-        var keyName = keyMap[btn.dataset.dir];
-        if (!keyName) return;
-        function fire(e) {
-          e.preventDefault();
-          var keyCode = keyName === 'Enter' ? 13 :
-            keyName === 'ArrowUp' ? 38 :
-            keyName === 'ArrowDown' ? 40 :
-            keyName === 'ArrowLeft' ? 37 :
-            keyName === 'ArrowRight' ? 39 : 0;
-          var ev = new KeyboardEvent('keydown', {
-            key: keyName, code: keyName, keyCode: keyCode,
-            bubbles: true, cancelable: true, view: window
-          });
-          document.dispatchEvent(ev);
-        }
-        btn.addEventListener('click', fire);
-        btn.addEventListener('touchend', function(e) { e.preventDefault(); fire(e); });
-      });
+      }, 600);
     }
 
     // ====== Service Worker cache busting ======

@@ -511,11 +511,11 @@
         <button id="tgLoginBarClose" title="Скрыть" style="background:rgba(255,255,255,0.15);border:none;color:var(--text-primary);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;-webkit-tap-highlight-color:transparent;">✕</button>
       </div>
     </div>
-    <!-- Lite version banner — shown on TV / projector / large non-touch screens -->
+    <!-- Lite version banner — shown when user manually returns from lite (?from=lite) -->
     <div class="lite-banner" id="liteBanner">
       <div class="lite-text">
         <span class="lite-icon">📺</span>
-        <span>Обнаружено TV/проектор — <b>Lite-версия</b> работает быстрее и поддерживает пульт</span>
+        <span>Вы на полной версии сайта. Для проектора/TV рекомендуется <b>Lite-версия</b></span>
       </div>
       <a href="/lite.html" class="lite-link">Открыть Lite →</a>
       <button class="lite-close" id="liteBannerClose" title="Скрыть">✕</button>
@@ -738,12 +738,18 @@
       var isTVDevice = (function() {
         var ua = (navigator.userAgent || '').toLowerCase();
         var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
-                          'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv'];
+                          'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+                          'aftt', 'aftm', 'bento'];
         for (var i = 0; i < tvPatterns.length; i++) {
           if (ua.indexOf(tvPatterns[i]) !== -1) return true;
         }
+        // Android tablet-like with large screen + no real touch = projector
+        var isAndroid = ua.indexOf('android') !== -1;
+        var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
+        if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
+        // Very large screen + no touch (projector / 4K TV)
         var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        return !hasTouch && window.innerWidth >= 1280;
+        return !hasTouch && window.innerWidth >= 1920;
       })();
       if (fixedBtn) {
         if (isInTelegram || isTVDevice) {
@@ -2941,56 +2947,116 @@
     //
     // Banner is dismissible — dismissal stored in sessionStorage so it
     // doesn't pop back up on every page load.
-    (function setupLiteBanner() {
-      // Don't show inside Telegram Mini App (already lightweight, has its own UI)
+    // ====== TV/projector detection + auto-redirect to lite.html ======
+    // Detection heuristics (more comprehensive than before):
+    //   1. UA contains known TV/projector keywords (TV, SmartTV, Bravia,
+    //      WebOS, Tizen, HbbTV, Roku, FireTV, AFTT, AFTM, Bento, projector)
+    //   2. Android tablet-like device with LARGE screen (>= 1024px) AND
+    //      no Multi-touch API support — many Android projectors report
+    //      themselves as "Android Tablet" in UA but have a large display
+    //      and no real touch input (only remote control via mouse emulation)
+    //   3. No touch support AND viewport >= 1280px (desktop-like HTPC)
+    //   4. userAgentData.formFactors contains TV/Large (Chromium 134+)
+    //
+    // Behavior:
+    //   - If detected AND not inside Telegram Mini App AND not already
+    //     dismissed this session → AUTO-REDIRECT to /lite.html
+    //   - If user came back from lite (URL has ?from=lite or ?full=1) →
+    //     don't redirect, just show a small "open lite" banner instead
+    //   - Dismissal is per-session (sessionStorage)
+    (function setupLiteAutoRedirect() {
+      // Don't run inside Telegram Mini App
       if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) return;
-      // Don't show if dismissed this session
-      if (sessionStorage.getItem('genopoisk_lite_banner_dismissed')) return;
+
+      // Check URL params — user might have requested full version explicitly
+      var urlParams = new URLSearchParams(window.location.search);
+      var forceFull = urlParams.get('full') === '1' || urlParams.get('from') === 'lite';
+
+      // Check sessionStorage — user dismissed lite redirect this session
+      var dismissed = sessionStorage.getItem('genopoisk_lite_dismissed');
 
       var ua = (navigator.userAgent || '').toLowerCase();
       var uaData = navigator.userAgentData || {};
       var isTV = false;
+      var detectionReason = '';
 
-      // Check 1: known TV/projector UA strings
+      // Check 1: known TV/projector UA keywords
       var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
                         'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
-                        'aftt', 'aftm', 'bento'];
+                        'aftt', 'aftm', 'bento', 'googletv'];
       for (var i = 0; i < tvPatterns.length; i++) {
-        if (ua.indexOf(tvPatterns[i]) !== -1) { isTV = true; break; }
-      }
-
-      // Check 2: large screen + no touch
-      var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-      var isLargeScreen = window.innerWidth >= 1280;
-      if (!isTV && !hasTouch && isLargeScreen) {
-        // Could also be a desktop PC — but desktop users can dismiss it.
-        // The banner is non-intrusive (top of page, dismissible).
-        isTV = true;
-      }
-
-      // Check 3: userAgentData.formFactors (Chromium 134+)
-      if (!isTV && uaData.formFactors) {
-        var ff = uaData.formFactors.map(function(f) { return String(f).toLowerCase(); });
-        if (ff.some(function(f) { return f.indexOf('tv') !== -1 || f.indexOf('large') !== -1; })) {
+        if (ua.indexOf(tvPatterns[i]) !== -1) {
           isTV = true;
+          detectionReason = 'UA keyword: ' + tvPatterns[i];
+          break;
         }
       }
 
+      // Check 2: Android (tablet-like) with large screen + no real touch
+      // Many Android projectors identify as Android tablets in UA but
+      // have a 100"+ display and only a remote (no real touch input).
+      // Heuristics: UA contains "android", viewport >= 1024px, AND
+      // maxTouchPoints === 0 (no multi-touch hardware).
+      if (!isTV) {
+        var isAndroid = ua.indexOf('android') !== -1;
+        var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
+        var isLargeEnough = window.innerWidth >= 1024;
+        if (isAndroid && isLargeEnough && !hasRealTouch) {
+          isTV = true;
+          detectionReason = 'Android + large screen + no touch (' + window.innerWidth + 'px)';
+        }
+      }
+
+      // Check 3: any device with no touch + VERY large screen (>= 1920px)
+      // Only triggers on really big screens — typical desktop monitors are
+      // 1280-1920px and shouldn't be redirected. Projectors and 4K TVs
+      // are usually >= 1920px.
+      if (!isTV) {
+        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        var isVeryLarge = window.innerWidth >= 1920;
+        if (!hasTouch && isVeryLarge) {
+          isTV = true;
+          detectionReason = 'No touch + very large screen (' + window.innerWidth + 'px)';
+        }
+      }
+
+      // Check 4: userAgentData.formFactors (Chromium 134+)
+      if (!isTV && uaData.formFactors) {
+        var ff = uaData.formFactors.map(function(f) { return String(f).toLowerCase(); });
+        if (ff.some(function(f) { return f.indexOf('tv') !== -1; })) {
+          isTV = true;
+          detectionReason = 'formFactor: TV';
+        }
+      }
+
+      console.log('[lite-redirect] isTV=' + isTV + ', reason=' + detectionReason +
+                  ', forceFull=' + forceFull + ', dismissed=' + !!dismissed +
+                  ', UA=' + navigator.userAgent);
+
       if (!isTV) return;
 
-      // Show banner
-      var banner = document.getElementById('liteBanner');
-      var closeBtn = document.getElementById('liteBannerClose');
-      if (banner) {
-        banner.classList.add('visible');
+      // If user explicitly asked for full version OR dismissed lite this
+      // session — just show the banner (don't auto-redirect)
+      if (forceFull || dismissed) {
+        var banner = document.getElementById('liteBanner');
+        var closeBtn = document.getElementById('liteBannerClose');
+        if (banner) banner.classList.add('visible');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function() {
+            banner.classList.remove('visible');
+            sessionStorage.setItem('genopoisk_lite_dismissed', '1');
+          });
+        }
+        return;
       }
-      if (closeBtn) {
-        closeBtn.addEventListener('click', function() {
-          banner.classList.remove('visible');
-          sessionStorage.setItem('genopoisk_lite_banner_dismissed', '1');
-        });
+
+      // Auto-redirect to lite.html
+      console.log('[lite-redirect] Redirecting to /lite.html...');
+      try {
+        window.location.replace('/lite.html');
+      } catch (e) {
+        window.location.href = '/lite.html';
       }
-      console.log('[lite-banner] TV/projector detected — banner shown. UA:', navigator.userAgent);
     })();
 
     // ====== D-pad / keyboard navigation for TV / projector / desktop ======
@@ -3186,7 +3252,7 @@
       // Check sessionStorage (user dismissed this session)
       var dismissed = sessionStorage.getItem('genopoisk_dpad_dismissed');
 
-      // Detect TV/projector (same logic as lite-banner)
+      // Detect TV/projector (same logic as auto-redirect)
       function detectTV() {
         var ua = (navigator.userAgent || '').toLowerCase();
         var patterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
@@ -3195,8 +3261,13 @@
         for (var i = 0; i < patterns.length; i++) {
           if (ua.indexOf(patterns[i]) !== -1) return true;
         }
+        // Android tablet-like with large screen + no real touch
+        var isAndroid = ua.indexOf('android') !== -1;
+        var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
+        if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
+        // Very large screen + no touch (projector / 4K TV)
         var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        return !hasTouch && window.innerWidth >= 1280;
+        return !hasTouch && window.innerWidth >= 1920;
       }
 
       var shouldShow = false;

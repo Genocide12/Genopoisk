@@ -159,21 +159,39 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'ADMIN_IDS not configured' });
   }
 
-  // Admin panel inline keyboard — added under the commit message so
-  // admin can act on the new commit directly from the notification:
-  //   - 🚀 Redeploy: trigger fresh Vercel deploy from latest main commit
-  //   - 📊 Статистика: open bot admin stats panel
-  //   - 👥 Пользователи: open bot users list
-  //   - 🏠 Главная: open bot main menu
-  // Same callback_data values the bot already handles in webhook.js
+  // Full admin panel inline keyboard — matches mainMenuKeyboard() in
+  // webhook.js exactly so the notification has the same buttons the
+  // admin sees when opening the bot:
+  //   Row 1: 📊 Статистика | 👥 Пользователи
+  //   Row 2: 📀 Мои фильмы | 🚀 Деплой
+  //   Row 3: ❤️ Коллекция | 📢 Уведомление
+  //   Row 4: 🔍 Найти фильм (switch_inline_query_current_chat)
+  //   Row 5: 🧹 Очистить статистику | ❓ Помощь
+  //   Row 6: ⭐ Купить Premium (5 звёзд)
+  //   Row 7: 🐛 Debug (с консолью) — web_app button to debug-index.html
+  const siteUrl = (process.env.SITE_URL || 'https://genopoisk.vercel.app').replace(/\/$/, '');
+  const debugUrl = siteUrl + '/debug-index.html';
   const adminKeyboard = {
     inline_keyboard: [
-      [{ text: '🚀 Redeploy', callback_data: 'menu_deploy' }],
       [
         { text: '📊 Статистика', callback_data: 'menu_stats' },
         { text: '👥 Пользователи', callback_data: 'menu_users' }
       ],
-      [{ text: '🏠 Главная', callback_data: 'menu_main' }]
+      [
+        { text: '📀 Мои фильмы', callback_data: 'menu_myfilms' },
+        { text: '🚀 Деплой', callback_data: 'menu_deploy' }
+      ],
+      [
+        { text: '❤️ Коллекция', callback_data: 'menu_favorites' },
+        { text: '📢 Уведомление', callback_data: 'menu_broadcast' }
+      ],
+      [{ text: '🔍 Найти фильм', switch_inline_query_current_chat: '' }],
+      [
+        { text: '🧹 Очистить статистику', callback_data: 'menu_clear' },
+        { text: '❓ Помощь', callback_data: 'menu_help' }
+      ],
+      [{ text: '⭐ Купить Premium (5 звёзд)', callback_data: 'menu_buy_premium' }],
+      [{ text: '🐛 Debug (с консолью)', web_app: { url: debugUrl } }]
     ]
   };
 

@@ -51,7 +51,7 @@
       border-radius: 12px;
       outline-offset: 4px;
     }
-    .hero-title:focus-visible {
+    .hero-title:focus, .hero-title:focus-visible {
       outline: 3px solid #007AFF;
       background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
       -webkit-background-clip: text;
@@ -78,7 +78,7 @@
       cursor: pointer;
     }
     .resume-card.visible { display: flex; }
-    .resume-card:focus-visible {
+    .resume-card:focus, .resume-card:focus-visible {
       outline: 2px solid #007AFF;
       outline-offset: 2px;
     }
@@ -138,7 +138,7 @@
       user-select: none;
     }
     .action-card:hover { background: #1a1a1a; }
-    .action-card:focus-visible {
+    .action-card:focus, .action-card:focus-visible {
       outline: 2px solid #007AFF;
       outline-offset: 2px;
     }
@@ -183,7 +183,7 @@
       position: relative;
       transition: transform 0.15s;
     }
-    .film-card:focus-visible {
+    .film-card:focus, .film-card:focus-visible {
       outline: 2px solid #007AFF;
       outline-offset: 2px;
     }
@@ -239,6 +239,24 @@
     /* D-pad focus ring — visible only when navigating with keyboard */
     .dpad-focused {
       outline: 3px solid #007AFF !important;
+      outline-offset: 2px;
+    }
+
+    /* Global focus ring — visible on ALL focused elements (not just
+       :focus-visible). This is essential for projector remotes that
+       emulate a mouse: when user clicks an element with the remote
+       cursor, the element receives focus and the ring must be visible
+       so user knows where focus is. */
+    *:focus {
+      outline: 2px solid #007AFF;
+      outline-offset: 2px;
+    }
+    /* But don't show outline on the body itself (only on real focusable
+       elements like buttons, links, inputs, [tabindex]) */
+    body:focus { outline: none; }
+    /* Stronger outline for elements with explicit tabindex */
+    [tabindex]:focus, button:focus, a:focus, input:focus {
+      outline: 3px solid #007AFF;
       outline-offset: 2px;
     }
 
@@ -875,6 +893,31 @@
     }
 
     function setupKeyboardNav() {
+      // Track whether focus was changed by mouse click or keyboard.
+      // This helps us decide whether to show focus ring on the next
+      // keyboard interaction.
+      var lastInputWasMouse = false;
+
+      // On any mousedown, mark that input was via mouse
+      document.addEventListener('mousedown', function(e) {
+        lastInputWasMouse = true;
+        // Find closest focusable element to the click target
+        var target = e.target.closest('button, a, input, [tabindex], .action-card, .film-card, .hero-title, .resume-card');
+        if (target) {
+          // Force focus on the clicked element — this makes the focus
+          // ring visible so user knows where they are
+          setTimeout(function() {
+            try { target.focus({ preventScroll: false }); } catch (_) { target.focus(); }
+            try { target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+          }, 0);
+        }
+      });
+
+      // On any keydown, mark that input was via keyboard
+      document.addEventListener('keydown', function(e) {
+        lastInputWasMouse = false;
+      });
+
       document.addEventListener('keydown', function(e) {
         // If user is typing in search input — only intercept Escape (to blur)
         // and Enter (to blur/done). Arrows move the text cursor as usual.
@@ -890,6 +933,18 @@
         }
 
         var target = null;
+        // Also handle Tab key — find next focusable element in DOM order
+        if (e.key === 'Tab') {
+          // Let Tab work naturally, but scroll the focused element into view
+          setTimeout(function() {
+            var active = document.activeElement;
+            if (active && active !== document.body) {
+              try { active.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+            }
+          }, 0);
+          return;
+        }
+
         switch (e.key) {
           case 'ArrowUp':    target = findNearestFocusable('up');    break;
           case 'ArrowDown':  target = findNearestFocusable('down');  break;
@@ -936,6 +991,20 @@
           e.preventDefault();
         }
       });
+
+      // ALSO: when an element receives focus (by any means — mouse click,
+      // keyboard tab, programmatic focus), make sure it's scrolled into view.
+      // This handles the projector remote case where user clicks somewhere
+      // off-screen and we need to scroll to show the focused element.
+      document.addEventListener('focus', function(e) {
+        var target = e.target;
+        if (target && target !== document.body && target.scrollIntoView) {
+          // Use setTimeout to avoid jank during the focus change
+          setTimeout(function() {
+            try { target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+          }, 50);
+        }
+      }, true);  // capture phase — fires before bubble
     }
 
     // ====== Infinite scroll (lazy load more pages) ======
@@ -1025,15 +1094,34 @@
         sessionStorage.setItem('genopoisk_resume_dismissed', '1');
       });
 
-      // Hero title click — cycle themes (kept for parity, but no glow effect)
+      // Hero title click — cycle themes + show toast feedback
       heroTitle.addEventListener('click', function() {
         var themes = ['dark', 'light', 'night'];
+        var labels = { dark: '🌙 Тёмная', light: '☀️ Светлая', night: '🌌 Ночная' };
         var current = localStorage.getItem('genopoisk_theme') || 'dark';
         var idx = themes.indexOf(current);
         var next = themes[(idx + 1) % themes.length];
         localStorage.setItem('genopoisk_theme', next);
         applyTheme(next);
+        // Visual feedback so user knows the click was registered
+        showToast(labels[next] || next, 1500);
       });
+    }
+
+    // Simple toast notification (creates element on demand)
+    var toastTimer = null;
+    function showToast(text, duration) {
+      var existing = document.getElementById('liteToast');
+      if (existing) existing.remove();
+      var toast = document.createElement('div');
+      toast.id = 'liteToast';
+      toast.textContent = text;
+      toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:#fff;padding:10px 20px;border-radius:22px;font-size:14px;z-index:9999;pointer-events:none;transition:opacity 0.2s;box-shadow:0 4px 16px rgba(0,0,0,0.4)';
+      document.body.appendChild(toast);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, duration || 2000);
     }
 
     function applyTheme(theme) {
@@ -1136,18 +1224,19 @@
       checkPremiumStatus();
 
       // Auto-focus the hero title on page load — this is the entry point
-      // for D-pad navigation. User presses ArrowDown to move to search input,
-      // ArrowDown again to move to category cards.
-      // Skipped inside Telegram Mini App (would pop keyboard on mobile) and
-      // on touch devices (no D-pad).
+      // for navigation. User can then:
+      //   - Press Tab (or Arrow Down) to move to search
+      //   - Click anywhere with mouse (projector remote cursor) — clicked
+      //     element receives focus, visible ring shows where focus is
+      // We always auto-focus on lite.html (it's specifically for projectors
+      // and TVs). The visible focus ring is essential for non-touch devices.
       setTimeout(function() {
         var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
-        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        if (!isInTelegram && !hasTouch && heroTitle) {
+        if (!isInTelegram && heroTitle) {
           heroTitle.focus();
-          console.log('[lite] Auto-focused hero title for D-pad navigation');
+          console.log('[lite] Auto-focused hero title');
         }
-      }, 600);
+      }, 400);
     }
 
     // ====== Service Worker cache busting ======

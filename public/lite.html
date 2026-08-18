@@ -260,6 +260,35 @@
       outline-offset: 2px;
     }
 
+    /* ====== Hide system cursor + auto-focus on mousemove ====== */
+    /* Projector remotes move a system cursor — but we want the user to
+       see the BLUE FOCUS RING, not the cursor. So we:
+       1. Hide the system cursor (cursor: none)
+       2. On mousemove, find the nearest focusable element and focus it
+       3. The blue ring follows the cursor automatically
+       User clicks OK on remote = mouse click = activates focused element. */
+    body.cursor-hidden {
+      cursor: none !important;
+    }
+    body.cursor-hidden * {
+      cursor: none !important;
+    }
+    /* Custom pointer — small dot that shows where the system cursor is,
+       so user has a fallback if focus doesn't catch up */
+    .focus-cursor {
+      position: fixed;
+      width: 24px; height: 24px;
+      border: 2px solid #007AFF;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 99999;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.15s;
+      opacity: 0;
+      background: rgba(0, 122, 255, 0.15);
+    }
+    .focus-cursor.visible { opacity: 1; }
+
     /* Lite version badge — small indicator in corner */
     .lite-badge {
       position: fixed;
@@ -333,6 +362,11 @@
   </style>
 </head>
 <body>
+  <!-- Custom focus cursor — replaces the system cursor on projectors.
+       Shows a blue ring at the cursor position, and the actual focus
+       ring is on the nearest focusable element. -->
+  <div class="focus-cursor" id="focusCursor"></div>
+
   <div class="lite-badge" id="liteBadge">
     Lite · <a href="/?device=desktop">полная</a>
     <span class="saved-indicator" id="savedIndicator" style="display:none">✓ проектор</span>
@@ -1007,6 +1041,133 @@
       }, true);  // capture phase — fires before bubble
     }
 
+    // ====== Cursor-as-focus navigation (for projector remotes) ======
+    // On Android projectors, the remote emulates a MOUSE — arrow keys on
+    // the remote move the system cursor on screen, not keydown events.
+    // To make navigation feel like a TV (where arrows move focus):
+    //
+    //   1. Hide the system cursor (body.cursor-hidden, cursor: none)
+    //   2. Show a small blue ring (.focus-cursor) at the cursor position
+    //   3. On mousemove, find the nearest focusable element and focus it
+    //   4. The blue focus ring appears on that element
+    //   5. When user clicks OK on the remote = mouse click = activates
+    //      the focused element
+    //
+    // This way the user sees the blue ring moving between elements as
+    // they move the remote — same UX as a TV, but using the mouse protocol
+    // that the projector remote speaks.
+    function setupCursorNav() {
+      var cursorEl = document.getElementById('focusCursor');
+      if (!cursorEl) return;
+
+      // Detect if this is likely a projector/TV (no real touch OR saved
+      // as projector). On real touch devices (phones/tablets), don't
+      // hide the cursor — users need it for touch input.
+      var savedDevice = '';
+      try { savedDevice = localStorage.getItem('genopoisk_device_type') || ''; } catch (_) {}
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram) return;
+
+      var ua = (navigator.userAgent || '').toLowerCase();
+      var isAndroid = ua.indexOf('android') !== -1;
+      var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+      // Show cursor-nav mode if:
+      //   - User explicitly saved device as projector, OR
+      //   - Android device with large screen (likely projector), OR
+      //   - Any non-touch device (desktop, TV, projector)
+      var shouldEnable = (savedDevice === 'projector') ||
+                         (isAndroid && window.innerWidth >= 800) ||
+                         (!hasTouch);
+
+      // Also allow forcing via URL param ?cursor=1 or ?cursor=0
+      var urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('cursor') === '1') shouldEnable = true;
+      if (urlParams.get('cursor') === '0') shouldEnable = false;
+
+      if (!shouldEnable) {
+        console.log('[cursor-nav] Disabled (touch device or not projector)');
+        return;
+      }
+
+      // Enable cursor-hidden mode
+      document.body.classList.add('cursor-hidden');
+      console.log('[cursor-nav] Enabled — system cursor hidden, focus follows mouse');
+
+      // Throttle mousemove to avoid excessive focus calls
+      var lastMoveTime = 0;
+      var lastFocusEl = null;
+
+      document.addEventListener('mousemove', function(e) {
+        // Move the custom cursor ring to the mouse position
+        cursorEl.style.left = e.clientX + 'px';
+        cursorEl.style.top = e.clientY + 'px';
+        cursorEl.classList.add('visible');
+
+        // Throttle: only process focus changes every 50ms
+        var now = Date.now();
+        if (now - lastMoveTime < 50) return;
+        lastMoveTime = now;
+
+        // Find the nearest focusable element to the cursor position
+        var focusables = Array.from(document.querySelectorAll(
+          '.hero-title, .action-card, .film-card, .resume-card, .search-input, .search-clear, button, a[href], [tabindex]'
+        )).filter(function(el) {
+          // Skip hidden elements
+          if (el.offsetParent === null && el !== document.activeElement) return false;
+          // Skip elements with tabindex="-1" (explicitly not focusable)
+          if (el.getAttribute('tabindex') === '-1') return false;
+          return true;
+        });
+
+        if (focusables.length === 0) return;
+
+        var bestEl = null;
+        var bestDist = Infinity;
+        for (var i = 0; i < focusables.length; i++) {
+          var el = focusables[i];
+          var r = el.getBoundingClientRect();
+          // Check if cursor is INSIDE this element — if yes, focus it immediately
+          if (e.clientX >= r.left && e.clientX <= r.right &&
+              e.clientY >= r.top && e.clientY <= r.bottom) {
+            bestEl = el;
+            bestDist = 0;
+            break;
+          }
+          // Otherwise, find the nearest by center distance
+          var cx = r.left + r.width / 2;
+          var cy = r.top + r.height / 2;
+          var dx = cx - e.clientX;
+          var dy = cy - e.clientY;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestEl = el;
+          }
+        }
+
+        // Only focus if it's a different element (avoid re-focusing same one)
+        if (bestEl && bestEl !== lastFocusEl && bestEl !== document.activeElement) {
+          lastFocusEl = bestEl;
+          try { bestEl.focus({ preventScroll: true }); } catch (_) { bestEl.focus(); }
+        }
+      });
+
+      // Hide custom cursor when mouse leaves the window
+      document.addEventListener('mouseleave', function() {
+        cursorEl.classList.remove('visible');
+      });
+
+      // On click, also make sure the focused element is activated
+      // (mousedown already handles this, but add click as backup)
+      document.addEventListener('click', function(e) {
+        var target = e.target.closest('button, a, input, [tabindex], .action-card, .film-card, .hero-title, .resume-card');
+        if (target && target !== document.activeElement) {
+          try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+        }
+      }, true);
+    }
+
     // ====== Infinite scroll (lazy load more pages) ======
     function setupInfiniteScroll() {
       var scrollTimeout;
@@ -1208,6 +1369,7 @@
       applyTheme(localStorage.getItem('genopoisk_theme') || 'dark');
       setupEventListeners();
       setupKeyboardNav();
+      setupCursorNav();
       setupInfiniteScroll();
       setupProjectorPrompt();
       bustServiceWorkerCache();

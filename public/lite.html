@@ -263,15 +263,26 @@
     /* ====== Hide system cursor + auto-focus on mousemove ====== */
     /* Projector remotes move a system cursor — but we want the user to
        see the BLUE FOCUS RING, not the cursor. So we:
-       1. Hide the system cursor (cursor: none)
+       1. Hide the system cursor using a transparent image (cursor: none
+          doesn't work on old Android WebView, so we use a 1x1 transparent
+          GIF as fallback)
        2. On mousemove, find the nearest focusable element and focus it
        3. The blue ring follows the cursor automatically
        User clicks OK on remote = mouse click = activates focused element. */
-    body.cursor-hidden {
-      cursor: none !important;
-    }
-    body.cursor-hidden * {
-      cursor: none !important;
+
+    /* Transparent 1x1 GIF — makes cursor invisible even on browsers
+       that don't support cursor:none */
+    body.cursor-hidden,
+    body.cursor-hidden *,
+    body.cursor-hidden a,
+    body.cursor-hidden button,
+    body.cursor-hidden input,
+    body.cursor-hidden [tabindex],
+    body.cursor-hidden .action-card,
+    body.cursor-hidden .film-card,
+    body.cursor-hidden .hero-title,
+    body.cursor-hidden .resume-card {
+      cursor: url('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="transparent"/></svg>'), none !important;
     }
     /* Custom pointer — small dot that shows where the system cursor is,
        so user has a fallback if focus doesn't catch up */
@@ -288,6 +299,17 @@
       background: rgba(0, 122, 255, 0.15);
     }
     .focus-cursor.visible { opacity: 1; }
+
+    /* Selected element — green ring, ready to activate on next click.
+       Blue ring = focused (cursor is over it)
+       Green ring = selected (press OK again to activate) */
+    .cursor-selected,
+    .cursor-selected:focus,
+    .cursor-selected:focus-visible {
+      outline: 4px solid #34C759 !important;
+      outline-offset: 3px !important;
+      box-shadow: 0 0 16px rgba(52, 199, 89, 0.5) !important;
+    }
 
     /* Lite version badge — small indicator in corner */
     .lite-badge {
@@ -1092,80 +1114,161 @@
 
       // Enable cursor-hidden mode
       document.body.classList.add('cursor-hidden');
-      console.log('[cursor-nav] Enabled — system cursor hidden, focus follows mouse');
+      console.log('[cursor-nav] Enabled — system cursor hidden, Tab-style navigation');
 
-      // Throttle mousemove to avoid excessive focus calls
+      // ====== Tab-style navigation ======
+      // The projector remote moves a system cursor. We hide the cursor
+      // and implement Tab-style behavior:
+      //
+      //   - On mousemove: focus the element under the cursor (highlight it)
+      //   - On click (OK button on remote):
+      //     * If the clicked element is NOT yet focused → just focus it
+      //       (like Tab — moves selection, doesn't activate)
+      //     * If the clicked element IS already focused → activate it
+      //       (like pressing Enter — confirms the selection)
+      //
+      // This gives the user a predictable pattern:
+      //   1. Move cursor to element → it gets highlighted (blue ring)
+      //   2. Press OK once → element is "selected" (ring gets thicker/green)
+      //   3. Press OK again → element is activated (click fires)
+      //
+      // The visual difference between "focused" and "selected" is the
+      // ring color: blue = focused, green = selected (ready to activate).
+
+      // Track the currently "selected" element (ready to activate on next click)
+      var selectedEl = null;
+
+      // Helper: find closest focusable element
+      function findClosestFocusable(target) {
+        if (!target || !target.closest) return null;
+        return target.closest('button, a, input, [tabindex], .action-card, .film-card, .hero-title, .resume-card');
+      }
+
+      // Helper: mark an element as "selected" (green ring)
+      function markSelected(el) {
+        // Clear previous selection
+        if (selectedEl) {
+          selectedEl.classList.remove('cursor-selected');
+        }
+        selectedEl = el;
+        if (el) {
+          el.classList.add('cursor-selected');
+        }
+      }
+
+      // Throttle mousemove
       var lastMoveTime = 0;
-      var lastFocusEl = null;
 
       document.addEventListener('mousemove', function(e) {
         // Move the custom cursor ring to the mouse position
-        cursorEl.style.left = e.clientX + 'px';
-        cursorEl.style.top = e.clientY + 'px';
-        cursorEl.classList.add('visible');
-
-        // Throttle: only process focus changes every 50ms
-        var now = Date.now();
-        if (now - lastMoveTime < 50) return;
-        lastMoveTime = now;
-
-        // Find the nearest focusable element to the cursor position
-        var focusables = Array.from(document.querySelectorAll(
-          '.hero-title, .action-card, .film-card, .resume-card, .search-input, .search-clear, button, a[href], [tabindex]'
-        )).filter(function(el) {
-          // Skip hidden elements
-          if (el.offsetParent === null && el !== document.activeElement) return false;
-          // Skip elements with tabindex="-1" (explicitly not focusable)
-          if (el.getAttribute('tabindex') === '-1') return false;
-          return true;
-        });
-
-        if (focusables.length === 0) return;
-
-        var bestEl = null;
-        var bestDist = Infinity;
-        for (var i = 0; i < focusables.length; i++) {
-          var el = focusables[i];
-          var r = el.getBoundingClientRect();
-          // Check if cursor is INSIDE this element — if yes, focus it immediately
-          if (e.clientX >= r.left && e.clientX <= r.right &&
-              e.clientY >= r.top && e.clientY <= r.bottom) {
-            bestEl = el;
-            bestDist = 0;
-            break;
-          }
-          // Otherwise, find the nearest by center distance
-          var cx = r.left + r.width / 2;
-          var cy = r.top + r.height / 2;
-          var dx = cx - e.clientX;
-          var dy = cy - e.clientY;
-          var dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestEl = el;
-          }
+        if (cursorEl) {
+          cursorEl.style.left = e.clientX + 'px';
+          cursorEl.style.top = e.clientY + 'px';
+          cursorEl.classList.add('visible');
         }
 
-        // Only focus if it's a different element (avoid re-focusing same one)
-        if (bestEl && bestEl !== lastFocusEl && bestEl !== document.activeElement) {
-          lastFocusEl = bestEl;
-          try { bestEl.focus({ preventScroll: true }); } catch (_) { bestEl.focus(); }
+        // Throttle: only process focus changes every 80ms
+        var now = Date.now();
+        if (now - lastMoveTime < 80) return;
+        lastMoveTime = now;
+
+        // Find element under cursor
+        var target = findClosestFocusable(e.target);
+        if (target && target !== document.activeElement) {
+          // Focus it (blue ring), but DON'T select it yet
+          try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+          // Clear selection if cursor moved to a different element
+          if (selectedEl && selectedEl !== target) {
+            markSelected(null);
+          }
         }
       });
 
       // Hide custom cursor when mouse leaves the window
       document.addEventListener('mouseleave', function() {
-        cursorEl.classList.remove('visible');
+        if (cursorEl) cursorEl.classList.remove('visible');
       });
 
-      // On click, also make sure the focused element is activated
-      // (mousedown already handles this, but add click as backup)
+      // ====== Click handler: Tab-style (first click = select, second = activate) ======
       document.addEventListener('click', function(e) {
-        var target = e.target.closest('button, a, input, [tabindex], .action-card, .film-card, .hero-title, .resume-card');
-        if (target && target !== document.activeElement) {
-          try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+        var target = findClosestFocusable(e.target);
+        if (!target) return;
+
+        // If clicking a different element than what's selected:
+        // → just focus/select it, DON'T activate
+        if (target !== selectedEl) {
+          e.preventDefault();
+          e.stopPropagation();
+          target.focus();
+          markSelected(target);
+          // Show toast: "Press OK again to confirm"
+          showToast('Нажмите ещё раз для подтверждения', 1200);
+          return false;
         }
+
+        // If clicking the SAME element that's already selected:
+        // → activate it (let the default click happen)
+        // Clear selection first so next click on different element works
+        markSelected(null);
+        // Don't preventDefault — let the click activate the element
       }, true);
+
+      // Also handle keydown for keyboards that DO send arrow keys
+      // (some projector remotes have both mouse mode AND D-pad mode)
+      document.addEventListener('keydown', function(e) {
+        // If user is in search input, don't interfere
+        if (e.target === searchInput) return;
+
+        // Enter or Space on a focused element = activate it
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          var active = document.activeElement;
+          if (active && active !== document.body && active.click) {
+            e.preventDefault();
+            active.click();
+          }
+          return;
+        }
+
+        // Arrow keys = Tab-style navigation (move focus in direction)
+        var target = null;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          target = findNextFocusable(1);  // forward
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          target = findNextFocusable(-1);  // backward
+        } else if (e.key === 'Tab') {
+          // Let Tab work naturally, just clear selection
+          markSelected(null);
+          return;
+        }
+
+        if (target) {
+          e.preventDefault();
+          target.focus();
+          try { target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+          markSelected(null);
+        }
+      });
+
+      // Helper: find next/previous focusable element in DOM order
+      function findNextFocusable(direction) {
+        var focusables = Array.from(document.querySelectorAll(
+          '.hero-title, .action-card, .film-card, .resume-card, .search-input, .search-clear, button, a[href], [tabindex]'
+        )).filter(function(el) {
+          if (el.offsetParent === null && el !== document.activeElement) return false;
+          if (el.getAttribute('tabindex') === '-1') return false;
+          return true;
+        });
+        if (focusables.length === 0) return null;
+
+        var currentIdx = focusables.indexOf(document.activeElement);
+        var nextIdx;
+        if (currentIdx === -1) {
+          nextIdx = 0;
+        } else {
+          nextIdx = (currentIdx + direction + focusables.length) % focusables.length;
+        }
+        return focusables[nextIdx];
+      }
     }
 
     // ====== Infinite scroll (lazy load more pages) ======

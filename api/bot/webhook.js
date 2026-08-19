@@ -1906,7 +1906,7 @@ module.exports = async (req, res) => {
 // When clicked, sends a message with the film deep link + poster.
 async function handleInlineQuery(iq) {
   const query = (iq.query || '').trim();
-  const userId = iq.from?.id;
+  const userId = iq.from && iq.from.id;
 
   // If query is empty — show a helpful "start typing" message
   if (!query || query.length < 2) {
@@ -1928,15 +1928,15 @@ async function handleInlineQuery(iq) {
 
   try {
     // Search Kinopoisk API
-    const searchUrl = SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.1/films/search-by-keyword&keyword=' + encodeURIComponent(query) + '&page=1';
-    const res = await fetch(searchUrl);
+    var searchUrl = SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.1/films/search-by-keyword&keyword=' + encodeURIComponent(query) + '&page=1';
+    var res = await fetch(searchUrl);
     if (!res.ok) {
       console.error('[inline] Kinopoisk search failed:', res.status);
       await answerInlineQuery(iq.id, [], { cache_time: 0 });
       return;
     }
-    const data = await res.json();
-    const films = data.films || [];
+    var data = await res.json();
+    var films = data.films || [];
 
     if (films.length === 0) {
       await answerInlineQuery(iq.id, [{
@@ -1953,39 +1953,42 @@ async function handleInlineQuery(iq) {
     }
 
     // Build inline results — up to 20 films.
-    // search-by-keyword already returns: nameRu, year, rating, genres,
-    // description, posterUrl — NO need for separate detail fetches.
-    // This makes the response INSTANT (~0.8s = just the search API call).
-    const baseUrl = SITE_URL.replace(/\/$/, '');
-    const results = films.slice(0, 20).map(function(film, i) {
-      const filmId = film.filmId || film.kinopoiskId;
-      const title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
-      const year = film.year || '';
-      const rating = film.rating || film.ratingKinopoisk || '';
-      const thumbUrl = film.posterUrlPreview || film.posterUrl || '';
-      const description = (film.description || '').slice(0, 300);
+    // Uses ONLY data from search-by-keyword (no extra API calls).
+    // IMPORTANT: Telegram does NOT support web_app buttons in inline
+    // query reply_markup — only url buttons work. Use filmDeepLink.
+    var baseUrl = SITE_URL.replace(/\/$/, '');
+    var results = films.slice(0, 20).map(function(film, i) {
+      var filmId = film.filmId || film.kinopoiskId;
+      var title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
+      var year = film.year || '';
+      var rating = film.rating || film.ratingKinopoisk || '';
+      var thumbUrl = film.posterUrlPreview || film.posterUrl || '';
+      var description = (film.description || '').slice(0, 300);
+
       var genres = '';
       if (film.genres && film.genres.length > 0) {
         genres = film.genres.slice(0, 3).map(function(g) { return g.genre; }).join(', ');
       }
 
-      // Build description for inline result list
+      // Description for the inline dropdown list
       var descParts = [];
       if (year) descParts.push(year);
       if (genres) descParts.push(genres);
-      if (rating && rating !== 'null' && rating !== '0') {
-        descParts.push('⭐ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating));
+      if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
+        var r = typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating;
+        descParts.push('⭐ ' + r);
       }
       var listDescription = descParts.join(' · ') || 'Нажмите чтобы открыть';
 
-      var playerUrl = baseUrl + '/player.html?id=' + filmId + '&title=' + encodeURIComponent(title);
+      // Deep link — opens bot with /start=film_ID which opens player
+      var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
 
-      // Build rich message text
+      // Build message text
       var messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n\n';
       var metaParts = [];
       if (year) metaParts.push('📅 ' + year);
       if (genres) metaParts.push('🎭 ' + escapeHtml(genres));
-      if (rating && rating !== 'null' && rating !== '0') {
+      if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
         var ratingNum = typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating;
         metaParts.push('⭐ ' + ratingNum + ' (Кинопоиск)');
       }
@@ -2007,8 +2010,8 @@ async function handleInlineQuery(iq) {
         },
         reply_markup: {
           inline_keyboard: [[
-            { text: '▶ Смотреть', web_app: { url: playerUrl } },
-            { text: '🏠 Главная', callback_data: 'menu_main' }
+            { text: '▶ Смотреть', url: filmDeepLink },
+            { text: '🏠 Главная', url: 'https://t.me/Genopoiskbot?start=app' }
           ]]
         }
       };

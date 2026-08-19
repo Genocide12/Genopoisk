@@ -2198,10 +2198,22 @@
           }
         } catch (_) {}
       }
-      // Small delay to ensure request is sent before navigation
+      // Show loading overlay before navigating to player
+      var loadingOverlay = document.createElement('div');
+      loadingOverlay.id = 'playerLoadingOverlay';
+      loadingOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:system-ui,sans-serif';
+      loadingOverlay.innerHTML = '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.2);border-top-color:#007AFF;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:20px"></div><div style="font-size:18px;font-weight:600">Загрузка плеера...</div><div style="font-size:14px;color:#888;margin-top:8px">' + escapeHtmlLite(title) + '</div>';
+      document.body.appendChild(loadingOverlay);
+
+      // Small delay to ensure request is sent + overlay is visible
       setTimeout(function() {
         window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
-      }, 100);
+      }, 200);
+    }
+
+    function escapeHtmlLite(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     async function loadCategory(category) {

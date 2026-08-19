@@ -126,6 +126,9 @@
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
+      /* Mobile: disable tap highlight + prevent double-tap zoom */
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     /* Desktop-only: holo transform effect (tilt + translate) */
     @media (hover: hover) and (pointer: fine) {
@@ -597,23 +600,23 @@
       </div>
     </div>
     <div class="actions">
-      <div class="action-card" onclick="loadCategory('popular')">
+      <div class="action-card" data-cat="popular" tabindex="0">
         <span class="action-icon">🔥</span>
         <div class="action-title">Популярные</div>
       </div>
-      <div class="action-card" onclick="loadCategory('top250')">
+      <div class="action-card" data-cat="top250" tabindex="0">
         <span class="action-icon">⭐</span>
         <div class="action-title">Топ 250</div>
       </div>
-      <div class="action-card" onclick="loadCategory('new')">
+      <div class="action-card" data-cat="new" tabindex="0">
         <span class="action-icon">🎬</span>
         <div class="action-title">Новинки</div>
       </div>
-      <div class="action-card" onclick="loadCategory('random')">
+      <div class="action-card" data-cat="random" tabindex="0">
         <span class="action-icon">🎯</span>
         <div class="action-title">Случайный</div>
       </div>
-      <div class="action-card" onclick="loadFavorites()">
+      <div class="action-card" data-cat="favorites" tabindex="0">
         <span class="action-icon">❤️</span>
         <div class="action-title">Коллекция</div>
       </div>
@@ -2297,14 +2300,53 @@
       });
     }
 
+    // ====== Action card click handler with debounce ======
+    // Prevents double-fire in Telegram Mini App where click event can
+    // fire twice (once from touchstart→click, once from synthetic click).
+    // Also prevents rapid double-tap from triggering the category twice.
+    var lastCategoryClick = 0;
+    var lastCategoryTarget = null;
+    function setupActionCardClicks() {
+      var cards = document.querySelectorAll('.action-card[data-cat]');
+      cards.forEach(function(card) {
+        card.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var cat = card.dataset.cat;
+          var now = Date.now();
+          // Debounce: ignore clicks within 500ms on the SAME card
+          if (lastCategoryTarget === card && (now - lastCategoryClick) < 500) {
+            console.log('[action-card] Ignored duplicate click on', cat);
+            return;
+          }
+          lastCategoryClick = now;
+          lastCategoryTarget = card;
+          if (cat === 'favorites') {
+            loadFavorites();
+          } else {
+            loadCategory(cat);
+          }
+        });
+        // Keyboard support: Enter/Space activates the card
+        card.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            card.click();
+          }
+        });
+      });
+    }
+
     // Run after DOM is ready (cards must exist before attaching handlers)
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', function() {
         setupActionCardEffects();
+        setupActionCardClicks();
         setupHeroTitleGlow();
       });
     } else {
       setupActionCardEffects();
+      setupActionCardClicks();
       setupHeroTitleGlow();
     }
     // Also re-run after translations apply (in case cards were re-rendered)
@@ -2596,8 +2638,11 @@
         frag.appendChild(card);
       });
       filmGrid.appendChild(frag);
-      // Wait for all posters to load before hiding loader
-      waitForPosters();
+      // Hide loader IMMEDIATELY — don't wait for posters.
+      // Posters load in background and appear as they arrive.
+      // This fixes the "cards don't load" issue on mobile where
+      // waitForPosters could block the UI for up to 4 seconds.
+      hideLoader();
       if (forceCenter || films.length === 1) {
         // Single film (random or search with 1 result) — center it
         filmGrid.classList.add('centered');

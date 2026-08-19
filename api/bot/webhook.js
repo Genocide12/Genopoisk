@@ -1963,32 +1963,44 @@ async function handleInlineQuery(iq) {
       var title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
       var year = film.year || '';
       var rating = film.rating || film.ratingKinopoisk || '';
+      var thumbUrl = film.posterUrlPreview || film.posterUrl || '';
+      // Краткое описание — 150 символов
+      var description = (film.description || '').slice(0, 150);
+      if (film.description && film.description.length > 150) description += '...';
 
-      // Build description: "2024 · 8.5 ★ · genres"
+      var genres = '';
+      if (film.genres && film.genres.length > 0) {
+        genres = film.genres.slice(0, 2).map(function(g) { return g.genre; }).join(', ');
+      }
+
+      // Description for dropdown list: year · ★ rating · genres
       var descParts = [];
       if (year) descParts.push(year);
       if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
         descParts.push('★ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating));
       }
-      if (film.genres && film.genres.length > 0) {
-        var genres = film.genres.slice(0, 2).map(function(g) { return g.genre; }).join(', ');
-        descParts.push(genres);
-      }
-      var description = descParts.join(' · ') || 'Нажмите чтобы открыть';
+      if (genres) descParts.push(genres);
+      var listDescription = descParts.join(' · ') || 'Нажмите чтобы открыть';
 
       var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
-      var thumbUrl = film.posterUrlPreview || film.posterUrl || '';
+      var homeLink = 'https://t.me/Genopoiskbot?start=app';
 
-      var messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n' +
-        (year ? '📅 ' + year + '\n' : '') +
-        (rating && rating !== 'null' && rating !== '0' && rating !== 'null%' ? '⭐ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating) + '\n' : '') +
-        '\n<a href="' + filmDeepLink + '">▶ Открыть в Genopoisk</a>';
+      // Build message text: title + meta + short description
+      var messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n';
+      var metaParts = [];
+      if (year) metaParts.push('📅 ' + year);
+      if (genres) metaParts.push('🎭 ' + escapeHtml(genres));
+      if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
+        metaParts.push('⭐ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating));
+      }
+      if (metaParts.length > 0) messageText += metaParts.join(' · ') + '\n';
+      if (description) messageText += '\n' + escapeHtml(description) + '\n';
 
       return {
         type: 'article',
         id: 'film_' + filmId + '_' + i,
         title: title,
-        description: description,
+        description: listDescription,
         thumb_url: thumbUrl || undefined,
         thumb_width: 100,
         thumb_height: 150,
@@ -1999,7 +2011,8 @@ async function handleInlineQuery(iq) {
         },
         reply_markup: {
           inline_keyboard: [[
-            { text: '▶ Смотреть', url: filmDeepLink }
+            { text: '▶ Смотреть', url: filmDeepLink },
+            { text: '🏠 Главная', url: homeLink }
           ]]
         }
       };

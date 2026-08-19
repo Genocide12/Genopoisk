@@ -754,13 +754,20 @@
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
 
-    // Safety timeout
+    // Safety timeout — if player hasn't loaded after 12s, show error
+    // (HLS library might be blocked by ad blocker or upstream down)
     setTimeout(function() {
       if (!loadingOverlay.classList.contains('hidden')) {
-        console.warn('[player] Safety timeout');
+        console.warn('[player] Safety timeout — player failed to load');
         loadingOverlay.classList.add('hidden');
+        // Show error toast with helpful message
+        if (toastEl) {
+          toastEl.textContent = '⚠️ Плеер не загрузился. Возможно: ad-block блокирует скрипты, проблема с сетью, или источник недоступен. Попробуйте отключить ad-block или открыть другой фильм.';
+          toastEl.classList.add('visible');
+          setTimeout(function() { toastEl.classList.remove('visible'); }, 8000);
+        }
       }
-    }, 8000);
+    }, 12000);
 
     iframe.addEventListener('load', function() {
       setTimeout(function() {

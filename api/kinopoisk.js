@@ -151,7 +151,7 @@ module.exports = async (req, res) => {
   //     second batch may also fail — but at least we tried
   //
   // Per-request timeout: 6s. Promise.any returns as soon as one resolves.
-  const REQUEST_TIMEOUT_MS = 6000;
+  const REQUEST_TIMEOUT_MS = 4000;
 
   // Realistic browser headers — Kinopoisk's edge (Cloudflare) returns 403
   // for bot-like User-Agents such as "Mozilla/5.0 (compatible; ...)".
@@ -268,7 +268,7 @@ module.exports = async (req, res) => {
   if (!winner) {
     console.warn('[kinopoisk] All keys failed with UA#0. Retrying with different User-Agents...');
     for (var retryIdx = 1; retryIdx <= 2; retryIdx++) {
-      await new Promise(function(resolve) { setTimeout(resolve, retryIdx === 1 ? 1500 : 2000); });
+      await new Promise(function(resolve) { setTimeout(resolve, retryIdx === 1 ? 800 : 1200); });
       // Reset exhausted keys for the retry — 403 doesn't really mean key is bad,
       // it means IP/UA combo is blocked. Try all keys again.
       var allKeysForRetry = API_KEYS.slice();

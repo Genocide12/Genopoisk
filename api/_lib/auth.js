@@ -86,6 +86,9 @@ function extractVerifiedUser(body, req) {
 
   if (!body) body = {};
 
+  // Get bot token from env (used for initData verification)
+  var botToken = process.env.TG_BOT_TOKEN;
+
   // 1) Mini App path — verify initData signature
   if (body.initData) {
     const validated = verifyInitData(body.initData, botToken);

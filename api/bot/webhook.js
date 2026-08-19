@@ -743,39 +743,38 @@ function formatPosition(seconds) {
 
 // ---- My films view (films watched by the user who clicked the button) ----
 async function buildMyFilmsText(targetUserId) {
-  // targetUserId is the Bot API user.id of the user who pressed the button.
-  // After the auth fix, this matches users.telegram_id directly.
   let u = await getUser(targetUserId);
-
   if (!u) {
-    // User hasn't done anything yet — no profile in Supabase.
     return { text: `📀 <b>Мои фильмы</b>\n\nИстория ещё не создана. Откройте фильм, чтобы он появился здесь.`, films: [] };
   }
   const films = u.watched_films || (u.last_film ? [u.last_film] : []);
   if (films.length === 0) {
     return { text: `📀 <b>Мои фильмы</b>\n\nВы ещё не смотрели фильмы.`, films: [] };
   }
-  var lines = films.slice(0, 20).map(function(f, i) {
-    var rating = f.rating ? ' ⭐' + f.rating : '';
-    return (i + 1) + '. «' + escapeHtml(f.title) + '»' + rating;
-  }).join('\n');
   return {
-    text: '📀 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм, чтобы открыть плеер:',
+    text: '📀 <b>Мои фильмы</b> (всего ' + films.length + ')',
     films: films
   };
 }
 
 function myFilmsKeyboard(films, page) {
-  var pageSize = 8;
+  var pageSize = 10;
   var totalPages = Math.max(1, Math.ceil(films.length / pageSize));
   var curPage = Math.min(Math.max(0, page), totalPages - 1);
   var startIdx = curPage * pageSize;
   var entries = films.slice(startIdx, startIdx + pageSize);
 
-  // Use index in callback_data (short, ASCII-safe). Film titles are cached.
+  // Build dynamic text: list of 10 films for this page
+  var lines = entries.map(function(f, i) {
+    var idx = startIdx + i;
+    var rating = f.rating ? ' ⭐' + f.rating : '';
+    return (idx + 1) + '. «' + escapeHtml(f.title) + '»' + rating;
+  }).join('\n');
+
+  // Build buttons: one per film + navigation
   var buttons = entries.map(function(f, i) {
     var idx = startIdx + i;
-    return [{ text: '📀 ' + f.title.slice(0, 40), callback_data: 'myfilm_' + idx }];
+    return [{ text: '▶ ' + f.title.slice(0, 35), callback_data: 'myfilm_' + idx }];
   });
 
   var navRow = [];
@@ -784,7 +783,12 @@ function myFilmsKeyboard(films, page) {
   if (curPage < totalPages - 1) navRow.push({ text: '➡️', callback_data: 'myfilms_' + (curPage + 1) });
   buttons.push(navRow);
   buttons.push([{ text: '🏠 На главную', callback_data: 'menu_main' }]);
-  return { inline_keyboard: buttons };
+
+  // Return keyboard with the dynamic text
+  return {
+    text: '📀 <b>Мои фильмы</b> (всего ' + films.length + ')\n\n' + lines + '\n\nНажмите на фильм:',
+    inline_keyboard: buttons
+  };
 }
 
 // ---- Favorites view (films favorited by the user who clicked the button) ----
@@ -1332,10 +1336,10 @@ async function handleCallback(update) {
       return;
     }
     if (data === 'menu_myfilms') {
-      // Show films watched by the user who clicked (identified by fromId)
       const result = await buildMyFilmsText(String(fromId));
-      cacheMyFilms(fromId, result.films); // cache for film button callbacks
-      await edit(result.text, myFilmsKeyboard(result.films, 0));
+      cacheMyFilms(fromId, result.films);
+      var kb = myFilmsKeyboard(result.films, 0);
+      await edit(kb.text, { inline_keyboard: kb.inline_keyboard });
       return;
     }
     if (data === 'menu_favorites') {
@@ -1676,7 +1680,8 @@ async function handleCallback(update) {
       const page = parseInt(myFilmsPageMatch[1], 10);
       const result = await buildMyFilmsText(String(fromId));
       cacheMyFilms(fromId, result.films);
-      await edit(result.text, myFilmsKeyboard(result.films, page));
+      var pageKb = myFilmsKeyboard(result.films, page);
+      await edit(pageKb.text, { inline_keyboard: pageKb.inline_keyboard });
       return;
     }
 
@@ -1952,90 +1957,52 @@ async function handleInlineQuery(iq) {
       return;
     }
 
-    // Build inline results — up to 20 films.
-    // Uses ONLY data from search-by-keyword (no extra API calls).
-    // IMPORTANT: Telegram does NOT support web_app buttons in inline
-    // query reply_markup — only url buttons work. Use filmDeepLink.
-    var baseUrl = SITE_URL.replace(/\/$/, '');
+    // Build inline results — up to 20 films
     var results = films.slice(0, 20).map(function(film, i) {
       var filmId = film.filmId || film.kinopoiskId;
       var title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
       var year = film.year || '';
       var rating = film.rating || film.ratingKinopoisk || '';
-      var thumbUrl = film.posterUrlPreview || film.posterUrl || '';
-      // Краткое описание — обрезаем до 150 символов
-      var description = (film.description || '').slice(0, 150);
-      if (film.description && film.description.length > 150) description += '...';
 
-      var genres = '';
-      if (film.genres && film.genres.length > 0) {
-        genres = film.genres.slice(0, 3).map(function(g) { return g.genre; }).join(', ');
-      }
-
-      // Description for the inline dropdown list
-      // Include: year · ⭐ rating (genres removed for brevity per user request)
+      // Build description: "2024 · 8.5 ★ · genres"
       var descParts = [];
       if (year) descParts.push(year);
       if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
-        var r = typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating;
-        descParts.push('⭐ ' + r);
+        descParts.push('★ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating));
       }
-      var listDescription = descParts.join(' · ') || 'Нажмите чтобы открыть';
+      if (film.genres && film.genres.length > 0) {
+        var genres = film.genres.slice(0, 2).map(function(g) { return g.genre; }).join(', ');
+        descParts.push(genres);
+      }
+      var description = descParts.join(' · ') || 'Нажмите чтобы открыть';
 
-      // Deep link — opens bot with /start=film_ID which opens player
       var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
+      var thumbUrl = film.posterUrlPreview || film.posterUrl || '';
 
-      // Build caption (for photo type — Telegram shows photo + caption)
-      var captionText = '🎬 <b>' + escapeHtml(title) + '</b>\n';
-      var metaParts = [];
-      if (year) metaParts.push('📅 ' + year);
-      if (genres) metaParts.push('🎭 ' + escapeHtml(genres));
-      if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
-        var ratingNum = typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating;
-        metaParts.push('⭐ ' + ratingNum);
-      }
-      if (metaParts.length > 0) captionText += metaParts.join(' · ') + '\n';
-      if (description) captionText += '\n' + escapeHtml(description);
+      var messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n' +
+        (year ? '📅 ' + year + '\n' : '') +
+        (rating && rating !== 'null' && rating !== '0' && rating !== 'null%' ? '⭐ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating) + '\n' : '') +
+        '\n<a href="' + filmDeepLink + '">▶ Открыть в Genopoisk</a>';
 
-      // Use 'photo' type if we have a poster URL — shows poster IN the message
-      // Use 'article' type as fallback (text only)
-      if (thumbUrl) {
-        return {
-          type: 'photo',
-          id: 'film_' + filmId + '_' + i,
-          photo_url: thumbUrl,
-          thumb_url: thumbUrl,
-          photo_width: 150,
-          photo_height: 225,
-          title: title,
-          description: listDescription,
-          caption: captionText,
+      return {
+        type: 'article',
+        id: 'film_' + filmId + '_' + i,
+        title: title,
+        description: description,
+        thumb_url: thumbUrl || undefined,
+        thumb_width: 100,
+        thumb_height: 150,
+        input_message_content: {
+          message_text: messageText,
           parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [[
-              { text: '▶ Смотреть', url: filmDeepLink },
-              { text: '🏠 Главная', url: 'https://t.me/Genopoiskbot?start=app' }
-            ]]
-          }
-        };
-      } else {
-        return {
-          type: 'article',
-          id: 'film_' + filmId + '_' + i,
-          title: title,
-          description: listDescription,
-          input_message_content: {
-            message_text: captionText,
-            parse_mode: 'HTML'
-          },
-          reply_markup: {
-            inline_keyboard: [[
-              { text: '▶ Смотреть', url: filmDeepLink },
-              { text: '🏠 Главная', url: 'https://t.me/Genopoiskbot?start=app' }
-            ]]
-          }
-        };
-      }
+          disable_web_page_preview: false
+        },
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '▶ Смотреть', url: filmDeepLink }
+          ]]
+        }
+      };
     });
 
     await answerInlineQuery(iq.id, results, { cache_time: 60 });

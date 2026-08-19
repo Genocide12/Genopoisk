@@ -132,8 +132,8 @@
       }
       .action-card:active { transform: perspective(800px) scale(0.94); }
     }
-    /* On touch devices — simple tap effect (scale down briefly).
-       NO :hover effects (they stick), but :active gives tactile feedback. */
+    /* On touch devices — same press effect as desktop (perspective + scale + glow).
+       NO :hover effects (they stick), but :active gives full tactile feedback. */
     @media not all and (hover: hover) and (pointer: fine) {
       .action-card:hover,
       .action-card:focus {
@@ -144,16 +144,18 @@
       .action-card:hover::before {
         opacity: 0 !important;
       }
-      /* Tap effect — scale down slightly when finger is pressing */
+      /* Tap effect — SAME as desktop: perspective + scale + glow */
       .action-card:active {
-        transform: translateZ(0) scale(0.95) !important;
-        background: var(--bg-tertiary) !important;
-        transition: transform 0.1s ease-out !important;
+        transform: perspective(800px) scale(0.94) !important;
+        border-color: var(--ios-blue) !important;
+        box-shadow: 0 8px 28px rgba(0,122,255,0.22) !important;
+        transition: transform 0.1s ease-out, border-color 0.1s, box-shadow 0.1s !important;
       }
-      /* Film card tap effect */
+      /* Film card tap effect — same scale as desktop */
       .film-card:active {
-        transform: scale(0.95) !important;
-        transition: transform 0.1s ease-out !important;
+        transform: translateY(-8px) scale(0.96) !important;
+        box-shadow: 0 20px 50px -10px rgba(0,122,255,0.5) !important;
+        transition: transform 0.1s ease-out, box-shadow 0.1s !important;
       }
     }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}

@@ -2425,26 +2425,26 @@
     });
 
     let scrollTimeout;
-    let lastScrollY = window.scrollY;
-    window.addEventListener('scroll', () => {
+    let lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    window.addEventListener('scroll', function() {
       clearTimeout(scrollTimeout);
       // Hide/show fixed Telegram button based on scroll direction
-      var currentScrollY = window.scrollY;
+      // Use pageYOffset for iOS Safari compatibility (scrollY can be 0
+      // when body has overflow-x:hidden on iOS)
+      var currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
       var fixedBtn = document.getElementById('fixedTelegramBtn');
       if (fixedBtn && !fixedBtn.classList.contains('hidden-by-tv')) {
-        if (currentScrollY > lastScrollY + 10 && currentScrollY > 100) {
-          // Scrolling DOWN — hide button
+        if (currentScrollY > lastScrollY + 5 && currentScrollY > 50) {
           fixedBtn.classList.add('hidden');
-        } else if (currentScrollY < lastScrollY - 10) {
-          // Scrolling UP — show button
+        } else if (currentScrollY < lastScrollY - 5) {
           fixedBtn.classList.remove('hidden');
         }
       }
       lastScrollY = currentScrollY;
 
-      scrollTimeout = setTimeout(() => {
-        const scrollPosition = window.innerHeight + window.scrollY;
-        const threshold = document.documentElement.scrollHeight - 800;
+      scrollTimeout = setTimeout(function() {
+        var scrollPosition = (window.pageYOffset || document.documentElement.scrollTop || 0) + window.innerHeight;
+        var threshold = document.documentElement.scrollHeight - 800;
         if (scrollPosition >= threshold &&
             currentCategory &&
             currentCategory !== 'random' &&

@@ -35,7 +35,8 @@
     .actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:32px;}
     /* Padding for fixed bottom Telegram button */
     body { padding-bottom: 60px; }
-    #fixedTelegramBtn.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
+    #fixedTelegramBtn { transition: transform 0.3s ease, opacity 0.3s ease; -webkit-transition: -webkit-transform 0.3s ease, opacity 0.3s ease; }
+    #fixedTelegramBtn.hidden { -webkit-transform: translateY(100%); transform: translateY(100%); opacity: 0; pointer-events: none; }
 
     /* === PRODUCTION EFFECTS (always on) === */
 

@@ -1973,9 +1973,9 @@ async function handleInlineQuery(iq) {
       }
 
       // Description for the inline dropdown list
+      // Include: year · ⭐ rating (genres removed for brevity per user request)
       var descParts = [];
       if (year) descParts.push(year);
-      if (genres) descParts.push(genres);
       if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
         var r = typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating;
         descParts.push('⭐ ' + r);

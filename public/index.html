@@ -1926,14 +1926,24 @@
     // Fire async — don't block page load
     loadResumeCard();
 
-    // Retry after window load — telegram-web-app.js loads async, so tgInitData
-    // may not be available on first call. Without initData, browser userId is
-    // used as fallback, but in Telegram Mini App we want the real Telegram ID.
+    // Prefetch the poster lambda — first call takes 2+ seconds (cold start),
+    // subsequent calls are 40ms (Vercel Edge cache). By firing a prefetch
+    // on page load, we warm the cache BEFORE the user clicks a category.
+    // Uses a common film ID (251733 = Интерстеллар) just to warm the lambda.
+    // The actual poster doesn't matter — we just need the lambda to be warm.
+    try {
+      fetch('/api/poster?id=251733&size=small', { method: 'GET' }).catch(function(){});
+    } catch(_) {}
+
+    // Retry after window load — ONLY if we're in Telegram Mini App
+    // (telegram-web-app.js loads async, so tgInitData may not be available
+    // on first call). In regular browser, initData never appears, so
+    // retrying is a waste of a network request.
     window.addEventListener('load', function() {
-      // Re-init Telegram WebApp (script may have loaded by now)
-      if (!tg) tg = initTelegramWebApp();
-      // Only retry if card is not visible yet
-      if (!resumeCard.classList.contains('visible')) {
+      // Only retry if we're in Telegram and card is not visible yet
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram && !resumeCard.classList.contains('visible')) {
+        if (!tg) tg = initTelegramWebApp();
         loadResumeCard();
       }
     });
@@ -2462,14 +2472,16 @@
           }, { once: true });
         }
       });
-      // Safety timeout — hide loader after 10s even if not all loaded
+      // Safety timeout — hide loader after 4s even if not all posters
+      // loaded (was 10s — too long, made the site feel slow).
+      // Posters will still load in the background and appear as they arrive.
       posterLoadTimeout = setTimeout(function() {
         // Force-load any remaining images
         filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)').forEach(function(img) {
           img.classList.add(img.naturalWidth > 0 ? 'loaded' : 'error');
         });
         hideLoader();
-      }, 10000);
+      }, 4000);
     }
 
     function clearFilms() {

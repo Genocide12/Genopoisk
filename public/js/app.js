@@ -1316,9 +1316,11 @@
     // By firing prefetches on page load, we warm BOTH caches BEFORE the
     // user clicks a category. When they click "Популярные", both lambdas
     // are already warm — films + posters load in <500ms total.
+    // Also prefetch "popular" films list (most clicked category).
     try {
       fetch('/api/poster?id=251733&size=small', { method: 'GET' }).catch(function(){});
       fetch('/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1', { method: 'GET' }).catch(function(){});
+      fetch('/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=1', { method: 'GET' }).catch(function(){});
     } catch(_) {}
 
     // Retry after window load — ONLY if we're in Telegram Mini App

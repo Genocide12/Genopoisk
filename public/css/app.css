@@ -132,19 +132,28 @@
       }
       .action-card:active { transform: perspective(800px) scale(0.94); }
     }
-    /* On touch devices — NO hover/active effects at all.
-       Reset ALL visual states to prevent stuck :hover. */
+    /* On touch devices — simple tap effect (scale down briefly).
+       NO :hover effects (they stick), but :active gives tactile feedback. */
     @media not all and (hover: hover) and (pointer: fine) {
       .action-card:hover,
-      .action-card:active,
       .action-card:focus {
         transform: translateZ(0) !important;
         box-shadow: none !important;
         border-color: var(--separator) !important;
       }
-      .action-card:hover::before,
-      .action-card:active::before {
+      .action-card:hover::before {
         opacity: 0 !important;
+      }
+      /* Tap effect — scale down slightly when finger is pressing */
+      .action-card:active {
+        transform: translateZ(0) scale(0.95) !important;
+        background: var(--bg-tertiary) !important;
+        transition: transform 0.1s ease-out !important;
+      }
+      /* Film card tap effect */
+      .film-card:active {
+        transform: scale(0.95) !important;
+        transition: transform 0.1s ease-out !important;
       }
     }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}

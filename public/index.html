@@ -255,6 +255,44 @@
       gap: 0;
       min-height:300px;
     }
+    /* Random film mode — single card takes 95% of #content width.
+       Used when user clicks "Случайный" category. The poster becomes
+       much larger, centered, with prominent display. */
+    .film-grid.random-mode {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0;
+      min-height: 400px;
+      padding: 20px 0;
+    }
+    .film-grid.random-mode .film-card {
+      width: 95%;
+      max-width: 95%;
+      display: flex;
+      flex-direction: column;
+    }
+    .film-grid.random-mode .film-poster {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 2 / 3;
+      max-height: 70vh;
+      object-fit: cover;
+    }
+    .film-grid.random-mode .film-info {
+      position: relative;
+      transform: none;
+      padding: 16px;
+      background: var(--bg-secondary);
+    }
+    .film-grid.random-mode .film-title {
+      font-size: 20px;
+      text-align: center;
+    }
+    .film-grid.random-mode .film-meta {
+      justify-content: center;
+      font-size: 14px;
+    }
     .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:transform 0.4s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.4s;background:var(--bg-secondary);box-shadow:0 14px 30px -10px rgba(0,0,0,0.4);}
     .film-card:hover{transform:translateY(-8px);box-shadow:0 20px 50px -10px rgba(0,122,255,0.5);z-index:2;}
     .film-poster {width: 140px;height:210px;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;transition:transform 0.7s cubic-bezier(0.2,0.8,0.2,1);}
@@ -2508,6 +2546,7 @@
         return;
       }
       filmGrid.classList.remove('centered');
+      filmGrid.classList.remove('random-mode');
       const frag = document.createDocumentFragment();
       films.forEach((film, index) => {
         const filmId = film.filmId || film.kinopoiskId;
@@ -2550,7 +2589,10 @@
       filmGrid.appendChild(frag);
       // Wait for all posters to load before hiding loader
       waitForPosters();
-      if (forceCenter || films.length === 1) {
+      if (forceCenter && films.length === 1) {
+        // Random film mode — single card takes 95% of #content width
+        filmGrid.classList.add('random-mode');
+      } else if (forceCenter || films.length === 1) {
         filmGrid.classList.add('centered');
       }
       // Show long-press hint once on first batch (touch devices only)

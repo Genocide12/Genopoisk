@@ -2170,7 +2170,8 @@
       }
     });
 
-    // Show the long-press hint once per session (touch devices only)
+    async function openPlayer(filmId, title) {
+      const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
       const payload = JSON.stringify({
         type: 'movies_opened',
         initData: getTgInitData(),

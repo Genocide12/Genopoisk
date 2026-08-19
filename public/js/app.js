@@ -1801,7 +1801,7 @@
             if (filmGridEl && filmGridEl.children.length === 0) {
               filmGridEl.innerHTML = '<div class="empty-state">⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...</div>';
             }
-            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            await new Promise(function(resolve) { setTimeout(resolve, 500); });
             continue;
           }
 
@@ -1813,7 +1813,7 @@
           lastErr = e;
           if (attempt === 0) {
             console.warn('[apiGet] Network error, retrying in 2s:', e.message);
-            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            await new Promise(function(resolve) { setTimeout(resolve, 500); });
             continue;
           }
           throw e;

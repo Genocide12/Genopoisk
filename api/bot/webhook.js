@@ -1934,7 +1934,20 @@ async function handleInlineQuery(iq) {
   try {
     // Search Kinopoisk API
     var searchUrl = SITE_URL.replace(/\/$/, '') + '/api/kinopoisk?q=v2.1/films/search-by-keyword&keyword=' + encodeURIComponent(query) + '&page=1';
-    var res = await fetch(searchUrl);
+    // Use a short timeout for inline search — Telegram requires response
+    // within 5 seconds. If the API is slow/blocked, return empty results.
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { try { controller.abort(); } catch(_) {} }, 4000);
+    var res;
+    try {
+      res = await fetch(searchUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+    } catch (e) {
+      clearTimeout(timeoutId);
+      console.warn('[inline] Search timeout:', e.message);
+      await answerInlineQuery(iq.id, [], { cache_time: 0 });
+      return;
+    }
     if (!res.ok) {
       console.error('[inline] Kinopoisk search failed:', res.status);
       await answerInlineQuery(iq.id, [], { cache_time: 0 });

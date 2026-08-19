@@ -248,6 +248,19 @@
     @keyframes spin{to{transform:rotate(360deg);}}
     .loader-text{font-size:15px;font-weight:500;color:var(--text-secondary);letter-spacing:-0.01em;}
     .film-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
+    /* Desktop (>= 1024px) — larger cards for bigger screens */
+    @media (min-width: 1024px) {
+      .film-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 20px;
+      }
+    }
+    @media (min-width: 1440px) {
+      .film-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 24px;
+      }
+    }
     .film-grid.centered {
       display: flex;
       justify-content: center;
@@ -256,8 +269,7 @@
       min-height:300px;
     }
     /* Single film (random or search with 1 result) — centered, same size
-       as regular cards. No more huge 95% width — just normal-sized card
-       in the center of the grid. */
+       as regular cards. Responsive to screen size. */
     .film-grid.random-mode {
       display: flex;
       justify-content: center;
@@ -270,9 +282,21 @@
       width: 140px;
       max-width: 140px;
     }
+    @media (min-width: 1024px) {
+      .film-grid.random-mode .film-card {
+        width: 180px;
+        max-width: 180px;
+      }
+    }
+    @media (min-width: 1440px) {
+      .film-grid.random-mode .film-card {
+        width: 200px;
+        max-width: 200px;
+      }
+    }
     .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:transform 0.4s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.4s;background:var(--bg-secondary);box-shadow:0 14px 30px -10px rgba(0,0,0,0.4);}
     .film-card:hover{transform:translateY(-8px);box-shadow:0 20px 50px -10px rgba(0,122,255,0.5);z-index:2;}
-    .film-poster {width: 140px;height:210px;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;transition:transform 0.7s cubic-bezier(0.2,0.8,0.2,1);}
+    .film-poster {width: 100%;height:auto;aspect-ratio:2/3;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;transition:transform 0.7s cubic-bezier(0.2,0.8,0.2,1);}
     .film-card:hover .film-poster{transform:scale(1.12);}
     .film-info{position:absolute;left:0;right:0;bottom:0;padding:16px;background:linear-gradient(transparent,rgba(0,0,0,0.9));transform:translateY(100%);transition:transform 0.4s ease;z-index:2;}
     .film-card:hover .film-info{transform:translateY(0);}

@@ -121,18 +121,22 @@
       cursor: pointer;
       /* Smooth spring return when NOT tracking (touch release / mouseleave).
          Cubic-bezier with overshoot gives a satisfying settle-to-neutral. */
-      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                  border-color 0.3s, box-shadow 0.3s;
-      transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateX(var(--tx)) translateY(var(--ty));
+      transition: border-color 0.3s, box-shadow 0.3s;
       /* Prevent text selection on long press */
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
     }
-    /* When finger/cursor is actively tracking the card — use a faster,
-       near-instant transition so movement feels 1:1 with the cursor. */
-    .action-card.tracking {
-      transition: transform 0.08s linear, border-color 0.2s, box-shadow 0.2s;
+    /* Desktop-only: holo transform effect (tilt + translate) */
+    @media (hover: hover) and (pointer: fine) {
+      .action-card {
+        transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                    border-color 0.3s, box-shadow 0.3s;
+        transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateX(var(--tx)) translateY(var(--ty));
+      }
+      .action-card.tracking {
+        transition: transform 0.08s linear, border-color 0.2s, box-shadow 0.2s;
+      }
     }
     .action-card::before {
       content: "";
@@ -1965,13 +1969,17 @@
     // Fire async — don't block page load
     loadResumeCard();
 
-    // Prefetch the poster lambda — first call takes 2+ seconds (cold start),
-    // subsequent calls are 40ms (Vercel Edge cache). By firing a prefetch
-    // on page load, we warm the cache BEFORE the user clicks a category.
-    // Uses a common film ID (251733 = Интерстеллар) just to warm the lambda.
-    // The actual poster doesn't matter — we just need the lambda to be warm.
+    // Prefetch BOTH lambdas on page load to warm them up:
+    // 1. /api/poster — first call takes 2+ seconds (cold start),
+    //    subsequent calls are 40ms (Vercel Edge cache).
+    // 2. /api/kinopoisk — first call also slow (cold start + upstream fetch),
+    //    subsequent calls are 250ms (cache hit).
+    // By firing prefetches on page load, we warm BOTH caches BEFORE the
+    // user clicks a category. When they click "Популярные", both lambdas
+    // are already warm — films + posters load in <500ms total.
     try {
       fetch('/api/poster?id=251733&size=small', { method: 'GET' }).catch(function(){});
+      fetch('/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1', { method: 'GET' }).catch(function(){});
     } catch(_) {}
 
     // Retry after window load — ONLY if we're in Telegram Mini App

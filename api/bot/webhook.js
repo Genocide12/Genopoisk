@@ -1963,7 +1963,9 @@ async function handleInlineQuery(iq) {
       var year = film.year || '';
       var rating = film.rating || film.ratingKinopoisk || '';
       var thumbUrl = film.posterUrlPreview || film.posterUrl || '';
-      var description = (film.description || '').slice(0, 300);
+      // Краткое описание — обрезаем до 150 символов
+      var description = (film.description || '').slice(0, 150);
+      if (film.description && film.description.length > 150) description += '...';
 
       var genres = '';
       if (film.genres && film.genres.length > 0) {
@@ -1983,38 +1985,57 @@ async function handleInlineQuery(iq) {
       // Deep link — opens bot with /start=film_ID which opens player
       var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
 
-      // Build message text
-      var messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n\n';
+      // Build caption (for photo type — Telegram shows photo + caption)
+      var captionText = '🎬 <b>' + escapeHtml(title) + '</b>\n';
       var metaParts = [];
       if (year) metaParts.push('📅 ' + year);
       if (genres) metaParts.push('🎭 ' + escapeHtml(genres));
       if (rating && rating !== 'null' && rating !== '0' && rating !== 'null%') {
         var ratingNum = typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating;
-        metaParts.push('⭐ ' + ratingNum + ' (Кинопоиск)');
+        metaParts.push('⭐ ' + ratingNum);
       }
-      if (metaParts.length > 0) messageText += metaParts.join(' · ') + '\n';
-      if (description) messageText += '\n' + escapeHtml(description) + '\n';
+      if (metaParts.length > 0) captionText += metaParts.join(' · ') + '\n';
+      if (description) captionText += '\n' + escapeHtml(description);
 
-      return {
-        type: 'article',
-        id: 'film_' + filmId + '_' + i,
-        title: title,
-        description: listDescription,
-        thumb_url: thumbUrl || undefined,
-        thumb_width: 100,
-        thumb_height: 150,
-        input_message_content: {
-          message_text: messageText,
+      // Use 'photo' type if we have a poster URL — shows poster IN the message
+      // Use 'article' type as fallback (text only)
+      if (thumbUrl) {
+        return {
+          type: 'photo',
+          id: 'film_' + filmId + '_' + i,
+          photo_url: thumbUrl,
+          thumb_url: thumbUrl,
+          photo_width: 150,
+          photo_height: 225,
+          title: title,
+          description: listDescription,
+          caption: captionText,
           parse_mode: 'HTML',
-          disable_web_page_preview: false
-        },
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '▶ Смотреть', url: filmDeepLink },
-            { text: '🏠 Главная', url: 'https://t.me/Genopoiskbot?start=app' }
-          ]]
-        }
-      };
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '▶ Смотреть', url: filmDeepLink },
+              { text: '🏠 Главная', url: 'https://t.me/Genopoiskbot?start=app' }
+            ]]
+          }
+        };
+      } else {
+        return {
+          type: 'article',
+          id: 'film_' + filmId + '_' + i,
+          title: title,
+          description: listDescription,
+          input_message_content: {
+            message_text: captionText,
+            parse_mode: 'HTML'
+          },
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '▶ Смотреть', url: filmDeepLink },
+              { text: '🏠 Главная', url: 'https://t.me/Genopoiskbot?start=app' }
+            ]]
+          }
+        };
+      }
     });
 
     await answerInlineQuery(iq.id, results, { cache_time: 60 });

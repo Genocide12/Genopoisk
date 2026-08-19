@@ -161,7 +161,9 @@ module.exports = async (req, res) => {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Android 14; Mobile; rv:121.0) Gecko/121.0 Firefox/121.0'
   ];
 
   function makeBrowserHeaders(uaIndex) {
@@ -262,17 +264,15 @@ module.exports = async (req, res) => {
   }
 
   // Fallback 2: if all keys failed (likely 403 IP block from Cloudflare),
-  // wait 1.5s and retry ALL keys with a DIFFERENT User-Agent. Cloudflare
-  // sometimes blocks specific UAs as "bot-like" — switching UA can bypass.
-  // We retry up to 2 times with different UAs (1.5s + 2s delays).
+  // retry ALL keys with different User-Agents and longer delays.
+  // Cloudflare blocks are temporary — waiting longer between retries
+  // gives the block time to lift.
   if (!winner) {
     console.warn('[kinopoisk] All keys failed with UA#0. Retrying with different User-Agents...');
-    for (var retryIdx = 1; retryIdx <= 2; retryIdx++) {
-      await new Promise(function(resolve) { setTimeout(resolve, retryIdx === 1 ? 800 : 1200); });
-      // Reset exhausted keys for the retry — 403 doesn't really mean key is bad,
-      // it means IP/UA combo is blocked. Try all keys again.
+    for (var retryIdx = 1; retryIdx <= 3; retryIdx++) {
+      // Longer delays: 2s, 3s, 4s (was 0.8s, 1.2s)
+      await new Promise(function(resolve) { setTimeout(resolve, retryIdx * 1000 + 1000); });
       var allKeysForRetry = API_KEYS.slice();
-      // Shuffle to distribute load
       for (var i = allKeysForRetry.length - 1; i > 0; i--) {
         var j = Math.floor(Math.random() * (i + 1));
         var tmp = allKeysForRetry[i]; allKeysForRetry[i] = allKeysForRetry[j]; allKeysForRetry[j] = tmp;

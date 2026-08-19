@@ -133,25 +133,27 @@
     @media not all and (hover: hover) and (pointer: fine) {
       .action-card:hover,
       .action-card:focus {
-        transform: translateZ(0) !important;
+        transform: none !important;
         box-shadow: none !important;
         border-color: var(--separator) !important;
       }
       .action-card:hover::before {
         opacity: 0 !important;
       }
-      /* Tap effect — SAME as desktop: perspective + scale + glow */
+      /* Tap effect via .pressing class (JS-driven, more reliable than :active on iOS) */
+      .action-card.pressing,
       .action-card:active {
-        transform: perspective(800px) scale(0.94) !important;
+        transform: scale(0.92) !important;
         border-color: var(--ios-blue) !important;
-        box-shadow: 0 8px 28px rgba(0,122,255,0.22) !important;
-        transition: transform 0.1s ease-out, border-color 0.1s, box-shadow 0.1s !important;
+        box-shadow: 0 8px 28px rgba(0,122,255,0.3) !important;
+        background: rgba(0, 122, 255, 0.15) !important;
+        transition: transform 0.08s ease-out, border-color 0.08s, box-shadow 0.08s, background 0.08s !important;
       }
-      /* Film card tap effect — same scale as desktop */
+      .film-card.pressing,
       .film-card:active {
-        transform: translateY(-8px) scale(0.96) !important;
-        box-shadow: 0 20px 50px -10px rgba(0,122,255,0.5) !important;
-        transition: transform 0.1s ease-out, box-shadow 0.1s !important;
+        transform: scale(0.93) !important;
+        box-shadow: 0 12px 40px rgba(0,122,255,0.4) !important;
+        transition: transform 0.08s ease-out, box-shadow 0.08s !important;
       }
     }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}
@@ -402,19 +404,3 @@
       border: 1px solid var(--separator);
     }
     /* Long-press hint shown briefly when grid loads on touch devices */
-    .longpress-hint {
-      position: fixed; bottom: 80px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.85);
-      color: #fff; font-size: 13px;
-      padding: 8px 16px; border-radius: 20px;
-      z-index: 1200;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      white-space: nowrap;
-    }
-    .longpress-hint.visible { opacity: 1; }
-
-    /* ====== Lite version banner (shown on TV / projector / large screens) ====== */
-

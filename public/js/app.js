@@ -1644,15 +1644,43 @@
     // Also prevents rapid double-tap from triggering the category twice.
     var lastCategoryClick = 0;
     var lastCategoryTarget = null;
+
+    // ====== Touch press effect ======
+    // iOS Safari doesn't reliably fire :active CSS pseudo-class.
+    // We use touchstart/touchend to add a .pressing class which gives
+    // guaranteed visual feedback on ALL mobile browsers.
+    function setupTouchPressEffect() {
+      // Action cards
+      document.querySelectorAll('.action-card, .film-card, .resume-card').forEach(function(el) {
+        el.addEventListener('touchstart', function() {
+          this.classList.add('pressing');
+        }, { passive: true });
+        el.addEventListener('touchend', function() {
+          this.classList.remove('pressing');
+        }, { passive: true });
+        el.addEventListener('touchcancel', function() {
+          this.classList.remove('pressing');
+        }, { passive: true });
+        // Also handle mousedown/mouseup for mouse on touch devices
+        el.addEventListener('mousedown', function() {
+          this.classList.add('pressing');
+        });
+        el.addEventListener('mouseup', function() {
+          this.classList.remove('pressing');
+        });
+        el.addEventListener('mouseleave', function() {
+          this.classList.remove('pressing');
+        });
+      });
+    }
+
     function setupActionCardClicks() {
       var cards = document.querySelectorAll('.action-card[data-cat]');
       cards.forEach(function(card) {
         card.addEventListener('click', function(e) {
           var cat = card.dataset.cat;
           var now = Date.now();
-          // Debounce: ignore clicks within 500ms on the SAME card
           if (lastCategoryTarget === card && (now - lastCategoryClick) < 500) {
-            console.log('[action-card] Ignored duplicate click on', cat);
             return;
           }
           lastCategoryClick = now;
@@ -1663,7 +1691,6 @@
             loadCategory(cat);
           }
         });
-        // Keyboard support: Enter/Space activates the card
         card.addEventListener('keydown', function(e) {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -1678,11 +1705,13 @@
       document.addEventListener('DOMContentLoaded', function() {
         setupActionCardEffects();
         setupActionCardClicks();
+        setupTouchPressEffect();
         setupHeroTitleGlow();
       });
     } else {
       setupActionCardEffects();
       setupActionCardClicks();
+      setupTouchPressEffect();
       setupHeroTitleGlow();
     }
     // Also re-run after translations apply (in case cards were re-rendered)
@@ -1984,7 +2013,6 @@
         filmGrid.classList.add('centered');
       }
       // Show long-press hint once on first batch (touch devices only)
-      showLongPressHintOnce();
     }
 
     // ====== Long-press film info popup (mobile) ======
@@ -2143,24 +2171,6 @@
     });
 
     // Show the long-press hint once per session (touch devices only)
-    var longPressHintShown = false;
-    function showLongPressHintOnce() {
-      if (longPressHintShown) return;
-      if (!isMobileView()) return; // desktop uses hover
-      longPressHintShown = true;
-      var hint = document.getElementById('longpressHint');
-      if (!hint) return;
-      // Localize hint text via i18n
-      if (typeof t === 'function') {
-        hint.textContent = t('longpressHint');
-      }
-      hint.classList.add('visible');
-      setTimeout(function() { hint.classList.remove('visible'); }, 3500);
-    }
-
-    async function openPlayer(filmId, title) {
-      // Send track event reliably before navigating.
-      const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
       const payload = JSON.stringify({
         type: 'movies_opened',
         initData: getTgInitData(),

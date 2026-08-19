@@ -1648,8 +1648,6 @@
       var cards = document.querySelectorAll('.action-card[data-cat]');
       cards.forEach(function(card) {
         card.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
           var cat = card.dataset.cat;
           var now = Date.now();
           // Debounce: ignore clicks within 500ms on the SAME card

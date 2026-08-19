@@ -367,23 +367,39 @@
 
         // venoplayer resets currentTime to 0 after play(). We need to seek
         // MULTIPLE times to win the race: seek, wait, check if reset, re-seek.
-        function performSeek() {
+        // BUT: only post 'seeked' event ONCE (after the last attempt) to
+        // avoid flooding the parent with seeked events that cause infinite
+        // loops in the retry logic.
+        var seekedSent = false;
+        function performSeek(isLast) {
           try {
             video.currentTime = targetTime;
             log('Seek set to', targetTime, '→ actual:', video.currentTime);
-            post({ type: 'seeked', currentTime: video.currentTime });
+            // Only send 'seeked' event on the LAST attempt to avoid
+            // flooding parent with events that trigger retry loops
+            if (isLast && !seekedSent) {
+              seekedSent = true;
+              post({ type: 'seeked', currentTime: video.currentTime });
+            }
           } catch(err) {
             log('Seek failed', err);
+            if (isLast && !seekedSent) {
+              seekedSent = true;
+              post({ type: 'seeked', currentTime: video.currentTime });
+            }
           }
         }
 
-        // Aggressive seek: repeat 5 times with 300ms interval to override
-        // venoplayer's reset-to-0 behavior
+        // Aggressive seek: repeat 3 times with 300ms interval (was 5 —
+        // reduced to avoid excessive events). Only the last attempt sends
+        // the 'seeked' event.
         var seekCount = 0;
+        var MAX_SEEKS = 3;
         var aggressiveSeek = function() {
           seekCount++;
-          performSeek();
-          if (seekCount < 5) {
+          var isLast = (seekCount >= MAX_SEEKS);
+          performSeek(isLast);
+          if (!isLast) {
             setTimeout(aggressiveSeek, 300);
           }
         };
@@ -397,13 +413,11 @@
           };
           video.addEventListener('canplay', seekOnCanPlay);
           video.addEventListener('loadeddata', seekOnCanPlay);
-          try { video.play().then(function() {
-            log('Video playing, will aggressive-seek on canplay');
-          }).catch(function(e) { log('play() failed', e); }); } catch(_) {}
+          // Safety timeout — if canplay never fires, force aggressive seek
           setTimeout(function() {
             video.removeEventListener('canplay', seekOnCanPlay);
             video.removeEventListener('loadeddata', seekOnCanPlay);
-            aggressiveSeek();
+            if (!seekedSent) aggressiveSeek();
           }, 3000);
         } else {
           try {

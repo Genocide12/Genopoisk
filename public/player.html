@@ -577,18 +577,21 @@
     // Seek to saved position with retries. venoplayer may reset currentTime
     // to 0 after our seek (it calls play() which restarts from beginning).
     // We monitor currentTime after each seek and re-seek if it drops.
+    var seekConfirmed = false;  // flag to stop retry loop after success
     function attemptSeekToSaved() {
       if (!savedPos || !playerReady) return;
+      if (seekConfirmed) return;  // already done — don't retry
       var target = savedPos.t;
       // If we're already close to target (within 10s), seek succeeded
       if (lastKnownTime > 0 && Math.abs(lastKnownTime - target) < 10) {
         console.log('[player] Seek confirmed at', lastKnownTime, '(target:', target + ')');
+        seekConfirmed = true;
         isResuming = false;
         return;
       }
-      // If we've tried 15 times, give up
-      if (seekRetries >= 15) {
-        console.warn('[player] Seek failed after 15 retries, lastKnownTime:', lastKnownTime);
+      // If we've tried 5 times, give up (was 15 — reduced to avoid spam)
+      if (seekRetries >= 5) {
+        console.warn('[player] Seek failed after 5 retries, lastKnownTime:', lastKnownTime);
         isResuming = false;
         return;
       }
@@ -596,8 +599,8 @@
       isResuming = true;
       console.log('[player] Seek attempt ' + seekRetries + ' to', target, '(currentTime:', lastKnownTime + ')');
       sendToPlayer({ type: 'seek', time: target });
-      // Retry after 1.5s — monitor if venoplayer reset currentTime to 0
-      setTimeout(attemptSeekToSaved, 1500);
+      // Retry after 2s — give bridge.js time to complete its aggressive seek
+      setTimeout(attemptSeekToSaved, 2000);
     }
 
     function maybeSavePosition(t) {
@@ -643,6 +646,15 @@
       if (data.type === 'seeked') {
         console.log('[player] Seeked event:', data.currentTime);
         if (typeof data.currentTime === 'number') lastKnownTime = data.currentTime;
+        // If seeked position is close to target, mark as confirmed
+        // to stop the retry loop in attemptSeekToSaved
+        if (savedPos && typeof data.currentTime === 'number') {
+          if (Math.abs(data.currentTime - savedPos.t) < 10) {
+            seekConfirmed = true;
+            isResuming = false;
+            console.log('[player] Seek confirmed via seeked event');
+          }
+        }
       }
       if (data.type === 'ended') {
         // Ignore 'ended' events while resuming (venoplayer fires false ended

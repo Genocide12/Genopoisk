@@ -1,0 +1,2983 @@
+
+    // ====== Global error handler — surface JS errors to user ======
+    // If any JS error occurs (especially on old Chrome versions on
+    // projectors), show it in a small banner so the user knows what's
+    // wrong instead of seeing a dead page.
+    window.addEventListener('error', function(e) {
+      console.error('[global-error]', e.message, e.filename + ':' + e.lineno);
+      // Show error to user (but only if it's not a network resource error)
+      if (e.message && e.message.indexOf('Script error') === -1) {
+        try {
+          var errBanner = document.createElement('div');
+          errBanner.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;background:#8B0000;color:#fff;padding:10px;border-radius:8px;font-size:12px;z-index:9999;font-family:monospace;max-height:120px;overflow:auto';
+          errBanner.textContent = 'JS Error: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')';
+          document.body.appendChild(errBanner);
+        } catch (_) {}
+      }
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var reason = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+      console.error('[unhandled-rejection]', reason);
+    });
+
+    // ====== Copy/inspect protection ======
+    // EXCEPT inside the long-press film info popup — there users CAN select
+    // and copy the title/year/rating (that's the whole point of the popup).
+    function isInsideFilmInfoPopup(el) {
+      return !!(el && el.closest && el.closest('.film-info-popup'));
+    }
+    document.addEventListener('contextmenu', e => {
+      if (isInsideFilmInfoPopup(e.target)) return; // allow context menu in popup
+      e.preventDefault();
+    });
+    document.addEventListener('copy', e => {
+      if (isInsideFilmInfoPopup(e.target)) return; // allow copy in popup
+      e.preventDefault();
+    });
+    document.addEventListener('cut', e => {
+      if (isInsideFilmInfoPopup(e.target)) return;
+      e.preventDefault();
+    });
+    document.addEventListener('selectstart', e => {
+      if (isInsideFilmInfoPopup(e.target)) return; // allow text selection in popup
+      e.preventDefault();
+    });
+    document.onkeydown = function(e) {
+      // Allow copy/cut shortcuts inside the long-press film info popup
+      if (isInsideFilmInfoPopup(e.target)) return;
+      const key = e.key || '';
+      if (e.ctrlKey && (key === 'c' || key === 'C' || key === 'x' || key === 'X' || key === 'u' || key === 'U' || key === 's' || key === 'S')) {
+        e.preventDefault();
+        return false;
+      }
+      if (key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
+
+    // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
+    // We need to extract TG user ID from initData and store it in localStorage
+    // BEFORE getBrowserUserId() reads it, so profiles are linked.
+    let tgInitData = '';
+    let tg = null;
+    function initTelegramWebApp() {
+      tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg) return null;
+      try {
+        tg.ready();
+        tg.expand();
+        if (tg.setHeaderColor) tg.setHeaderColor('#000000');
+        if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
+      } catch (_) {}
+      tgInitData = tg.initData || '';
+      if (tgInitData) {
+        try {
+          const params = new URLSearchParams(tgInitData);
+          const userJson = params.get('user');
+          if (userJson) {
+            const u = JSON.parse(userJson);
+            localStorage.setItem('genopoisk_tg_user_id', String(u.id));
+            if (u.username) localStorage.setItem('genopoisk_tg_username', u.username);
+            console.log('[tg] Linked TG user ID:', u.id, 'username:', u.username);
+          }
+        } catch (_) {}
+      }
+      console.log('[tg] Telegram WebApp initialized, has initData:', !!tgInitData);
+      return tg;
+    }
+    // Try immediately — in Telegram Mini App, telegram-web-app.js is already loaded
+    tg = initTelegramWebApp();
+
+    // --- User identification ---
+    // Priority: 1) Stored TG user ID (from previous Telegram visit, in localStorage)
+    //           2) Stable localStorage web_ ID (persists across VPN changes)
+    function getBrowserUserId() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) {
+        console.log('[user] Using stored TG ID:', tgId);
+        return tgId;
+      }
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
+    }
+    // DYNAMIC userId — re-reads localStorage EVERY TIME (not a const!)
+    // This fixes the core bug: telegram-web-app.js loads async and stores
+    // TG user ID in localStorage AFTER getBrowserUserId() was first called.
+    // With a const, all subsequent trackEvent calls used the old web_ ID.
+    function getUserId() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      if (tgId) return tgId;
+      let id = localStorage.getItem('genopoisk_user_id');
+      if (!id) {
+        const rand = Math.random().toString(36).slice(2, 11);
+        const time = Date.now().toString(36);
+        id = `web_${time}_${rand}`;
+        localStorage.setItem('genopoisk_user_id', id);
+      }
+      return id;
+    }
+
+    // --- Telegram OIDC Login bar ---
+    // Two states:
+    //   A) Not logged in → show "Войти через Telegram" (login button)
+    //   B) Logged in → show "Открыть в Telegram" (link to bot) + ✕ close button
+    // User can dismiss state B with ✕ — it remembers the dismissal in
+    // sessionStorage so it stays hidden during the browsing session.
+    // In Mini App (running inside Telegram already) the bar is hidden entirely.
+    const tgLoginBar = document.getElementById('tgLoginBar');
+    const tgLoginStateLoggedOut = document.getElementById('tgLoginStateLoggedOut');
+    const tgLoginStateLoggedIn = document.getElementById('tgLoginStateLoggedIn');
+    const tgLoginBarCloseBtn = document.getElementById('tgLoginBarClose');
+
+    function checkTgLoginBar() {
+      const isInTelegram = !!(tg && tg.initData);
+      const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
+      const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
+      const isLoggedIn = !!(storedTgId || storedTgUsername);
+
+      // Hide/show fixed bottom Telegram button
+      var fixedBtn = document.getElementById('fixedTelegramBtn');
+      var fixedText = document.getElementById('fixedTelegramText');
+      // Detect TV/projector/large non-touch screen — hide the fixed Telegram
+      // button there (it clutters the bottom of the screen and gets in the
+      // way of D-pad navigation). User can still open Telegram via the top
+      // login bar or the lite-banner link.
+      var isTVDevice = (function() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
+                          'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+                          'aftt', 'aftm', 'bento'];
+        for (var i = 0; i < tvPatterns.length; i++) {
+          if (ua.indexOf(tvPatterns[i]) !== -1) return true;
+        }
+        // Android tablet-like with large screen + no real touch = projector
+        var isAndroid = ua.indexOf('android') !== -1;
+        var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
+        if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
+        // Removed: "no touch + large screen" check — caused false positives
+        // on desktop monitors (1920px+ is common for Full HD/2K/4K monitors).
+        // Real TVs/projectors are caught by UA keywords above.
+        return false;
+      })();
+      if (fixedBtn) {
+        if (isInTelegram || isTVDevice) {
+          fixedBtn.classList.add('hidden');
+        } else {
+          fixedBtn.classList.remove('hidden');
+          if (fixedText && typeof t === 'function') fixedText.textContent = t('openInTelegram');
+        }
+      }
+
+      // Top bar: only show login button if NOT logged in.
+      // If logged in — hide top bar entirely (fixed bottom button handles it).
+      if (isInTelegram) {
+        tgLoginBar.classList.remove('visible');
+        return;
+      }
+      if (isLoggedIn) {
+        // Logged in — hide top bar, fixed bottom button is enough
+        tgLoginBar.classList.remove('visible');
+        return;
+      }
+      // Not logged in — show login button in top bar
+      tgLoginStateLoggedOut.style.display = '';
+      tgLoginStateLoggedIn.style.display = 'none';
+      tgLoginBar.classList.add('visible');
+    }
+
+    if (tgLoginBarCloseBtn) {
+      tgLoginBarCloseBtn.addEventListener('click', function() {
+        sessionStorage.setItem('genopoisk_tg_bar_dismissed', '1');
+        tgLoginBar.classList.remove('visible');
+      });
+    }
+    // DON'T call checkTgLoginBar yet — wait for telegram-web-app.js to load
+    // (it's async, so tg might be null on first run even in Mini App)
+
+    // Check for ?telegram_login=success&tg_id=... (from OAuth callback redirect)
+    const urlParams = new URLSearchParams(window.location.search);
+    const telegramLogin = urlParams.get('telegram_login');
+    const tgIdFromUrl = urlParams.get('tg_id');
+    const tgNameFromUrl = urlParams.get('tg_name');
+    const tgUsernameFromUrl = urlParams.get('tg_username');
+
+    if (telegramLogin === 'success' && tgIdFromUrl) {
+      // OAuth success — store user data
+      localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
+      if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
+      if (tgUsernameFromUrl) localStorage.setItem('genopoisk_tg_username', tgUsernameFromUrl);
+      console.log('[tg] OIDC login successful, TG ID:', tgIdFromUrl, 'username:', tgUsernameFromUrl);
+      // Clean URL
+      history.replaceState(null, '', window.location.pathname);
+      window.location.reload();
+    } else if (telegramLogin === 'error') {
+      const msg = urlParams.get('message') || 'unknown';
+      console.error('[tg] OIDC login error:', msg);
+      history.replaceState(null, '', window.location.pathname);
+    }
+
+    // Also handle ?tg_id= (fallback from bot deep link)
+    if (tgIdFromUrl && !telegramLogin) {
+      localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
+      if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
+      console.log('[tg] Linked via bot, TG ID:', tgIdFromUrl);
+      history.replaceState(null, '', window.location.pathname);
+      window.location.reload();
+    }
+
+    // --- Check if user still exists in stats (after "logout all devices") ---
+    async function checkAuth() {
+      const tgId = localStorage.getItem('genopoisk_tg_user_id');
+      const tgUsername = localStorage.getItem('genopoisk_tg_username');
+      if (!tgId && !tgUsername) return; // not logged in at all
+      if (tg && tg.initData) return; // Mini App — always authenticated
+      try {
+        const res = await fetch('/api/user-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: tgId, username: tgUsername, initData: getTgInitData() })
+        });
+        const data = await res.json();
+        if (data.reauth) {
+          console.log('[auth] User not found, clearing localStorage');
+          localStorage.removeItem('genopoisk_tg_user_id');
+          localStorage.removeItem('genopoisk_tg_user_name');
+          localStorage.removeItem('genopoisk_tg_username');
+          window.location.reload();
+        }
+      } catch (e) { console.warn('[auth] check failed:', e); }
+    }
+
+    // --- Wait for telegram-web-app.js to load, then init everything ---
+    // This ensures tg is available before checkTgLoginBar and checkAuth
+    window.addEventListener('load', function() {
+      // Retry TG init (async script should be loaded by now)
+      if (!tg) {
+        tg = initTelegramWebApp();
+      }
+      // Now check login bar (tg is set, even in Mini App)
+      checkTgLoginBar();
+      // Check auth status
+      checkAuth();
+    });
+
+    // Also try immediately (for browsers without Telegram — checkTgLoginBar shows bar)
+    // But only for NON-Mini-App contexts (don't show bar in Mini App)
+    if (!window.Telegram) {
+      // No Telegram at all — definitely a browser → show login bar
+      checkTgLoginBar();
+      checkAuth();
+    }
+
+    // Periodic auth check — picks up "logout all devices" within ~2 minutes
+    // for already-open tabs without requiring a manual page reload.
+    // Only runs in browser context (Mini App initData is always authenticated).
+    setInterval(function() {
+      if (tg && tg.initData) return; // skip Mini App
+      checkAuth();
+    }, 120000);
+
+    // --- Register service worker for offline PWA support ---
+    // Caches the app shell (index.html, icons, manifest, bridge.js) so the
+    // main page works offline. Player and API calls always need network.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+          console.log('[sw] registered, scope:', reg.scope);
+        }).catch(function(e) {
+          console.warn('[sw] registration failed:', e);
+        });
+      });
+    }
+
+    // --- PWA install info (mobile-only) ---
+    // Shows a floating "📲 Как установить приложение" button ONLY when:
+    //   - NOT in Telegram Mini App
+    //   - NOT already running as installed PWA (display-mode: standalone)
+    //   - On a mobile device (phone or tablet)
+    // Desktop browsers have their own native install prompts (Chrome ⊕ in
+    // address bar) so we don't show this button there.
+    //
+    // Click opens a modal with platform-specific instructions:
+    //   - iOS Safari: Share → На экран Домой
+    //   - Chrome/Edge Android: uses beforeinstallprompt (native install dialog)
+    //     if available, otherwise instructions for menu ⋮
+    //   - Firefox / other Android browsers: menu ⋮ → Добавить на главный экран
+
+    function pwaIsStandalone() {
+      try {
+        return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+               (window.navigator.standalone === true) ||
+               (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches);
+      } catch (_) { return false; }
+    }
+
+    function pwaIsTelegramMiniApp() {
+      try {
+        var t = window.Telegram && window.Telegram.WebApp;
+        if (!t) return false;
+        if (t.initData && t.initData.length > 0) return true;
+        if (t.platform && t.platform !== 'unknown') return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaIsIOS() {
+      try {
+        var ua = navigator.userAgent || '';
+        var platform = navigator.platform || '';
+        if (/iPhone|iPad|iPod/i.test(ua)) return true;
+        // iPadOS 13+ reports as MacIntel with touch
+        if (platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaIsMobile() {
+      try {
+        var ua = navigator.userAgent || '';
+        // Android phone, iPhone, iPad, small Windows/Mac touch devices
+        if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return true;
+        // iPadOS 13+
+        if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+        return false;
+      } catch (_) { return false; }
+    }
+
+    function pwaShowInstallInfoButton() {
+      // Skip: Mini App, already-installed PWA, desktop browsers
+      if (pwaIsTelegramMiniApp()) return;
+      if (pwaIsStandalone()) return;
+      if (!pwaIsMobile()) return;
+
+      // Floating button at bottom-right corner (less intrusive than centered bar)
+      var btn = document.createElement('button');
+      btn.id = 'pwaInstallInfoBtn';
+      btn.textContent = '📲';
+      btn.title = 'Как установить приложение';
+      btn.setAttribute('aria-label', 'Как установить приложение');
+      btn.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#007AFF;color:#fff;border:none;width:52px;height:52px;border-radius:50%;font-size:24px;cursor:pointer;z-index:1000;box-shadow:0 4px 16px rgba(0,122,255,0.5);font-family:inherit;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;line-height:1;';
+      document.body.appendChild(btn);
+
+      var deferredPrompt = null;
+      var isIOS = pwaIsIOS();
+
+      // Chrome/Edge fire beforeinstallprompt — capture for native flow
+      window.addEventListener('beforeinstallprompt', function(e) {
+        console.log('[pwa] beforeinstallprompt fired');
+        e.preventDefault();
+        deferredPrompt = e;
+      });
+
+      // If app gets installed (any browser), hide button
+      window.addEventListener('appinstalled', function() {
+        console.log('[pwa] app installed');
+        btn.remove();
+      });
+
+      btn.addEventListener('click', function() {
+        if (deferredPrompt) {
+          // Native Chrome/Edge flow — show install prompt directly
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function() {
+            deferredPrompt = null;
+          }).catch(function() {});
+        } else if (isIOS) {
+          pwaShowIosInstructions();
+        } else {
+          // Android non-Chrome (Firefox, Samsung Internet, etc.)
+          pwaShowAndroidInstructions();
+        }
+      });
+    }
+
+    function pwaShowIosInstructions() {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      var modal = document.createElement('div');
+      modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+      modal.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка на iPhone/iPad</div>' +
+        '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
+        '<p style="margin:0 0 10px;">1. Нажмите кнопку <b>«Поделиться»</b> внизу Safari (квадрат со стрелкой вверх ▲).</p>' +
+        '<p style="margin:0 0 10px;">2. В меню выберите <b>«На экран&nbsp;Домой»</b> (➕).</p>' +
+        '<p style="margin:0 0 10px;">3. Нажмите <b>«Добавить»</b> в правом верхнем углу.</p>' +
+        '<p style="margin:0;">Приложение появится на главном экране.</p>' +
+        '</div>' +
+        '<button id="pwaIosClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.id === 'pwaIosClose') overlay.remove();
+      });
+    }
+
+    function pwaShowAndroidInstructions() {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      var modal = document.createElement('div');
+      modal.style.cssText = 'background:#1c1c1e;color:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+      var ua = navigator.userAgent || '';
+      var browserName = 'браузере';
+      if (ua.indexOf('Firefox') !== -1) browserName = 'Firefox';
+      else if (ua.indexOf('SamsungBrowser') !== -1) browserName = 'Samsung Internet';
+      else if (ua.indexOf('Edg/') !== -1) browserName = 'Edge';
+      else if (ua.indexOf('Chrome') !== -1) browserName = 'Chrome';
+      modal.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:14px;">📲 Установка на Android</div>' +
+        '<div style="font-size:14px;line-height:1.5;color:rgba(255,255,255,0.85);">' +
+        '<p style="margin:0 0 10px;">В ' + browserName + ':</p>' +
+        '<p style="margin:0 0 10px;">1. Нажмите меню браузера (значок <b>⋮</b> в правом верхнем углу).</p>' +
+        '<p style="margin:0 0 10px;">2. Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</p>' +
+        '<p style="margin:0 0 10px;">3. Подтвердите установку.</p>' +
+        '<p style="margin:0;">Приложение появится на рабочем столе и в списке приложений.</p>' +
+        '</div>' +
+        '<button id="pwaAndroidClose" style="margin-top:18px;width:100%;background:#007AFF;color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Понятно</button>';
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay || e.target.id === 'pwaAndroidClose') overlay.remove();
+      });
+    }
+
+    // Wait for window load so telegram-web-app.js has a chance to initialize
+    // (we need its platform field to detect Mini App).
+    window.addEventListener('load', function() {
+      setTimeout(pwaShowInstallInfoButton, 300);
+    });
+
+    // --- Tracking ---
+    // tgInitData is read DYNAMICALLY each time (not cached)
+    function getTgInitData() {
+      const t = window.Telegram && window.Telegram.WebApp;
+      return (t && t.initData) || '';
+    }
+
+    async function trackEvent(type, payload = {}) {
+      try {
+        const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type,
+            initData: getTgInitData(),
+            userId: getUserId(),
+            username: tgUsername,
+            ...payload
+          })
+        });
+      } catch (e) { console.warn('track error:', e); }
+    }
+
+    // ====== DEBUG-ONLY: Effects + Settings panel ======
+    // Activates ONLY when document.title contains '[DEBUG]' (i.e. debug build).
+    // In production, none of this code runs — no performance impact.
+    (function setupDebugEffects() {
+      if (!document.title || document.title.indexOf('[DEBUG]') === -1) return;
+      console.log('[debug-effects] Activating debug effects & settings panel');
+
+      // --- Inject effect CSS ---
+      var effectStyle = document.createElement('style');
+      effectStyle.textContent = `
+        /* Debug effects — only active when <body> has class 'fx-on' */
+        body.fx-on .action-card { animation: fx-fade-up 0.4s cubic-bezier(0.4,0,0.2,1) backwards; }
+        body.fx-on .action-card:nth-child(1) { animation-delay: 0.05s; }
+        body.fx-on .action-card:nth-child(2) { animation-delay: 0.1s; }
+        body.fx-on .action-card:nth-child(3) { animation-delay: 0.15s; }
+        body.fx-on .action-card:nth-child(4) { animation-delay: 0.2s; }
+        body.fx-on .action-card:nth-child(5) { animation-delay: 0.25s; }
+        body.fx-on .film-card { animation: fx-fade-up 0.35s cubic-bezier(0.4,0,0.2,1) backwards; }
+    .film-poster { opacity: 0; transition: opacity 0.3s ease; }
+    .film-poster.loaded { opacity: 1; }
+    .film-poster.error { opacity: 0.3; }
+        body.fx-on .hero { animation: fx-fade-in 0.6s ease-out; }
+        body.fx-on .search-wrapper { animation: fx-slide-down 0.5s ease-out; }
+        body.fx-on .content { animation: fx-fade-in 0.3s ease-out; }
+        body.fx-on .resume-card.visible { animation: fx-slide-up 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+        body.fx-on .btn:active, body.fx-on .action-card:active { transform: scale(0.92); }
+
+        @keyframes fx-fade-up { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+        @keyframes fx-fade-in { from { opacity:0; } to { opacity:1; } }
+        @keyframes fx-slide-down { from { opacity:0; transform: translateY(-15px); } to { opacity:1; transform: translateY(0); } }
+        @keyframes fx-slide-up { from { opacity:0; transform: translateY(30px); } to { opacity:1; transform: translateY(0); } }
+        @keyframes fx-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+        /* === 1. Cube loader (replaces spinner) === */
+        .fx-loader-cube {
+          width: 44px; height: 44px;
+          transform: rotateZ(45deg);
+          position: relative;
+          margin-right: 12px;
+        }
+        .fx-loader-cube span {
+          display: block;
+          position: absolute;
+          width: 20px; height: 20px;
+          background: #22d3ee;
+          animation: fx-cube-fold 2.4s infinite linear;
+        }
+        .fx-loader-cube span:nth-child(1) { top: 0; left: 0; }
+        .fx-loader-cube span:nth-child(2) { top: 0; right: 0; animation-delay: 0.6s; background: #8b5cf6; }
+        .fx-loader-cube span:nth-child(3) { bottom: 0; left: 0; animation-delay: 1.2s; background: #ec4899; }
+        .fx-loader-cube span:nth-child(4) { bottom: 0; right: 0; animation-delay: 1.8s; background: #f59e0b; }
+        @keyframes fx-cube-fold {
+          0%, 10%    { transform: perspective(120px) rotateX(-180deg); opacity: 0; }
+          25%, 75%   { transform: perspective(120px) rotateX(0deg);    opacity: 1; }
+          90%, 100%  { transform: perspective(120px) rotateY(180deg);  opacity: 0; }
+        }
+        body.fx-on .spinner { display: none !important; }
+        body.fx-on .loader { align-items: center; }
+        body.fx-on .loader::before {
+          content: '';
+          display: block;
+          width: 44px; height: 44px;
+          transform: rotateZ(45deg);
+          position: relative;
+          animation: fx-cube-fold 2.4s infinite linear;
+          background: #22d3ee;
+          margin-right: 12px;
+        }
+
+        /* === 2. Rainbow text on hero title === */
+        body.fx-on .hero-title {
+          font-weight: 900 !important;
+          letter-spacing: 4px !important;
+        }
+        body.fx-on .hero-title span.fx-rb {
+          display: inline-block;
+          color: hsl(calc(var(--i, 0) * 60deg) 80% 60%);
+          animation: fx-rainbow 4s linear infinite;
+          animation-delay: calc(var(--i, 0) * -0.4s);
+          -webkit-text-fill-color: hsl(calc(var(--i, 0) * 60deg) 80% 60%) !important;
+          background: none !important;
+        }
+        @keyframes fx-rainbow { to { filter: hue-rotate(360deg); } }
+
+        /* === 3. Holographic action cards === */
+        body.fx-on .action-card {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+          --mx: 50%;
+          --my: 50%;
+          perspective: 800px;
+          transition: transform 0.15s ease-out, box-shadow 0.3s !important;
+        }
+        body.fx-on .action-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(
+            circle at var(--mx) var(--my),
+            rgba(236,72,153,0.5),
+            rgba(139,92,246,0.4),
+            rgba(34,211,238,0.3),
+            rgba(16,185,129,0.2),
+            rgba(245,158,11,0.1)
+          );
+          filter: blur(20px);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          z-index: -1;
+        }
+        body.fx-on .action-card::after {
+          content: "";
+          position: absolute;
+          inset: 1px;
+          border-radius: 19px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(0,0,0,0.3));
+          z-index: 0;
+          pointer-events: none;
+        }
+        body.fx-on .action-card:hover::before { opacity: 0.7; }
+        body.fx-on .action-card:hover {
+          transform: rotateX(15deg) rotateY(-15deg) translateY(-4px) !important;
+          box-shadow: 0 18px 40px -10px rgba(168,85,247,0.5) !important;
+        }
+        body.fx-on .action-card > * { position: relative; z-index: 1; }
+
+        /* === 4. Film card hover zoom + caption slide === */
+        body.fx-on .film-card {
+          overflow: hidden;
+          border-radius: 14px;
+          box-shadow: 0 14px 30px -10px rgba(0,0,0,0.4);
+        }
+        body.fx-on .film-card:hover {
+          transform: translateY(-6px) !important;
+          box-shadow: 0 20px 50px -10px rgba(0,122,255,0.5) !important;
+        }
+        body.fx-on .film-poster {
+          transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease !important;
+        }
+        body.fx-on .film-card:hover .film-poster {
+          transform: scale(1.12);
+        }
+        body.fx-on .film-info {
+          position: absolute !important;
+          left: 0; right: 0; bottom: 0;
+          padding: 16px !important;
+          background: linear-gradient(transparent, rgba(0,0,0,0.85)) !important;
+          transform: translateY(100%);
+          transition: transform 0.4s ease !important;
+          z-index: 2;
+        }
+        body.fx-on .film-card:hover .film-info {
+          transform: translateY(0);
+        }
+        body.fx-on .film-title {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+        }
+        body.fx-on .film-meta span { font-size: 12px; opacity: 0.85; }
+
+        /* Settings gear button */
+        #debugSettingsBtn {
+          position: fixed; top: 12px; right: 12px; z-index: 1500;
+          width: 40px; height: 40px; border-radius: 50%;
+          background: var(--bg-secondary); border: 1px solid var(--separator);
+          color: var(--text-primary); font-size: 20px; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+          transition: transform 0.3s, background 0.2s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        #debugSettingsBtn:hover { transform: rotate(45deg); background: var(--bg-tertiary); }
+        #debugSettingsBtn:active { transform: rotate(45deg) scale(0.9); }
+
+        /* Settings panel */
+        #debugSettingsPanel {
+          position: fixed; top: 60px; right: 12px; z-index: 1500;
+          background: var(--bg-secondary); border: 1px solid var(--separator);
+          border-radius: 16px; padding: 16px; min-width: 260px;
+          box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+          display: none; font-family: inherit;
+        }
+        #debugSettingsPanel.visible { display: block; animation: fx-slide-down 0.2s ease-out; }
+        .ds-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; }
+        .ds-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--separator); }
+        .ds-row:last-child { border-bottom: none; }
+        .ds-label { font-size: 13px; color: var(--text-primary); }
+        .ds-value { font-size: 13px; font-weight: 600; color: var(--ios-blue); min-width: 50px; text-align: right; }
+        .ds-slider { width: 100px; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: var(--separator); outline: none; }
+        .ds-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--ios-blue); cursor: pointer; }
+        .ds-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ios-blue); cursor: pointer; border: none; }
+        .ds-toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--separator); position: relative; cursor: pointer; transition: background 0.2s; border: none; padding: 0; }
+        .ds-toggle.on { background: var(--ios-blue); }
+        .ds-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+        .ds-toggle.on::after { transform: translateX(20px); }
+        .ds-btn { width: 100%; padding: 8px; border-radius: 10px; border: 1px solid var(--separator); background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px; cursor: pointer; margin-top: 8px; font-family: inherit; }
+        .ds-btn:active { transform: scale(0.96); }
+      `;
+      document.head.appendChild(effectStyle);
+
+      // --- Settings gear button ---
+      var gearBtn = document.createElement('button');
+      gearBtn.id = 'debugSettingsBtn';
+      gearBtn.textContent = '⚙️';
+      gearBtn.title = 'Настройки (debug)';
+      document.body.appendChild(gearBtn);
+
+      // --- Settings panel ---
+      var panel = document.createElement('div');
+      panel.id = 'debugSettingsPanel';
+      panel.innerHTML = `
+        <div class="ds-title">⚙️ Настройки (debug)</div>
+        <div class="ds-row">
+          <span class="ds-label">🧊 Cube loader</span>
+          <button class="ds-toggle" id="dsFx1Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">🌈 Rainbow title</span>
+          <button class="ds-toggle" id="dsFx2Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">💎 Holo cards</span>
+          <button class="ds-toggle" id="dsFx3Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">🔍 Film zoom</span>
+          <button class="ds-toggle" id="dsFx4Toggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">Масштаб</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="range" class="ds-slider" id="dsZoomSlider" min="50" max="150" value="100" step="5">
+            <span class="ds-value" id="dsZoomValue">100%</span>
+          </div>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">Тема</span>
+          <button class="ds-btn" id="dsThemeBtn" style="width:auto;padding:6px 12px;margin:0;">🎨 Цикл</button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">🔥 IRONFORGE</span>
+          <button class="ds-toggle" id="dsIronforgeToggle"></button>
+        </div>
+        <div class="ds-row">
+          <span class="ds-label">🌐 Язык</span>
+          <button class="ds-btn" id="dsLangBtn" style="width:auto;padding:6px 12px;margin:0;">RU</button>
+        </div>
+        <button class="ds-btn" id="dsResetBtn">Сбросить настройки</button>
+        <button class="ds-btn" id="dsSaveAllBtn" style="margin-top:6px;background:var(--ios-blue);color:#fff;border:none;">💾 Сохранить для всех</button>
+      `;
+      document.body.appendChild(panel);
+
+      // Load saved settings
+      var savedZoom = localStorage.getItem('debug_zoom') || '100';
+      var savedFx1 = localStorage.getItem('debug_fx1') === 'on';
+      var savedFx2 = localStorage.getItem('debug_fx2') === 'on';
+      var savedFx3 = localStorage.getItem('debug_fx3') === 'on';
+      var savedFx4 = localStorage.getItem('debug_fx4') === 'on';
+      var savedLang = localStorage.getItem('debug_lang') || (window.__genopoiskLang || 'ru');
+
+      // Apply zoom
+      function applyZoom(zoom) {
+        document.documentElement.style.zoom = zoom + '%';
+        if (!('zoom' in document.documentElement.style) || navigator.userAgent.indexOf('Firefox') !== -1) {
+          document.body.style.transform = 'scale(' + (zoom / 100) + ')';
+          document.body.style.transformOrigin = 'top center';
+        }
+        var zv = document.getElementById('dsZoomValue');
+        var zs = document.getElementById('dsZoomSlider');
+        if (zv) zv.textContent = zoom + '%';
+        if (zs) zs.value = zoom;
+      }
+      applyZoom(savedZoom);
+
+      // --- Individual effect toggles ---
+      // fx1: Cube loader, fx2: Rainbow title, fx3: Holo cards, fx4: Film zoom
+      function updateBodyClasses() {
+        document.body.classList.toggle('fx-on', savedFx1 || savedFx2 || savedFx3 || savedFx4);
+        document.body.classList.toggle('fx-cube', savedFx1);
+        document.body.classList.toggle('fx-rainbow', savedFx2);
+        document.body.classList.toggle('fx-holo', savedFx3);
+        document.body.classList.toggle('fx-zoom', savedFx4);
+      }
+
+      function applyFx1(on) {
+        savedFx1 = on;
+        document.body.classList.toggle('fx-cube', on);
+        updateBodyClasses();
+        document.getElementById('dsFx1Toggle').classList.toggle('on', on);
+        if (on) {
+          // Hide spinner, show cube
+          var loader = document.getElementById('loader');
+          if (loader) loader.classList.add('fx-cube-loader');
+        } else {
+          var loader2 = document.getElementById('loader');
+          if (loader2) loader2.classList.remove('fx-cube-loader');
+        }
+        localStorage.setItem('debug_fx1', on ? 'on' : 'off');
+      }
+
+      function applyFx2(on) {
+        savedFx2 = on;
+        document.body.classList.toggle('fx-rainbow', on);
+        updateBodyClasses();
+        document.getElementById('dsFx2Toggle').classList.toggle('on', on);
+        if (on) {
+          var titleEl = document.querySelector('.hero-title');
+          if (titleEl && !titleEl.dataset.fxRainbow) {
+            titleEl.dataset.fxRainbow = '1';
+            var badge = titleEl.querySelector('#premiumBadge');
+            var text = titleEl.textContent.replace(badge ? badge.textContent : '', '').trim();
+            var html = badge ? badge.outerHTML : '';
+            for (var i = 0; i < text.length; i++) {
+              html += '<span class="fx-rb" style="--i:' + i + '">' + text[i] + '</span>';
+            }
+            titleEl.innerHTML = html;
+          }
+        }
+        localStorage.setItem('debug_fx2', on ? 'on' : 'off');
+      }
+
+      function applyFx3(on) {
+        savedFx3 = on;
+        document.body.classList.toggle('fx-holo', on);
+        updateBodyClasses();
+        document.getElementById('dsFx3Toggle').classList.toggle('on', on);
+        if (on && !window._fxMouseTrack) {
+          window._fxMouseTrack = true;
+          document.addEventListener('mousemove', function(e) {
+            document.querySelectorAll('.action-card').forEach(function(card) {
+              var rect = card.getBoundingClientRect();
+              var x = e.clientX - rect.left;
+              var y = e.clientY - rect.top;
+              if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+                card.style.setProperty('--mx', (x / rect.width * 100) + '%');
+                card.style.setProperty('--my', (y / rect.height * 100) + '%');
+              }
+            });
+          });
+        }
+        localStorage.setItem('debug_fx3', on ? 'on' : 'off');
+      }
+
+      function applyFx4(on) {
+        savedFx4 = on;
+        document.body.classList.toggle('fx-zoom', on);
+        updateBodyClasses();
+        document.getElementById('dsFx4Toggle').classList.toggle('on', on);
+        localStorage.setItem('debug_fx4', on ? 'on' : 'off');
+      }
+
+      // Apply all on load
+      applyFx1(savedFx1);
+      applyFx2(savedFx2);
+      applyFx3(savedFx3);
+      applyFx4(savedFx4);
+
+      // --- Language toggle ---
+      function applyLang(lang) {
+        window.__genopoiskLang = lang;
+        localStorage.setItem('debug_lang', lang);
+        var btn = document.getElementById('dsLangBtn');
+        if (btn) btn.textContent = lang.toUpperCase();
+        if (typeof applyTranslations === 'function') applyTranslations();
+      }
+      applyLang(savedLang);
+
+      // Toggle panel
+      gearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        panel.classList.toggle('visible');
+      });
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#debugSettingsPanel') && !e.target.closest('#debugSettingsBtn')) {
+          panel.classList.remove('visible');
+        }
+      });
+
+      // Individual effect toggles
+      document.getElementById('dsFx1Toggle').addEventListener('click', function() { applyFx1(!this.classList.contains('on')); });
+      document.getElementById('dsFx2Toggle').addEventListener('click', function() { applyFx2(!this.classList.contains('on')); });
+      document.getElementById('dsFx3Toggle').addEventListener('click', function() { applyFx3(!this.classList.contains('on')); });
+      document.getElementById('dsFx4Toggle').addEventListener('click', function() { applyFx4(!this.classList.contains('on')); });
+
+      // Language toggle
+      document.getElementById('dsLangBtn').addEventListener('click', function() {
+        var newLang = (window.__genopoiskLang === 'ru') ? 'en' : 'ru';
+        applyLang(newLang);
+      });
+
+      // Zoom slider
+      document.getElementById('dsZoomSlider').addEventListener('input', function() {
+        var z = this.value;
+        applyZoom(z);
+        localStorage.setItem('debug_zoom', z);
+      });
+
+      // Theme toggle (reuses existing toggleTheme)
+      document.getElementById('dsThemeBtn').addEventListener('click', function() {
+        if (typeof toggleTheme === 'function') toggleTheme();
+      });
+
+      // Reset
+      document.getElementById('dsResetBtn').addEventListener('click', function() {
+        localStorage.removeItem('debug_zoom');
+        localStorage.removeItem('debug_fx1');
+        localStorage.removeItem('debug_fx2');
+        localStorage.removeItem('debug_fx3');
+        localStorage.removeItem('debug_fx4');
+        localStorage.removeItem('debug_ironforge');
+        localStorage.removeItem('debug_lang');
+        applyZoom(100);
+        applyFx1(false); applyFx2(false); applyFx3(false); applyFx4(false);
+        applyIronforge(false);
+        applyLang(window.__genopoiskLang || 'ru');
+        console.log('[debug] Settings reset');
+      });
+
+      // Save for all — copies debug settings to production (localStorage
+      // without debug_ prefix, so production index.html reads them)
+      document.getElementById('dsSaveAllBtn').addEventListener('click', function() {
+        // Save effects as production settings (fx-on class on body)
+        localStorage.setItem('prod_fx1', savedFx1 ? 'on' : 'off');
+        localStorage.setItem('prod_fx2', savedFx2 ? 'on' : 'off');
+        localStorage.setItem('prod_fx3', savedFx3 ? 'on' : 'off');
+        localStorage.setItem('prod_fx4', savedFx4 ? 'on' : 'off');
+        localStorage.setItem('prod_ironforge', localStorage.getItem('debug_ironforge') || 'off');
+        localStorage.setItem('prod_lang', window.__genopoiskLang || 'ru');
+        localStorage.setItem('prod_zoom', savedZoom);
+        // Show confirmation
+        var btn = document.getElementById('dsSaveAllBtn');
+        if (btn) {
+          btn.textContent = '✅ Сохранено!';
+          btn.style.background = '#34C759';
+          setTimeout(function() {
+            btn.textContent = '💾 Сохранить для всех';
+            btn.style.background = 'var(--ios-blue)';
+          }, 2000);
+        }
+        console.log('[debug] Settings saved for production');
+      });
+
+      // --- IRONFORGE design preset ---
+      // Extracted from IRONFORGE template: dark bg with orange accent,
+      // grain overlay, scroll reveal, card hover lift, pulse glow,
+      // custom scrollbar, text stroke effects, corner notch.
+      var ironforgeStyle = null;
+      function applyIronforge(on) {
+        var toggle = document.getElementById('dsIronforgeToggle');
+        if (toggle) toggle.classList.toggle('on', on);
+
+        if (on && !ironforgeStyle) {
+          ironforgeStyle = document.createElement('style');
+          ironforgeStyle.id = 'ironforge-preset';
+          ironforgeStyle.textContent = `
+            /* === IRONFORGE Design Preset === */
+            :root {
+              --if-bg: #0a0a0a;
+              --if-bg-card: #141414;
+              --if-fg: #f5f5f5;
+              --if-accent: #FF5400;
+              --if-accent-glow: rgba(255, 84, 0, 0.45);
+              --if-border: #1f1f1f;
+            }
+
+            /* Grain overlay */
+            body.ironforge::after {
+              content: '';
+              position: fixed;
+              inset: -10%;
+              pointer-events: none;
+              z-index: 200;
+              opacity: 0.06;
+              background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='250' height='250'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+              mix-blend-mode: overlay;
+            }
+
+            body.ironforge {
+              background: var(--if-bg) !important;
+              --bg-primary: #0a0a0a;
+              --bg-secondary: #141414;
+              --bg-tertiary: #1a1a1a;
+              --text-primary: #f5f5f5;
+              --text-secondary: #999;
+              --separator: #1f1f1f;
+              --fill: rgba(255, 84, 0, 0.08);
+              --ios-blue: #FF5400;
+            }
+
+            body.ironforge .hero {
+              background: linear-gradient(135deg, rgba(255,84,0,0.12) 0%, rgba(10,10,10,0.8) 50%, rgba(255,84,0,0.08) 100%) !important;
+              border-color: var(--if-border) !important;
+            }
+            body.ironforge .hero-title {
+              background: linear-gradient(135deg, #FF5400 0%, #FF7A33 50%, #FF5400 100%) !important;
+              -webkit-background-clip: text !important;
+              -webkit-text-fill-color: transparent !important;
+            }
+
+            body.ironforge .film-card {
+              background: var(--if-bg-card) !important;
+              border: 1px solid var(--if-border) !important;
+              border-radius: 12px !important;
+              overflow: hidden;
+              transition: transform 0.5s cubic-bezier(0.22,1,0.36,1), border-color 0.4s, box-shadow 0.4s !important;
+            }
+            body.ironforge .film-card:hover {
+              transform: translateY(-8px) !important;
+              border-color: var(--if-accent) !important;
+              box-shadow: 0 12px 40px var(--if-accent-glow) !important;
+            }
+            body.ironforge .film-card:hover .film-poster {
+              filter: grayscale(60%) contrast(1.3) brightness(0.8);
+              transform: scale(1.05);
+            }
+            body.ironforge .film-poster {
+              transition: filter 0.6s, transform 0.6s !important;
+            }
+
+            body.ironforge .action-card {
+              background: var(--if-bg-card) !important;
+              border: 1px solid var(--if-border) !important;
+              border-radius: 16px !important;
+              position: relative;
+              transition: transform 0.4s, border-color 0.4s, box-shadow 0.4s !important;
+            }
+            body.ironforge .action-card:hover {
+              border-color: var(--if-accent) !important;
+              box-shadow: 0 8px 24px var(--if-accent-glow) !important;
+              transform: translateY(-4px) !important;
+            }
+            /* Corner notch */
+            body.ironforge .action-card::before,
+            body.ironforge .action-card::after {
+              content: '';
+              position: absolute;
+              width: 12px;
+              height: 12px;
+              border: 1px solid var(--if-accent);
+              pointer-events: none;
+              opacity: 0;
+              transition: opacity 0.3s;
+            }
+            body.ironforge .action-card::before {
+              top: -1px; left: -1px;
+              border-right: none; border-bottom: none;
+            }
+            body.ironforge .action-card::after {
+              bottom: -1px; right: -1px;
+              border-left: none; border-top: none;
+            }
+            body.ironforge .action-card:hover::before,
+            body.ironforge .action-card:hover::after { opacity: 1; }
+
+            body.ironforge .search-input {
+              background: var(--if-bg-card) !important;
+              border-color: var(--if-border) !important;
+              border-radius: 12px !important;
+            }
+            body.ironforge .search-input:focus {
+              border-color: var(--if-accent) !important;
+              box-shadow: 0 0 0 4px var(--if-accent-glow) !important;
+            }
+
+            body.ironforge .content {
+              background: var(--if-bg-card) !important;
+              border-color: var(--if-border) !important;
+              border-radius: 20px !important;
+            }
+
+            body.ironforge .tg-login-bar {
+              background: var(--if-bg-card) !important;
+              border-color: var(--if-border) !important;
+            }
+
+            body.ironforge .resume-card {
+              background: linear-gradient(135deg, rgba(255,84,0,0.15), rgba(20,20,20,0.9)) !important;
+              border-color: var(--if-accent) !important;
+              border-radius: 16px !important;
+            }
+
+            /* Pulse glow on primary buttons */
+            body.ironforge .btn-close,
+            body.ironforge .search-clear {
+              animation: if-pulse 3s ease-out infinite;
+            }
+            @keyframes if-pulse {
+              0%, 100% { box-shadow: 0 0 0 0 var(--if-accent-glow); }
+              50% { box-shadow: 0 0 0 8px transparent; }
+            }
+
+            /* Custom scrollbar */
+            body.ironforge::-webkit-scrollbar { width: 8px; }
+            body.ironforge::-webkit-scrollbar-track { background: #050505; }
+            body.ironforge::-webkit-scrollbar-thumb { background: #B33A00; border-radius: 4px; }
+            body.ironforge::-webkit-scrollbar-thumb:hover { background: #FF5400; }
+
+            /* Text stroke effect on hero title hover */
+            body.ironforge .hero-title:hover {
+              -webkit-text-stroke: 1px #FF5400;
+              -webkit-text-fill-color: transparent;
+            }
+
+            /* Section reveal on scroll */
+            body.ironforge .film-card,
+            body.ironforge .action-card {
+              opacity: 0;
+              transform: translateY(30px);
+              animation: if-reveal 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+            }
+            body.ironforge .film-card:nth-child(1) { animation-delay: 0.05s; }
+            body.ironforge .film-card:nth-child(2) { animation-delay: 0.1s; }
+            body.ironforge .film-card:nth-child(3) { animation-delay: 0.15s; }
+            body.ironforge .film-card:nth-child(4) { animation-delay: 0.2s; }
+            body.ironforge .film-card:nth-child(5) { animation-delay: 0.25s; }
+            body.ironforge .film-card:nth-child(6) { animation-delay: 0.3s; }
+            @keyframes if-reveal {
+              to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* Loader spinner color */
+            body.ironforge .spinner {
+              border-top-color: #FF5400 !important;
+            }
+
+            /* Debug settings button glow */
+            body.ironforge #debugSettingsBtn {
+              background: #FF5400 !important;
+              box-shadow: 0 0 16px var(--if-accent-glow) !important;
+            }
+          `;
+          document.head.appendChild(ironforgeStyle);
+          document.body.classList.add('ironforge');
+          console.log('[ironforge] Design preset ON');
+        } else if (!on && ironforgeStyle) {
+          ironforgeStyle.remove();
+          ironforgeStyle = null;
+          document.body.classList.remove('ironforge');
+          console.log('[ironforge] Design preset OFF');
+        }
+      }
+
+      var savedIronforge = localStorage.getItem('debug_ironforge') === 'on';
+      applyIronforge(savedIronforge);
+
+      document.getElementById('dsIronforgeToggle').addEventListener('click', function() {
+        var on = !this.classList.contains('on');
+        applyIronforge(on);
+        localStorage.setItem('debug_ironforge', on ? 'on' : 'off');
+      });
+
+      console.log('[debug-effects] Settings panel ready. Zoom:', savedZoom + '%', 'Effects:', savedEffects);
+    })();
+
+    // --- Holo card repel + glow tracking (production) ---
+    // Cards repel from cursor (tilt away) + glow follows cursor
+    document.addEventListener('mousemove', function(e) {
+      document.querySelectorAll('.action-card').forEach(function(card) {
+        var rect = card.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        // Track cursor within 150px of card (for repel + glow)
+        if (x >= -150 && x <= rect.width + 150 && y >= -150 && y <= rect.height + 150) {
+          // Glow position (0-100%)
+          var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
+          card.style.setProperty('--mx', px + '%');
+          card.style.setProperty('--my', py + '%');
+
+          // Repel: card tilts AWAY from cursor
+          // Center of card = (width/2, height/2)
+          // Cursor offset from center: -1 to 1
+          var cx = (x / rect.width) - 0.5;   // -0.5 (left) to 0.5 (right)
+          var cy = (y / rect.height) - 0.5;   // -0.5 (top) to 0.5 (bottom)
+          // Tilt: cursor on left → card tilts right (repel)
+          var maxTilt = 15; // max degrees
+          var maxShift = 8; // max pixels shift
+          var rx = -cy * maxTilt * 2;  // negate Y for natural tilt
+          var ry = cx * maxTilt * 2;
+          var tx = cx * maxShift * 2;
+          var ty = cy * maxShift * 2;
+          // Smooth clamp
+          rx = Math.max(-maxTilt, Math.min(maxTilt, rx));
+          ry = Math.max(-maxTilt, Math.min(maxTilt, ry));
+          tx = Math.max(-maxShift, Math.min(maxShift, tx));
+          ty = Math.max(-maxShift, Math.min(maxShift, ty));
+          card.style.setProperty('--rx', rx + 'deg');
+          card.style.setProperty('--ry', ry + 'deg');
+          card.style.setProperty('--tx', tx + 'px');
+          card.style.setProperty('--ty', ty + 'px');
+        }
+      });
+    });
+
+    // Track initial page view
+    trackEvent('page_views', { path: '/' });
+
+    // --- Resume card: load last watched film ---
+    const resumeCard = document.getElementById('resumeCard');
+    const resumeTitle = document.getElementById('resumeTitle');
+    const resumeMeta = document.getElementById('resumeMeta');
+    const resumeClose = document.getElementById('resumeClose');
+    let resumeFilm = null;
+
+    async function loadResumeCard() {
+      // Note: removed sessionStorage dismissal check — card should always show
+      // if user has a recently watched film.
+      try {
+        var uid = getUserId();
+        var initData = getTgInitData();
+        console.log('[resume] loadResumeCard called, uid:', uid, 'initData:', initData ? 'yes' : 'no');
+        const res = await fetch('/api/last-film', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData: initData,
+            userId: uid || ''
+          })
+        });
+        if (!res.ok) { console.warn('[resume] last-film HTTP', res.status); return; }
+        const data = await res.json();
+        console.log('[resume] last-film response:', data.film ? data.film.title : 'null');
+        if (!data.film) return;
+        // Only show if watched in last 48h
+        const age = Date.now() - new Date(data.film.ts).getTime();
+        if (age > 48 * 60 * 60 * 1000) return;
+        resumeFilm = data.film;
+
+        // Resolve the best position to display + use for resume:
+        //   1. Server-provided position (cross-device, saved by player.html on another device)
+        //   2. localStorage position (this device's last session)
+        // Server wins because it's the most recent across all devices.
+        let bestPosition = 0;
+        if (typeof data.film.position === 'number' && data.film.position > 5) {
+          bestPosition = data.film.position;
+        } else {
+          try {
+            const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
+            if (raw) {
+              const pos = JSON.parse(raw);
+              if (pos && pos.t && pos.t > 5) bestPosition = pos.t;
+            }
+          } catch (_) {}
+        }
+
+        // Save server position to localStorage so player.html picks it up
+        // even if it doesn't read ?t= URL param.
+        if (bestPosition > 5) {
+          try {
+            localStorage.setItem(`genopoisk_position_${data.film.filmId}`, JSON.stringify({
+              t: bestPosition,
+              d: data.film.duration || 0,
+              ts: new Date().toISOString(),
+              title: data.film.title
+            }));
+          } catch (_) {}
+          resumeTitle.textContent = data.film.title;
+          resumeMeta.textContent = '▶ с ' + formatResumeTime(bestPosition);
+        } else {
+          resumeTitle.textContent = data.film.title;
+          resumeMeta.textContent = 'Продолжить просмотр';
+        }
+        // Set poster image from our proxy
+        var posterEl = document.getElementById('resumePoster');
+        if (posterEl) {
+          posterEl.src = '/api/poster?id=' + encodeURIComponent(data.film.filmId) + '&size=small';
+          posterEl.style.display = 'block';
+          posterEl.onerror = function() { this.style.display = 'none'; };
+        }
+        resumeCard.classList.add('visible');
+      } catch (e) { console.warn('resume load error:', e); }
+    }
+
+    function formatResumeTime(s) {
+      if (!s || s < 0 || !isFinite(s)) s = 0;
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      const pad = (n) => n < 10 ? '0' + n : '' + n;
+      return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+    }
+
+    resumeCard.addEventListener('click', async (e) => {
+      if (e.target === resumeClose) return;
+      if (resumeFilm) {
+        const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
+        const payload = JSON.stringify({
+          type: 'movies_opened',
+          initData: getTgInitData(),
+          userId: getUserId(),
+          username: tgUsername,
+          filmId: resumeFilm.filmId,
+          title: resumeFilm.title
+        });
+        try {
+          await fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          });
+        } catch (err) {
+          console.warn('track error:', err);
+          try {
+            if (navigator.sendBeacon) {
+              const blob = new Blob([payload], { type: 'application/json' });
+              navigator.sendBeacon('/api/track', blob);
+            }
+          } catch (_) {}
+        }
+        // Pass ?t= so player.html knows the cross-device resume position
+        const startPos = (typeof resumeFilm.position === 'number' && resumeFilm.position > 5)
+          ? resumeFilm.position
+          : 0;
+        const tParam = startPos > 0 ? `&t=${startPos}` : '';
+        setTimeout(function() {
+          window.location.href = `player.html?id=${resumeFilm.filmId}&title=${encodeURIComponent(resumeFilm.title)}${tParam}`;
+        }, 100);
+      }
+    });
+    resumeClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resumeCard.classList.remove('visible');
+    });
+
+    // Fire async — don't block page load
+    loadResumeCard();
+
+    // Prefetch BOTH lambdas on page load to warm them up:
+    // 1. /api/poster — first call takes 2+ seconds (cold start),
+    //    subsequent calls are 40ms (Vercel Edge cache).
+    // 2. /api/kinopoisk — first call also slow (cold start + upstream fetch),
+    //    subsequent calls are 250ms (cache hit).
+    // By firing prefetches on page load, we warm BOTH caches BEFORE the
+    // user clicks a category. When they click "Популярные", both lambdas
+    // are already warm — films + posters load in <500ms total.
+    try {
+      fetch('/api/poster?id=251733&size=small', { method: 'GET' }).catch(function(){});
+      fetch('/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1', { method: 'GET' }).catch(function(){});
+    } catch(_) {}
+
+    // Retry after window load — ONLY if we're in Telegram Mini App
+    // (telegram-web-app.js loads async, so tgInitData may not be available
+    // on first call). In regular browser, initData never appears, so
+    // retrying is a waste of a network request.
+    window.addEventListener('load', function() {
+      // Only retry if we're in Telegram and card is not visible yet
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram && !resumeCard.classList.contains('visible')) {
+        if (!tg) tg = initTelegramWebApp();
+        loadResumeCard();
+      }
+    });
+
+    let currentCategory = null;
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
+
+    // ====== Mobile pagination ======
+    // On mobile (Telegram Mini App, phone browsers) loading 20 films at once
+    // is wasteful — the screen only shows ~6-8 cards. We fetch a full page
+    // (20 films) from Kinopoisk, then display in smaller chunks:
+    //   - Initial load: 12 films (visible + a bit of buffer for scroll)
+    //   - Each subsequent scroll-load: 8 films
+    // On desktop, keep the original behavior (full 20 per page).
+    // The "film buffer" holds films fetched but not yet displayed.
+    let filmBuffer = [];
+    const MOBILE_INITIAL = 12;
+    const MOBILE_CHUNK = 8;
+    const DESKTOP_PAGE_SIZE = 20;
+
+    function isMobileView() {
+      try {
+        if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return true;
+      } catch (_) {}
+      var ua = navigator.userAgent || '';
+      if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua)) return true;
+      // iPadOS 13+ reports as MacIntel with touch
+      if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) return true;
+      return false;
+    }
+
+    const content = document.getElementById('content');
+    const loader = document.getElementById('loader');
+    const filmGrid = document.getElementById('filmGrid');
+    const searchInput = document.getElementById('searchInput');
+
+    // ====== Theme system ======
+    // Four modes: 'dark' (default), 'light', 'night' (extra dark, low blue),
+    // 'auto' (chooses based on time of day + system preference).
+    // Click on the 'Genopoisk' title cycles: dark → light → night → auto.
+    //
+    // Auto mode logic:
+    //   - 07:00–19:00 → light (daytime)
+    //   - 19:00–22:00 → dark (evening)
+    //   - 22:00–07:00 → night (night, low blue light for eye comfort)
+    //   - If system prefers-color-scheme is dark, shift one step darker
+    //     (day→dark, evening→night, night stays night)
+    //
+    // Auto mode re-evaluates every 30 minutes (covers sun changing position
+    // while the page is open).
+
+    function applyTheme(theme) {
+      var body = document.body;
+      body.classList.remove('light-theme', 'night-theme');
+      if (theme === 'light') {
+        body.classList.add('light-theme');
+      } else if (theme === 'night') {
+        body.classList.add('night-theme');
+      }
+      // 'dark' = no extra class (default body styles)
+      var metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) {
+        metaTheme.content = theme === 'light' ? '#F2F2F7' : (theme === 'night' ? '#050510' : '#000000');
+      }
+    }
+
+    function getAutoTheme() {
+      var hour = new Date().getHours();
+      var prefersDark = false;
+      try {
+        prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch (_) {}
+      var theme;
+      if (hour >= 7 && hour < 19) {
+        theme = prefersDark ? 'dark' : 'light';
+      } else if (hour >= 19 && hour < 22) {
+        theme = prefersDark ? 'night' : 'dark';
+      } else {
+        theme = 'night';
+      }
+      return theme;
+    }
+
+    function getCurrentThemeMode() {
+      return localStorage.getItem('theme_mode') || 'dark';
+    }
+
+    function resolveTheme() {
+      var mode = getCurrentThemeMode();
+      if (mode === 'auto') {
+        return getAutoTheme();
+      }
+      return mode; // 'dark', 'light', or 'night'
+    }
+
+    function applyCurrentTheme() {
+      applyTheme(resolveTheme());
+    }
+
+    function toggleTheme() {
+      // Cycle: dark → light → night → auto → dark
+      var modes = ['dark', 'light', 'night', 'auto'];
+      var current = getCurrentThemeMode();
+      var idx = modes.indexOf(current);
+      if (idx === -1) idx = 0;
+      var next = modes[(idx + 1) % modes.length];
+      localStorage.setItem('theme_mode', next);
+      applyCurrentTheme();
+      // Show a brief toast so user knows which mode they're on
+      var labels = window.__themeLabels || { dark: '🌙 Тёмная', light: '☀️ Светлая', night: '🌌 Ночная', auto: '🔄 Авто (по времени)' };
+      if (typeof showToast === 'function') {
+        showToast(labels[next] || next, 1500);
+      } else {
+        console.log('[theme] Switched to:', next);
+      }
+    }
+
+    // Apply theme on load
+    applyCurrentTheme();
+
+    // Apply translations based on detected language
+    function applyTranslations() {
+      var lang = window.__genopoiskLang || 'ru';
+      console.log('[i18n] Language:', lang);
+      // Hero subtitle
+      var hs = document.getElementById('heroSubtitle');
+      if (hs) hs.textContent = t('heroSubtitle');
+      // Search input placeholder
+      var si = document.getElementById('searchInput');
+      if (si) si.placeholder = t('searchPlaceholder');
+      // Search clear button title
+      var sc = document.getElementById('searchClear');
+      if (sc) sc.title = t('searchClear');
+      // Category cards
+      var cards = document.querySelectorAll('.action-card .action-title');
+      if (cards.length >= 5) {
+        cards[0].textContent = t('catPopular');
+        cards[1].textContent = t('catTop250');
+        cards[2].textContent = t('catNew');
+        cards[3].textContent = t('catRandom');
+        cards[4].textContent = t('catFavorites');
+      }
+      // Resume label
+      var rl = document.querySelector('.resume-label');
+      if (rl) rl.textContent = t('resumeLabel');
+      // Loader text
+      var lt = document.querySelector('.loader-text');
+      if (lt) lt.textContent = t('loading');
+      // Login buttons
+      var loginBtn = document.getElementById('tgLoginBtn');
+      if (loginBtn) {
+        // Find text node inside (after SVG)
+        var textNode = null;
+        loginBtn.childNodes.forEach(function(n) {
+          if (n.nodeType === 3 && n.textContent.trim()) textNode = n;
+        });
+        if (textNode) textNode.textContent = ' ' + t('loginTelegram') + ' ';
+      }
+      var openBtn = document.querySelector('#tgLoginStateLoggedIn a');
+      if (openBtn) {
+        // Find the text node (not inside a <span>) — it's the direct
+        // text child of <a> after the <span>🤖</span>
+        openBtn.childNodes.forEach(function(n) {
+          if (n.nodeType === 3 && n.textContent.trim()) {
+            n.textContent = ' ' + t('openInTelegram') + ' ';
+          }
+        });
+      }
+      // Theme toggle labels
+      window.__themeLabels = {
+        dark: t('themeDark'),
+        light: t('themeLight'),
+        night: t('themeNight'),
+        auto: t('themeAuto')
+      };
+      // Hero title tooltip
+      var ht = document.querySelector('.hero-title');
+      if (ht) {
+        if (lang === 'en') ht.title = 'Cycle: dark → light → night → auto';
+        else ht.title = 'Цикл: тёмная → светлая → ночная → авто';
+      }
+      // Auto-translate any element with data-i18n attribute
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        if (key) el.textContent = t(key);
+      });
+    }
+    applyTranslations();
+
+    // ====== Action card holographic tracking (DESKTOP ONLY) ======
+    // Cards ONLY move when:
+    //   - Desktop: cursor hovers DIRECTLY over the card (no press needed)
+    //     Mousemove within card bounds updates tilt + glow.
+    //     Mouseleave → spring back to neutral.
+    //   - Mobile (Telegram Mini App, phones, tablets, any touch device):
+    //     cards are COMPLETELY STATIC. Touch does nothing — no tilt,
+    //     no glow, no tracking. This matches the user's request:
+    //     "remove finger-tracking on mobile".
+    //
+    // Detection: isMobileView() (same helper used for pagination).
+    function setupActionCardEffects() {
+      // MOBILE = no effects at all on action cards
+      if (isMobileView()) {
+        return;
+      }
+
+      var cards = document.querySelectorAll('.action-card');
+      cards.forEach(function(card) {
+        var raf = null;
+
+        function updateFromPoint(clientX, clientY) {
+          var rect = card.getBoundingClientRect();
+          var x = clientX - rect.left;
+          var y = clientY - rect.top;
+          var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
+          // Reduced tilt: ±6° instead of ±10° — subtler reaction
+          var rx = ((y / rect.height) - 0.5) * -12;
+          var ry = ((x / rect.width) - 0.5) * 12;
+          card.style.setProperty('--mx', px + '%');
+          card.style.setProperty('--my', py + '%');
+          card.style.setProperty('--rx', rx.toFixed(2) + 'deg');
+          card.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+        }
+
+        function startTracking() {
+          card.classList.add('tracking');
+        }
+        function stopTracking() {
+          card.classList.remove('tracking');
+          card.style.setProperty('--mx', '50%');
+          card.style.setProperty('--my', '50%');
+          card.style.setProperty('--rx', '0deg');
+          card.style.setProperty('--ry', '0deg');
+        }
+
+        // Desktop: hover-tracking (no button press needed).
+        // mousemove over the card itself updates position 1:1.
+        card.addEventListener('mouseenter', function(e) {
+          startTracking();
+          updateFromPoint(e.clientX, e.clientY);
+        });
+        card.addEventListener('mousemove', function(e) {
+          if (raf) cancelAnimationFrame(raf);
+          var x = e.clientX, y = e.clientY;
+          raf = requestAnimationFrame(function() {
+            updateFromPoint(x, y);
+          });
+        });
+        card.addEventListener('mouseleave', stopTracking);
+      });
+    }
+
+    // ====== Hero title cursor-following glow (DESKTOP ONLY) ======
+    // On desktop, the Genopoisk hero title glows brighter where the
+    // cursor is. The .cursor-glow class is added on mouseenter over
+    // the hero (or any ancestor), and the --cursor-x/y/--cursor-strength
+    // CSS vars update on mousemove. On mobile: no effect, just the
+    // base animated glow.
+    function setupHeroTitleGlow() {
+      if (isMobileView()) return;
+      var heroTitle = document.querySelector('.hero-title');
+      var hero = document.querySelector('.hero');
+      if (!heroTitle || !hero) return;
+      var raf = null;
+
+      hero.addEventListener('mouseenter', function() {
+        heroTitle.classList.add('cursor-glow');
+        heroTitle.style.setProperty('--cursor-strength', '1');
+      });
+      hero.addEventListener('mousemove', function(e) {
+        if (raf) cancelAnimationFrame(raf);
+        var x = e.clientX, y = e.clientY;
+        raf = requestAnimationFrame(function() {
+          var rect = heroTitle.getBoundingClientRect();
+          // Position relative to hero-title's bounding box
+          var px = ((x - rect.left) / rect.width) * 100;
+          var py = ((y - rect.top) / rect.height) * 100;
+          // Clamp to [-20, 120] so glow extends slightly beyond title
+          px = Math.max(-20, Math.min(120, px));
+          py = Math.max(-20, Math.min(120, py));
+          heroTitle.style.setProperty('--cursor-x', px + '%');
+          heroTitle.style.setProperty('--cursor-y', py + '%');
+          // Strength = 1 when cursor is near the title, fades to 0.3
+          // when cursor is at the edge of the hero section
+          var cx = (rect.left + rect.width / 2);
+          var cy = (rect.top + rect.height / 2);
+          var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+          var maxDist = 400; // pixels
+          var strength = Math.max(0.3, 1 - dist / maxDist);
+          heroTitle.style.setProperty('--cursor-strength', strength.toFixed(2));
+        });
+      });
+      hero.addEventListener('mouseleave', function() {
+        heroTitle.style.setProperty('--cursor-strength', '0');
+        // Keep .cursor-glow class so the fade-out is visible
+        setTimeout(function() {
+          if (heroTitle.style.getPropertyValue('--cursor-strength') === '0') {
+            heroTitle.classList.remove('cursor-glow');
+          }
+        }, 400);
+      });
+    }
+
+    // ====== Action card click handler with debounce ======
+    // Prevents double-fire in Telegram Mini App where click event can
+    // fire twice (once from touchstart→click, once from synthetic click).
+    // Also prevents rapid double-tap from triggering the category twice.
+    var lastCategoryClick = 0;
+    var lastCategoryTarget = null;
+    function setupActionCardClicks() {
+      var cards = document.querySelectorAll('.action-card[data-cat]');
+      cards.forEach(function(card) {
+        card.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var cat = card.dataset.cat;
+          var now = Date.now();
+          // Debounce: ignore clicks within 500ms on the SAME card
+          if (lastCategoryTarget === card && (now - lastCategoryClick) < 500) {
+            console.log('[action-card] Ignored duplicate click on', cat);
+            return;
+          }
+          lastCategoryClick = now;
+          lastCategoryTarget = card;
+          if (cat === 'favorites') {
+            loadFavorites();
+          } else {
+            loadCategory(cat);
+          }
+        });
+        // Keyboard support: Enter/Space activates the card
+        card.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            card.click();
+          }
+        });
+      });
+    }
+
+    // Run after DOM is ready (cards must exist before attaching handlers)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setupActionCardEffects();
+        setupActionCardClicks();
+        setupHeroTitleGlow();
+      });
+    } else {
+      setupActionCardEffects();
+      setupActionCardClicks();
+      setupHeroTitleGlow();
+    }
+    // Also re-run after translations apply (in case cards were re-rendered)
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        setupActionCardEffects();
+        setupHeroTitleGlow();
+      }, 100);
+    });
+
+    // Check premium status and show crown badge if premium
+    async function checkPremiumStatus() {
+      try {
+        var uid = getUserId();
+        if (!uid || String(uid).indexOf('web_') === 0) return; // guest
+        var res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+        });
+        if (!res.ok) return;
+        var data = await res.json();
+        if (data.is_premium) {
+          var badge = document.getElementById('premiumBadge');
+          if (badge) {
+            badge.style.display = 'inline';
+            console.log('[premium] Crown badge shown');
+          }
+        }
+      } catch (e) {
+        console.warn('[premium] check failed:', e);
+      }
+    }
+    checkPremiumStatus();
+
+    // In auto mode, re-evaluate every 30 minutes
+    setInterval(function() {
+      if (getCurrentThemeMode() === 'auto') {
+        applyCurrentTheme();
+      }
+    }, 30 * 60 * 1000);
+
+    // Also re-evaluate when system color scheme changes (e.g. user toggles
+    // OS dark mode while page is open)
+    try {
+      var mql = window.matchMedia('(prefers-color-scheme: dark)');
+      if (mql && typeof mql.addEventListener === 'function') {
+        mql.addEventListener('change', function() {
+          if (getCurrentThemeMode() === 'auto') applyCurrentTheme();
+        });
+      } else if (mql && typeof mql.addListener === 'function') {
+        mql.addListener(function() {
+          if (getCurrentThemeMode() === 'auto') applyCurrentTheme();
+        });
+      }
+    } catch (_) {}
+
+    // apiGet with automatic retry on 429/403 (Cloudflare IP block from VPN).
+    // Uses ES5 syntax (var, function) for compatibility with old Chrome
+    // versions on Android projectors (some run Chrome 50-70 which doesn't
+    // support let/const/arrow functions).
+    async function apiGet(url) {
+      var lastErr = null;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          var res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (res.ok) return await res.json();
+
+          // Try to parse JSON error response
+          var errData = null;
+          try { errData = await res.json(); } catch (_) {}
+
+          // Retry on 429, 403, 5xx — all could be transient (VPN block,
+          // Cloudflare rate-limit, lambda cold start, etc.)
+          var isRetryable = (res.status === 429 || res.status === 403 ||
+                             res.status === 500 || res.status === 502 ||
+                             res.status === 503 || res.status === 504);
+          if (isRetryable && attempt === 0) {
+            var msg = (errData && errData.message) || ('HTTP ' + res.status);
+            lastErr = new Error(msg);
+            console.warn('[apiGet] Got ' + res.status + ', retrying in 2s...', msg);
+            // Show a friendly hint to the user
+            var filmGridEl = document.getElementById('filmGrid');
+            if (filmGridEl && filmGridEl.children.length === 0) {
+              filmGridEl.innerHTML = '<div class="empty-state">⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...</div>';
+            }
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            continue;
+          }
+
+          // Other errors — throw immediately
+          if (errData && errData.message) throw new Error(errData.message);
+          throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+        } catch (e) {
+          // Network error — retry once
+          lastErr = e;
+          if (attempt === 0) {
+            console.warn('[apiGet] Network error, retrying in 2s:', e.message);
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+            continue;
+          }
+          throw e;
+        }
+      }
+      throw lastErr || new Error('Request failed');
+    }
+
+    function extractFilms(data) {
+      if (!data) return [];
+      return data.films || data.items || data.results || [];
+    }
+
+    async function getPopular(page = 1) {
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getTop250(page = 1) {
+      const url = `${API_BASE}/v2.2/films/top?type=TOP_250_BEST_FILMS&page=${page}`;
+      const d = await apiGet(url);
+      const f = extractFilms(d);
+      if (f.length === 0) {
+        const fb = `${API_BASE}/v2.2/films?order=RATING&type=FILM&ratingFrom=8&ratingTo=10&page=${page}`;
+        return extractFilms(await apiGet(fb));
+      }
+      return f;
+    }
+
+    async function getNew(page = 1) {
+      const currentYear = new Date().getFullYear();
+      const url = `${API_BASE}/v2.2/films?order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=${currentYear}&yearTo=${currentYear}&page=${page}`;
+      return extractFilms(await apiGet(url));
+    }
+
+    async function getRandomFilm() {
+      const randomPage = Math.floor(Math.random() * 5) + 1;
+      const films = await getTop250(randomPage);
+      if (films && films.length > 0) return films[Math.floor(Math.random() * films.length)];
+      return null;
+    }
+
+    // In-flight search request — if user types another character while the
+    // previous search is still loading, we abort it and start a new one.
+    // This prevents stale results from overwriting newer ones, and avoids
+    // wasting bandwidth on requests the user no longer cares about.
+    let currentSearchController = null;
+
+    async function searchFilms(query) {
+      // Abort previous in-flight search
+      if (currentSearchController) {
+        try { currentSearchController.abort(); } catch (_) {}
+      }
+      currentSearchController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const url = `${API_BASE}/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(query)}&page=1`;
+      try {
+        const data = await apiGet(url);
+        return extractFilms(data);
+      } finally {
+        currentSearchController = null;
+      }
+    }
+
+    function showLoader() {
+      content.classList.remove('hidden');
+      loader.classList.remove('hidden');
+    }
+
+    function hideLoader() {
+      loader.classList.add('hidden');
+    }
+
+    // Show loader until all posters in the grid have loaded.
+    // Called after appendFilms — waits for every <img> to fire onload/onerror.
+    // Uses a Map to track which images are still pending.
+    var posterLoadTimeout = null;
+    function waitForPosters() {
+      // Clear any previous timeout
+      if (posterLoadTimeout) clearTimeout(posterLoadTimeout);
+      // Get only NEW posters (not yet loaded — no .loaded or .error class)
+      var imgs = filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)');
+      if (imgs.length === 0) {
+        hideLoader();
+        return;
+      }
+      var pending = imgs.length;
+      function check() {
+        pending--;
+        if (pending <= 0) {
+          hideLoader();
+          if (posterLoadTimeout) { clearTimeout(posterLoadTimeout); posterLoadTimeout = null; }
+        }
+      }
+      imgs.forEach(function(img) {
+        if (img.complete) {
+          // Already loaded or errored
+          if (img.naturalWidth > 0) {
+            img.classList.add('loaded');
+          } else {
+            img.classList.add('error');
+          }
+          check();
+        } else {
+          img.addEventListener('load', function() {
+            this.classList.add('loaded');
+            check();
+          }, { once: true });
+          img.addEventListener('error', function() {
+            this.classList.add('error');
+            check();
+          }, { once: true });
+        }
+      });
+      // Safety timeout — hide loader after 4s even if not all posters
+      // loaded (was 10s — too long, made the site feel slow).
+      // Posters will still load in the background and appear as they arrive.
+      posterLoadTimeout = setTimeout(function() {
+        // Force-load any remaining images
+        filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)').forEach(function(img) {
+          img.classList.add(img.naturalWidth > 0 ? 'loaded' : 'error');
+        });
+        hideLoader();
+      }, 4000);
+    }
+
+    function clearFilms() {
+      filmGrid.innerHTML = '';
+      filmGrid.classList.remove('centered');
+      filmBuffer = []; // reset mobile pagination buffer
+    }
+
+    function showEmptyState(msg) {
+      hideLoader();
+      filmGrid.classList.remove('centered');
+      filmGrid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">🎬</div><div class="empty-text">${msg}</div></div>`;
+    }
+
+    function displayFilms(films, forceCenter = false) {
+      clearFilms();
+      appendFilms(films, forceCenter);
+    }
+
+    // Append films to grid without clearing (for infinite scroll)
+    function appendFilms(films, forceCenter = false) {
+      if (!films || films.length === 0) {
+        if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
+        return;
+      }
+      filmGrid.classList.remove('centered');
+      filmGrid.classList.remove('random-mode');
+      const frag = document.createDocumentFragment();
+      films.forEach((film, index) => {
+        const filmId = film.filmId || film.kinopoiskId;
+        const title = film.nameRu || film.nameEn || 'Без названия';
+        const year = film.year || 'Н/Д';
+        const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
+        const poster = filmId ? `/api/poster?id=${filmId}&size=small` : '';
+        // First 6 posters: high priority, no lazy loading (visible immediately)
+        // Rest: lazy + async (load when scrolled into view)
+        // Mobile pagination initial batch is 12 — eager-load all of them
+        // so they fire in parallel (multiple /api/poster lambdas at once,
+        // each racing 3 API keys = up to 36 parallel requests to Kinopoisk).
+        // Subsequent chunks (8 films) lazy-load when scrolled into view.
+        const isAboveFold = index < 12;
+        const loadingAttr = isAboveFold ? 'eager' : 'lazy';
+        const fetchPriority = isAboveFold ? 'fetchpriority="high"' : '';
+        const card = document.createElement('div');
+        card.className = 'film-card';
+        if (index < 10) card.style.animationDelay = `${index * 0.04}s`;
+        card.innerHTML = `
+          <img src="${poster}" class="film-poster" alt="${title}" loading="${loadingAttr}" ${fetchPriority} decoding="async" onload="this.classList.add('loaded')" onerror="this.classList.add('error');this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>'">
+          <div class="film-info">
+            <div class="film-title">${title}</div>
+            <div class="film-meta">
+              <span>${year}</span>
+              ${rating !== 'Н/Д' ? `<span class="rating">⭐ ${rating}</span>` : ''}
+            </div>
+          </div>`;
+        // Store film data on the card for long-press popup use
+        card.dataset.filmId = filmId || '';
+        card.dataset.title = title;
+        card.dataset.year = year;
+        card.dataset.rating = (rating !== 'Н/Д') ? rating : '';
+        card.dataset.poster = poster || '';
+        card.onclick = () => openPlayer(filmId, title);
+        // Attach long-press handler for mobile info popup
+        attachLongPress(card);
+        frag.appendChild(card);
+      });
+      filmGrid.appendChild(frag);
+      // Hide loader IMMEDIATELY — don't wait for posters.
+      // Posters load in background and appear as they arrive.
+      // This fixes the "cards don't load" issue on mobile where
+      // waitForPosters could block the UI for up to 4 seconds.
+      hideLoader();
+      if (forceCenter || films.length === 1) {
+        // Single film (random or search with 1 result) — center it
+        filmGrid.classList.add('centered');
+      }
+      // Show long-press hint once on first batch (touch devices only)
+      showLongPressHintOnce();
+    }
+
+    // ====== Long-press film info popup (mobile) ======
+    // On touch devices, :hover doesn't work so film-info is invisible.
+    // Long-press (touchstart + hold 500ms without significant move)
+    // opens a popup with film details. Inside the popup, text is
+    // SELECTABLE so users can copy the title/year (overriding the
+    // body-wide copy protection).
+    //
+    // Also works on desktop: right-click shows the same popup
+    // (since contextmenu is prevented globally outside the popup).
+    var LONGPRESS_DURATION = 500; // ms
+    var LONGPRESS_MOVE_TOLERANCE = 10; // px
+
+    function attachLongPress(card) {
+      var pressTimer = null;
+      var startX = 0, startY = 0;
+      var triggered = false;
+
+      function clearPress() {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      }
+
+      card.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        var touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        triggered = false;
+        clearPress();
+        pressTimer = setTimeout(function() {
+          triggered = true;
+          // Prevent the subsequent click (which would open the player)
+          // by calling preventDefault on the touchend.
+          showFilmInfoPopup(card);
+          // Haptic feedback if available (Telegram Mini App, supported browsers)
+          if (tg && tg.HapticFeedback) {
+            try { tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
+          } else if (navigator.vibrate) {
+            try { navigator.vibrate(15); } catch (_) {}
+          }
+        }, LONGPRESS_DURATION);
+      }, { passive: true });
+
+      card.addEventListener('touchmove', function(e) {
+        if (!pressTimer) return;
+        var touch = e.touches[0];
+        var dx = Math.abs(touch.clientX - startX);
+        var dy = Math.abs(touch.clientY - startY);
+        if (dx > LONGPRESS_MOVE_TOLERANCE || dy > LONGPRESS_MOVE_TOLERANCE) {
+          // User is scrolling — cancel the long-press
+          clearPress();
+        }
+      }, { passive: true });
+
+      card.addEventListener('touchend', function(e) {
+        if (triggered) {
+          // Long-press fired — prevent the click that follows touchend
+          e.preventDefault();
+          e.stopPropagation();
+          triggered = false;
+        }
+        clearPress();
+      }, { capture: true });
+
+      card.addEventListener('touchcancel', clearPress);
+
+      // Desktop: right-click also shows the popup (since context menu is
+      // blocked globally, right-click is otherwise a no-op).
+      card.addEventListener('contextmenu', function(e) {
+        // On touch devices, the contextmenu event fires AFTER the long-press
+        // already handled it — skip to avoid showing popup twice.
+        if (isMobileView()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        showFilmInfoPopup(card);
+      });
+    }
+
+    var filmInfoOverlay = document.getElementById('filmInfoOverlay');
+    var filmInfoPopup = document.getElementById('filmInfoPopup');
+    var fipPoster = document.getElementById('fipPoster');
+    var fipTitle = document.getElementById('fipTitle');
+    var fipMeta = document.getElementById('fipMeta');
+    var fipOpenBtn = document.getElementById('fipOpen');
+    var fipCloseBtn = document.getElementById('fipClose');
+    var pendingFilmId = null;
+    var pendingFilmTitle = null;
+
+    function showFilmInfoPopup(card) {
+      var filmId = card.dataset.filmId;
+      var title = card.dataset.title || 'Без названия';
+      var year = card.dataset.year || '';
+      var rating = card.dataset.rating || '';
+      var poster = card.dataset.poster || '';
+
+      pendingFilmId = filmId;
+      pendingFilmTitle = title;
+
+      if (poster) {
+        fipPoster.src = poster;
+        fipPoster.style.display = 'block';
+      } else {
+        fipPoster.style.display = 'none';
+      }
+      fipTitle.textContent = title;
+      // Build meta HTML
+      var metaHtml = '';
+      if (year) metaHtml += '<span>' + escapeHtml(year) + '</span>';
+      if (rating) metaHtml += '<span class="fip-rating">⭐ ' + escapeHtml(rating) + '</span>';
+      if (!metaHtml) metaHtml = '<span style="opacity:0.6;">—</span>';
+      fipMeta.innerHTML = metaHtml;
+
+      filmInfoOverlay.classList.add('visible');
+      // Haptic feedback
+      if (tg && tg.HapticFeedback) {
+        try { tg.HapticFeedback.impactOccurred('light'); } catch (_) {}
+      }
+    }
+
+    function hideFilmInfoPopup() {
+      filmInfoOverlay.classList.remove('visible');
+      pendingFilmId = null;
+      pendingFilmTitle = null;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Close on overlay click (outside popup)
+    filmInfoOverlay.addEventListener('click', function(e) {
+      if (e.target === filmInfoOverlay) hideFilmInfoPopup();
+    });
+    fipCloseBtn.addEventListener('click', hideFilmInfoPopup);
+    // "Смотреть" button → open player (same as clicking the card)
+    fipOpenBtn.addEventListener('click', function() {
+      if (pendingFilmId) {
+        hideFilmInfoPopup();
+        openPlayer(pendingFilmId, pendingFilmTitle);
+      }
+    });
+    // ESC closes popup (desktop)
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && filmInfoOverlay.classList.contains('visible')) {
+        hideFilmInfoPopup();
+      }
+    });
+
+    // Show the long-press hint once per session (touch devices only)
+    var longPressHintShown = false;
+    function showLongPressHintOnce() {
+      if (longPressHintShown) return;
+      if (!isMobileView()) return; // desktop uses hover
+      longPressHintShown = true;
+      var hint = document.getElementById('longpressHint');
+      if (!hint) return;
+      // Localize hint text via i18n
+      if (typeof t === 'function') {
+        hint.textContent = t('longpressHint');
+      }
+      hint.classList.add('visible');
+      setTimeout(function() { hint.classList.remove('visible'); }, 3500);
+    }
+
+    async function openPlayer(filmId, title) {
+      // Send track event reliably before navigating.
+      const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
+      const payload = JSON.stringify({
+        type: 'movies_opened',
+        initData: getTgInitData(),
+        userId: getUserId(),
+        username: tgUsername,
+        filmId: filmId,
+        title: title
+      });
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        });
+      } catch (e) {
+        console.warn('track error:', e);
+        // Fallback: sendBeacon (may not parse as JSON on server, but better than nothing)
+        try {
+          if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon('/api/track', blob);
+          }
+        } catch (_) {}
+      }
+      // Small delay to ensure request is sent before navigation
+      setTimeout(function() {
+        window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
+      }, 100);
+    }
+
+    async function loadCategory(category) {
+      currentCategory = category;
+      currentPage = 1;
+      hasMore = true;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      trackEvent('categories_opened', { category });
+      try {
+        if (category === 'random') {
+          const film = await getRandomFilm();
+          if (film) displayFilms([film], true);
+          else showEmptyState('Не удалось загрузить случайный фильм');
+        } else {
+          await loadMoreFilms();
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
+      }
+    }
+
+    // Load user's favorites from backend and display as a grid.
+    // Each favorite has filmId + title; we fetch poster from kinopoisk by id.
+    async function loadFavorites() {
+      currentCategory = null;
+      hasMore = false;
+      clearFilms();
+      showLoader();
+      searchInput.value = '';
+      const uid = getUserId();
+      if (!uid || uid.startsWith('web_')) {
+        showEmptyState('Войдите через Telegram, чтобы видеть коллекцию');
+        return;
+      }
+      try {
+        const res = await fetch('/api/my-films', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const favs = data.favorites || [];
+        if (favs.length === 0) {
+          showEmptyState('В избранном пока пусто. Нажмите ☆ в плеере, чтобы добавить фильм.');
+          return;
+        }
+        // Fetch each film's details from kinopoisk (poster, year, rating).
+        // Do it in parallel for speed; cap at 30 to avoid hammering API.
+        const films = await Promise.all(favs.slice(0, 30).map(async function(f) {
+          try {
+            const r = await fetch('/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(f.filmId));
+            if (!r.ok) return null;
+            const j = await r.json();
+            return extractFilms({ films: [j] })[0] || null;
+          } catch (_) { return null; }
+        }));
+        // Filter out failed fetches
+        const valid = films.filter(Boolean);
+        if (valid.length === 0) {
+          showEmptyState('Не удалось загрузить постеры фильмов из избранного');
+          return;
+        }
+        displayFilms(valid);
+      } catch (e) {
+        showEmptyState('Ошибка загрузки избранного: ' + e.message);
+      }
+    }
+
+    async function loadMoreFilms() {
+      if (isLoading || !hasMore || !currentCategory) return;
+
+      // Mobile pagination: drain the buffer first before fetching a new page.
+      // On desktop, the buffer is always empty (we display the whole page at
+      // once), so this branch is skipped and we proceed to fetch.
+      if (filmBuffer.length > 0) {
+        const chunk = filmBuffer.splice(0, MOBILE_CHUNK);
+        appendFilms(chunk);
+        // Schedule a check: if user is still near the bottom after the
+        // buffer drain, load more (prevents "stuck" when only 8 films are
+        // shown and screen is tall).
+        setTimeout(function() {
+          if (currentCategory && hasMore && !isLoading) {
+            var scrollPos = window.innerHeight + window.scrollY;
+            var threshold = document.documentElement.scrollHeight - 800;
+            if (scrollPos >= threshold) loadMoreFilms();
+          }
+        }, 100);
+        return;
+      }
+
+      isLoading = true;
+      try {
+        let films = [];
+        switch (currentCategory) {
+          case 'popular':
+            films = await getPopular(currentPage);
+            break;
+          case 'top250':
+            films = await getTop250(currentPage);
+            break;
+          case 'new':
+            films = await getNew(currentPage);
+            break;
+        }
+        if (films.length > 0) {
+          currentPage++;
+          if (isMobileView()) {
+            // Mobile: show MOBILE_INITIAL on first load (empty grid),
+            // otherwise MOBILE_CHUNK from this fresh page.
+            const isFirstLoad = filmGrid.children.length === 0 ||
+                                filmGrid.querySelector('.empty-state');
+            const showNow = isFirstLoad
+              ? films.slice(0, MOBILE_INITIAL)
+              : films.slice(0, MOBILE_CHUNK);
+            // Buffer the rest for subsequent scroll-loads.
+            filmBuffer = films.slice(showNow.length);
+            appendFilms(showNow);
+            // If buffer is empty (page had fewer films than initial), allow
+            // next scroll to fetch the next page.
+          } else {
+            // Desktop: show all 20, no buffering.
+            appendFilms(films);
+          }
+        } else {
+          hasMore = false;
+          if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
+          // Don't call hideLoader here — waitForPosters in appendFilms handles it
+        }
+      } catch (e) {
+        showEmptyState('Ошибка загрузки: ' + e.message);
+        hasMore = false;
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    // --- Search behavior ---
+    // When user types, search results REPLACE the category buttons (actions)
+    // instead of appearing in a separate dropdown. When search is cleared,
+    // categories reappear.
+    // 250ms debounce — fast enough to feel live, slow enough to avoid
+    // hammering the API on every keystroke.
+    const actionsEl = document.querySelector('.actions');
+
+    function hideCategories() {
+      if (actionsEl) actionsEl.style.display = 'none';
+    }
+    function showCategories() {
+      if (actionsEl) actionsEl.style.display = '';
+    }
+
+    let searchTimeout;
+    // Clear button: clears the field AND dismisses the keyboard on mobile
+    // (blur() is what actually triggers keyboard dismissal on iOS Safari
+    // and Android Chrome). Also restores the previous category view.
+    const searchClearBtn = document.getElementById('searchClear');
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        searchInput.blur(); // dismiss keyboard
+        showCategories();
+        if (currentCategory) {
+          loadCategory(currentCategory);
+        } else {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+      });
+    }
+    // Enter key on mobile keyboard = "Готово"/Done → dismiss keyboard
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchInput.blur();
+      }
+    });
+    searchInput.addEventListener('input', function(e) {
+      clearTimeout(searchTimeout);
+      const val = e.target.value.trim();
+      if (!val || val.length < 2) {
+        // Too short — show categories again, hide grid
+        showCategories();
+        if (!currentCategory) {
+          content.classList.add('hidden');
+          clearFilms();
+        }
+        return;
+      }
+      // Search results replace the category buttons
+      hideCategories();
+      // 250ms debounce — fast live search feel
+      searchTimeout = setTimeout(async () => {
+        currentCategory = null;
+        currentPage = 1;
+        hasMore = false;
+        clearFilms();
+        showLoader();
+        trackEvent('searches', { query: val });
+        try {
+          const films = await searchFilms(val);
+          displayFilms(films);
+        } catch (e) {
+          showEmptyState('Ошибка поиска: ' + e.message);
+        }
+      }, 250);
+    });
+
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const threshold = document.documentElement.scrollHeight - 800;
+        if (scrollPosition >= threshold &&
+            currentCategory &&
+            currentCategory !== 'random' &&
+            !isLoading &&
+            hasMore) {
+          loadMoreFilms();
+        }
+      }, 100);
+    });
+
+    // Note: avoid optional chaining (?.) here — old Chrome on Android
+    // projectors (Chrome 50-70) doesn't support ES2020 syntax and the
+    // entire script will fail with SyntaxError, breaking all buttons.
+    if (window.Telegram && window.Telegram.WebApp) {
+      var themeParams = window.Telegram.WebApp.themeParams;
+      if (themeParams && themeParams.bg_color) {
+        var metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.content = themeParams.bg_color;
+      }
+      // Apply Telegram theme to body
+      if (themeParams && themeParams.text_color) document.documentElement.style.setProperty('--text-primary', themeParams.text_color);
+      if (themeParams && themeParams.bg_color) document.documentElement.style.setProperty('--bg-primary', themeParams.bg_color);
+    }
+
+    // Main button for Mini App back navigation
+    if (tg && tg.BackButton) {
+      tg.BackButton.hide();
+    }
+
+    // Auto-focus the hero title ONLY on detected TV/projector devices.
+    // Previously this fired on any non-touch device (including desktop PCs),
+    // causing an unwanted focus ring around "Genopoisk" title on desktop.
+    // Now we only auto-focus if the device matches TV/projector heuristics.
+    if (!(tg && tg.initData)) {
+      var uaLower = (navigator.userAgent || '').toLowerCase();
+      var isDetectedTV = false;
+      var tvKw = ['tv','television','smarttv','googletv','android tv','webos','tizen',
+                  'hbbtv','roku','firetv','aftt','aftm','bento','projector','thundeal',
+                  'thundea','xgimi','wanbo','jmgo','dangbei','nebula','epson','benq',
+                  'optoma','magbox','minix','hk1','x88','t95','tx3','tx6','h96','a95x'];
+      for (var ti = 0; ti < tvKw.length; ti++) {
+        if (uaLower.indexOf(tvKw[ti]) !== -1) { isDetectedTV = true; break; }
+      }
+      // Also auto-focus if user previously saved device as projector
+      if (!isDetectedTV) {
+        try {
+          if (localStorage.getItem('genopoisk_device_type') === 'projector') isDetectedTV = true;
+        } catch (_) {}
+      }
+      // Also auto-focus on Android + large screen (likely projector)
+      if (!isDetectedTV) {
+        var isAndroidUA = uaLower.indexOf('android') !== -1;
+        if (isAndroidUA && window.innerWidth >= 800) isDetectedTV = true;
+      }
+      if (isDetectedTV) {
+        setTimeout(function() {
+          var heroTitleEl = document.querySelector('.hero-title');
+          if (heroTitleEl) heroTitleEl.focus();
+        }, 600);
+      }
+    }
+
+    // ====== Lite version banner — show on TV / projector / large non-touch screens ======
+    // Detection heuristics (any one triggers the banner):
+    //   - User-Agent contains "TV", "GoogleTV", "AndroidTV", "SmartTV", "projector", "Bravia", "WebOS", "Tizen"
+    //   - No touch support ('ontouchstart' not in window) AND viewport width >= 1280px
+    //     (large screen + no touch = likely a TV/projector/HTPC)
+    //   - navigator.userAgentData.brand has "TV" hints (Android TV)
+    //
+    // Banner is dismissible — dismissal stored in sessionStorage so it
+    // doesn't pop back up on every page load.
+    // ====== TV/projector detection + auto-redirect to lite.html ======
+    // Detection heuristics (more comprehensive than before):
+    //   1. UA contains known TV/projector keywords (TV, SmartTV, Bravia,
+    //      WebOS, Tizen, HbbTV, Roku, FireTV, AFTT, AFTM, Bento, projector)
+    //   2. Android tablet-like device with LARGE screen (>= 1024px) AND
+    //      no Multi-touch API support — many Android projectors report
+    //      themselves as "Android Tablet" in UA but have a large display
+    //      and no real touch input (only remote control via mouse emulation)
+    //   3. No touch support AND viewport >= 1280px (desktop-like HTPC)
+    //   4. userAgentData.formFactors contains TV/Large (Chromium 134+)
+    //
+    // Behavior:
+    //   - If detected AND not inside Telegram Mini App AND not already
+    //     dismissed this session → AUTO-REDIRECT to /lite.html
+    //   - If user came back from lite (URL has ?from=lite or ?full=1) →
+    //     don't redirect, just show a small "open lite" banner instead
+    //   - Dismissal is per-session (sessionStorage)
+    (function setupLiteAutoRedirect() {
+      // Don't run inside Telegram Mini App
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) return;
+
+      var urlParams = new URLSearchParams(window.location.search);
+      // ?device=projector — user explicitly says "I'm on a projector".
+      // Saves to localStorage so future visits auto-redirect without URL param.
+      if (urlParams.get('device') === 'projector' || urlParams.get('device') === 'tv') {
+        try {
+          localStorage.setItem('genopoisk_device_type', 'projector');
+          console.log('[lite-redirect] Device type saved as projector (via ?device=projector)');
+        } catch (_) {}
+      }
+      // ?device=desktop — user explicitly says "I'm on a desktop, stop redirecting".
+      if (urlParams.get('device') === 'desktop' || urlParams.get('device') === 'phone') {
+        try {
+          localStorage.setItem('genopoisk_device_type', 'desktop');
+          sessionStorage.setItem('genopoisk_lite_dismissed', '1');
+        } catch (_) {}
+      }
+
+      // ?full=1 — same as ?device=desktop for backward compat
+      var forceFull = urlParams.get('full') === '1' || urlParams.get('from') === 'lite';
+      if (forceFull) {
+        try { sessionStorage.setItem('genopoisk_lite_dismissed', '1'); } catch (_) {}
+      }
+
+      // Check sessionStorage — user dismissed lite redirect this session
+      var dismissed = sessionStorage.getItem('genopoisk_lite_dismissed');
+
+      var ua = (navigator.userAgent || '').toLowerCase();
+      var uaData = navigator.userAgentData || {};
+      var isTV = false;
+      var detectionReason = '';
+
+      // Check 0: user previously marked this device as a projector
+      var savedDevice = '';
+      try { savedDevice = localStorage.getItem('genopoisk_device_type') || ''; } catch (_) {}
+      if (savedDevice === 'projector') {
+        isTV = true;
+        detectionReason = 'saved preference: projector';
+      }
+
+      // Check 1: known TV/projector UA keywords — expanded with more brands
+      if (!isTV) {
+        var tvPatterns = [
+          // Generic TV keywords
+          'tv', 'television', 'smarttv', 'smart tv',
+          // TV platforms
+          'googletv', 'android tv', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+          'aftt', 'aftm', 'bento',
+          // TV manufacturers
+          'bravia', 'crystal',
+          // Projector brands (complete list)
+          'projector', 'thundeal', 'thundea', 'xgimi', 'wanbo', 'jmgo', 'dangbei',
+          'nebula', 'anker', 'epson', 'benq', 'optoma', 'viewsonic', 'acer',
+          'lg projector', 'casio', 'ricoh', 'infocus', 'vivitek', 'sharp',
+          'mitsubishi', 'panasonic projector', 'jvc', 'eiki', 'christie',
+          // Chinese Android TV box / projector brands
+          'magbox', 'minix', 'nanopc', 'hk1', 'x88', 't95', 'tx3', 'tx6',
+          'h96', 'a95x', 'rbox', 'kingbox', 'tanix', 'sunchip',
+          // Set-top box keywords
+          'settopbox', 'set-top', 'stb'
+        ];
+        for (var i = 0; i < tvPatterns.length; i++) {
+          if (ua.indexOf(tvPatterns[i]) !== -1) {
+            isTV = true;
+            detectionReason = 'UA keyword: ' + tvPatterns[i];
+            break;
+          }
+        }
+      }
+
+      // Check 2: Android device with large screen (projector or TV box)
+      // Chinese Android projectors (ThunderdeaL, Wanbo, XGIMI, etc.) usually
+      // identify as standard Android devices without brand-specific keywords.
+      // Strategy: any Android device with viewport >= 800px is very likely
+      // a projector, TV box, or large tablet — all benefit from lite version.
+      // Real Android phones have viewport <= 600px typically.
+      if (!isTV) {
+        var isAndroid = ua.indexOf('android') !== -1;
+        var isLargeEnough = window.innerWidth >= 800;
+        if (isAndroid && isLargeEnough) {
+          isTV = true;
+          detectionReason = 'Android + large screen (' + window.innerWidth + 'px)';
+        }
+      }
+
+      // Check 3: very wide screen + no touch (HTPC, Mac mini attached to TV, etc.)
+      // Threshold 2560px to avoid false positives on desktop monitors (which
+      // max out at 1920-2560 for typical user setups).
+      if (!isTV) {
+        var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        var isVeryLarge = window.innerWidth >= 2560;
+        if (!hasTouch && isVeryLarge) {
+          isTV = true;
+          detectionReason = 'No touch + very large screen (' + window.innerWidth + 'px)';
+        }
+      }
+
+      // Check 4: userAgentData.formFactors (Chromium 134+)
+      if (!isTV && uaData.formFactors) {
+        var ff = uaData.formFactors.map(function(f) { return String(f).toLowerCase(); });
+        if (ff.some(function(f) { return f.indexOf('tv') !== -1; })) {
+          isTV = true;
+          detectionReason = 'formFactor: TV';
+        }
+      }
+
+      console.log('[lite-redirect] isTV=' + isTV + ', reason=' + detectionReason +
+                  ', forceFull=' + forceFull + ', dismissed=' + !!dismissed +
+                  ', savedDevice=' + savedDevice +
+                  ', UA=' + navigator.userAgent +
+                  ', viewport=' + window.innerWidth + 'x' + window.innerHeight +
+                  ', touchPoints=' + navigator.maxTouchPoints);
+
+      if (!isTV) return;
+
+      // Mark this device as a TV/projector — used by CSS to enable focus
+      // rings only on TV devices (see setupDpadNav focus-ring styles).
+      try { document.body.classList.add('tv-device'); } catch (_) {}
+
+      // If user explicitly asked for full version OR dismissed lite this
+      // session — just show the banner (don't auto-redirect)
+      if (forceFull || dismissed) {
+        var banner = document.getElementById('liteBanner');
+        var closeBtn = document.getElementById('liteBannerClose');
+        if (banner) banner.classList.add('visible');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function() {
+            banner.classList.remove('visible');
+            sessionStorage.setItem('genopoisk_lite_dismissed', '1');
+          });
+        }
+        return;
+      }
+
+      // Auto-redirect to lite.html
+      console.log('[lite-redirect] Redirecting to /lite.html...');
+      try {
+        window.location.replace('/lite.html');
+      } catch (e) {
+        window.location.href = '/lite.html';
+      }
+    })();
+
+    // ====== D-pad / keyboard navigation for TV / projector / desktop ======
+    // Enables arrow-key navigation between clickable elements:
+    //   ArrowUp/Down/Left/Right = move focus to nearest element in that direction
+    //   Enter / Space = click focused element
+    //   Escape / Backspace = back to top (scroll up + focus hero title)
+    //
+    // All clickable elements need tabindex="0" to be focusable via keyboard.
+    // The hero title, search input, action cards, and film cards are
+    // auto-tagged below. Existing onclick handlers fire on Enter naturally
+    // for elements with tabindex.
+    //
+    // Does NOT interfere with typing in search input — arrows there move
+    // the text cursor as usual. The handler bails out when the active
+    // element is the search input.
+    (function setupDpadNav() {
+      // Don't enable inside Telegram Mini App (touch-first environment)
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram) return;
+
+      // Make key elements focusable if they aren't already
+      var heroTitle = document.querySelector('.hero-title');
+      if (heroTitle && !heroTitle.hasAttribute('tabindex')) {
+        heroTitle.setAttribute('tabindex', '0');
+      }
+      var searchInput = document.getElementById('searchInput');
+      // searchInput is already focusable (it's an <input>)
+      // Action cards
+      document.querySelectorAll('.action-card').forEach(function(card) {
+        if (!card.hasAttribute('tabindex')) card.setAttribute('tabindex', '0');
+      });
+      // Film cards (added dynamically, so we use a MutationObserver)
+      var filmGridObserver = new MutationObserver(function() {
+        document.querySelectorAll('.film-card:not([tabindex])').forEach(function(card) {
+          card.setAttribute('tabindex', '0');
+        });
+      });
+      var filmGrid = document.getElementById('filmGrid');
+      if (filmGrid) {
+        filmGridObserver.observe(filmGrid, { childList: true, subtree: true });
+      }
+      // Resume card
+      var resumeCard = document.getElementById('resumeCard');
+      if (resumeCard && !resumeCard.hasAttribute('tabindex')) {
+        resumeCard.setAttribute('tabindex', '0');
+      }
+
+      // Focus ring — visible ONLY on TV/projector devices (body.tv-device).
+      // On desktop/mobile we DON'T want a focus ring around "Genopoisk" or
+      // category cards — it looks broken. On TV/projector, the focus ring
+      // is essential for D-pad navigation feedback.
+      // The body.tv-device class is set by setupLiteAutoRedirect() below
+      // when the device is detected as a TV/projector.
+      var styleEl = document.createElement('style');
+      styleEl.textContent =
+        'body.tv-device .hero-title:focus, body.tv-device .hero-title:focus-visible, ' +
+        'body.tv-device .action-card:focus, body.tv-device .action-card:focus-visible, ' +
+        'body.tv-device .film-card:focus, body.tv-device .film-card:focus-visible, ' +
+        'body.tv-device .resume-card:focus, body.tv-device .resume-card:focus-visible, ' +
+        'body.tv-device .search-input:focus, body.tv-device .search-input:focus-visible, ' +
+        'body.tv-device .lite-link:focus, body.tv-device .lite-link:focus-visible, ' +
+        'body.tv-device .lite-close:focus, body.tv-device .lite-close:focus-visible, ' +
+        'body.tv-device #tgLoginBtn:focus, body.tv-device #tgLoginBtn:focus-visible, ' +
+        'body.tv-device #tgLoginBarClose:focus, body.tv-device #tgLoginBarClose:focus-visible {' +
+        '  outline: 3px solid #007AFF !important;' +
+        '  outline-offset: 2px !important;' +
+        '  border-radius: 8px !important;' +
+        '}' +
+        'body.tv-device .action-card:focus, body.tv-device .action-card:focus-visible { background: rgba(0, 122, 255, 0.1) !important; }' +
+        'body.tv-device .film-card:focus, body.tv-device .film-card:focus-visible { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4); }' +
+        // On non-TV devices, suppress programmatic focus ring entirely
+        'body:not(.tv-device) .hero-title:focus, body:not(.tv-device) .hero-title:focus-visible {' +
+        '  outline: none !important;' +
+        '}';
+      document.head.appendChild(styleEl);
+
+      // Compute distance between two elements' centers
+      function getCenter(el) {
+        var r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }
+
+      // Find the nearest focusable element in a given direction
+      function findNearestFocusable(direction) {
+        var focusables = Array.from(document.querySelectorAll(
+          '.hero-title, .action-card, .film-card, .resume-card, .search-input, #tgLoginBtn, .lite-link'
+        )).filter(function(el) {
+          // Skip hidden elements
+          return el.offsetParent !== null || el === document.activeElement;
+        });
+        if (focusables.length === 0) return null;
+
+        var active = document.activeElement;
+        if (!active || active === document.body) return focusables[0];
+
+        var activeCenter = getCenter(active);
+        var best = null;
+        var bestScore = Infinity;
+
+        for (var i = 0; i < focusables.length; i++) {
+          var el = focusables[i];
+          if (el === active) continue;
+          var c = getCenter(el);
+          var dx = c.x - activeCenter.x;
+          var dy = c.y - activeCenter.y;
+
+          // Filter by direction
+          if (direction === 'up' && dy >= -5) continue;
+          if (direction === 'down' && dy <= 5) continue;
+          if (direction === 'left' && dx >= -5) continue;
+          if (direction === 'right' && dx <= 5) continue;
+
+          // Score: weighted distance (perpendicular axis weighs more)
+          var score;
+          if (direction === 'up' || direction === 'down') {
+            score = Math.abs(dy) + Math.abs(dx) * 2.5;
+          } else {
+            score = Math.abs(dx) + Math.abs(dy) * 2.5;
+          }
+          if (score < bestScore) {
+            bestScore = score;
+            best = el;
+          }
+        }
+        return best;
+      }
+
+      document.addEventListener('keydown', function(e) {
+        // Don't intercept arrows when typing in search input
+        var active = document.activeElement;
+        var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+
+        if (isTyping) {
+          // Only intercept Escape (to blur search)
+          if (e.key === 'Escape') {
+            active.blur();
+            e.preventDefault();
+          }
+          return;
+        }
+
+        var target = null;
+        switch (e.key) {
+          case 'ArrowUp':    target = findNearestFocusable('up');    break;
+          case 'ArrowDown':  target = findNearestFocusable('down');  break;
+          case 'ArrowLeft':  target = findNearestFocusable('left');  break;
+          case 'ArrowRight': target = findNearestFocusable('right'); break;
+          case 'Escape':
+          case 'Backspace':
+            // Back button on Android TV remote — scroll to top + focus hero
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (heroTitle) heroTitle.focus();
+            // If we were in a category, return to categories view
+            if (typeof currentCategory !== 'undefined' && currentCategory) {
+              if (typeof clearFilms === 'function') clearFilms();
+              if (content && content.classList) content.classList.add('hidden');
+              currentCategory = null;
+            }
+            return;
+          case 'Enter':
+          case ' ':
+            // Let native click fire on focused element
+            if (active && typeof active.click === 'function' && active !== document.body) {
+              e.preventDefault();
+              active.click();
+            }
+            return;
+          default:
+            return;
+        }
+        if (target) {
+          e.preventDefault();
+          target.focus();
+          // Scroll target into view smoothly
+          try {
+            target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          } catch (_) {}
+        }
+      });
+
+      console.log('[dpad-nav] Keyboard navigation enabled');
+    })();
+
+    // ====== On-screen D-pad (for projectors / TVs without keyboard) ======
+    // Many Android projectors' remotes emulate a MOUSE, not a keyboard.
+    // The arrow keys on such remotes move the on-screen cursor instead of
+    // firing `keydown` events. For those devices, we show an on-screen D-pad
+    // that the cursor (or finger on touch) can click directly.
+    //
+    // Visibility rules:
+    //   - Auto-shown on TV/projector/large non-touch screens
+    //   - Force-shown via ?dpad=1 URL param (for testing on desktop)
+    //   - Force-hidden via ?dpad=0 URL param
+    //   - Can be toggled by pressing 'D' key
+    //   - Can be closed via the ✕ button (remembered in sessionStorage)
+    (function setupOnScreenDpad() {
+      var dpad = document.getElementById('onScreenDpad');
+      var toggle = document.getElementById('dpadToggle');
+      if (!dpad) return;
+
+      // Check URL params
+      var urlParams = new URLSearchParams(window.location.search);
+      var dpadParam = urlParams.get('dpad');
+
+      // Check sessionStorage (user dismissed this session)
+      var dismissed = sessionStorage.getItem('genopoisk_dpad_dismissed');
+
+      // Detect TV/projector (same logic as auto-redirect)
+      function detectTV() {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var patterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
+                        'projector', 'bravia', 'webos', 'tizen', 'hbbtv', 'roku', 'firetv',
+                        'aftt', 'aftm', 'bento'];
+        for (var i = 0; i < patterns.length; i++) {
+          if (ua.indexOf(patterns[i]) !== -1) return true;
+        }
+        // Android tablet-like with large screen + no real touch
+        var isAndroid = ua.indexOf('android') !== -1;
+        var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
+        if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
+        // Removed: "no touch + large screen" check — caused false positives
+        // on desktop monitors. Real TVs/projectors are caught by UA keywords.
+        return false;
+      }
+
+      var shouldShow = false;
+      if (dpadParam === '1') shouldShow = true;
+      else if (dpadParam === '0') shouldShow = false;
+      else if (dismissed) shouldShow = false;
+      else shouldShow = detectTV();
+
+      // Don't show inside Telegram Mini App
+      var isInTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+      if (isInTelegram) shouldShow = false;
+
+      if (shouldShow) {
+        dpad.classList.add('visible');
+        console.log('[on-screen-dpad] Shown (TV/projector detected or ?dpad=1)');
+      }
+
+      // Close button
+      toggle.addEventListener('click', function() {
+        dpad.classList.remove('visible');
+        sessionStorage.setItem('genopoisk_dpad_dismissed', '1');
+      });
+
+      // Toggle with 'D' key (for desktop testing)
+      document.addEventListener('keydown', function(e) {
+        if ((e.key === 'd' || e.key === 'D') && !/INPUT|TEXTAREA/.test((document.activeElement || {}).tagName)) {
+          dpad.classList.toggle('visible');
+        }
+      });
+
+      // D-pad button clicks → simulate keyboard arrow / Enter
+      // We dispatch a real KeyboardEvent so all existing keydown handlers
+      // (setupDpadNav above) fire normally. This means both physical
+      // keyboard AND on-screen D-pad use the same code path.
+      var buttons = dpad.querySelectorAll('.dpad-btn');
+      buttons.forEach(function(btn) {
+        var dir = btn.dataset.dir;
+        var keyName;
+        switch (dir) {
+          case 'up':    keyName = 'ArrowUp';    break;
+          case 'down':  keyName = 'ArrowDown';  break;
+          case 'left':  keyName = 'ArrowLeft';  break;
+          case 'right': keyName = 'ArrowRight'; break;
+          case 'ok':    keyName = 'Enter';      break;
+          default: return;
+        }
+        function fire(event) {
+          event.preventDefault();
+          // Find currently focused element, or document.body
+          var target = document.activeElement || document.body;
+          // Dispatch a synthetic KeyboardEvent on document so the setupDpadNav
+          // handler picks it up. We use bubbling so any handler attached to
+          // document or window will receive it.
+          var syntheticEvent = new KeyboardEvent('keydown', {
+            key: keyName,
+            code: keyName,
+            keyCode: keyName === 'Enter' ? 13 : (
+              keyName === 'ArrowUp' ? 38 :
+              keyName === 'ArrowDown' ? 40 :
+              keyName === 'ArrowLeft' ? 37 :
+              keyName === 'ArrowRight' ? 39 : 0
+            ),
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+          document.dispatchEvent(syntheticEvent);
+        }
+        // Click = fire once (mouse)
+        btn.addEventListener('click', fire);
+        // Touch = fire once (mobile / some projectors with touch)
+        btn.addEventListener('touchend', function(e) {
+          e.preventDefault();
+          fire(e);
+        });
+      });
+    })();
+
+    // ====== Service Worker cache busting ======
+    // The old SW (v1, v2) cached index.html. After we update to v3+,
+    // users on the old SW keep getting the stale index.html from cache.
+    // This code forces the SW to skip caching for the next navigation
+    // and unregisters any old SW so the new one takes over immediately.
+    (function bustServiceWorkerCache() {
+      if (!('serviceWorker' in navigator)) return;
+
+      // Read the current SW version from /sw.js (network, not cache)
+      fetch('/sw.js', { cache: 'no-store' })
+        .then(function(res) {
+          if (!res.ok) return null;
+          return res.text();
+        })
+        .then(function(text) {
+          if (!text) return;
+          // Extract CACHE_NAME
+          var m = text.match(/CACHE_NAME\s*=\s*['"]([^'"]+)['"]/);
+          if (!m) return;
+          var currentVersion = m[1];
+          // Check what version we last saw
+          var lastSeen = localStorage.getItem('genopoisk_sw_version_seen');
+          if (lastSeen && lastSeen !== currentVersion) {
+            // Version changed — unregister all SWs to force fresh start
+            console.log('[sw-bust] SW version changed:', lastSeen, '→', currentVersion, '— unregistering');
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(reg) { reg.unregister(); });
+            });
+            // Clear all caches too
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                names.forEach(function(n) { caches.delete(n); });
+              });
+            }
+          }
+          localStorage.setItem('genopoisk_sw_version_seen', currentVersion);
+        })
+        .catch(function() {});
+    })();
+  

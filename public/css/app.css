@@ -89,10 +89,6 @@
       -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
-      /* Prevent disappearing on touch — force GPU layer */
-      will-change: transform;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
     }
     /* Desktop-only: holo transform effect (tilt + translate) */
     @media (hover: hover) and (pointer: fine) {
@@ -280,7 +276,7 @@
         max-width: 200px;
       }
     }
-    .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:transform 0.4s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.4s;background:var(--bg-secondary);box-shadow:0 14px 30px -10px rgba(0,0,0,0.4);-webkit-tap-highlight-color:transparent;touch-action:manipulation;will-change:transform;-webkit-transform:translateZ(0);transform:translateZ(0);}
+    .film-card{position:relative;border-radius:16px;overflow:hidden;cursor:pointer;transition:transform 0.4s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.4s;background:var(--bg-secondary);box-shadow:0 14px 30px -10px rgba(0,0,0,0.4);-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
     .film-card:hover{transform:translateY(-8px);box-shadow:0 20px 50px -10px rgba(0,122,255,0.5);z-index:2;}
     .film-poster {width: 100%;height:auto;aspect-ratio:2/3;object-fit:cover;background: linear-gradient(135deg,var(--bg-secondary) 0%,var(--bg-tertiary) 100%);display: block;margin: 0 auto;transition:transform 0.7s cubic-bezier(0.2,0.8,0.2,1);}
     .film-card:hover .film-poster{transform:scale(1.12);}
@@ -525,46 +521,4 @@
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-  
-    /* ====== iOS Safari / mobile performance optimization ====== */
-    /* backdrop-filter: blur() is EXTREMELY expensive on iOS Safari —
-       each blur(40px) forces a full-screen repaint on every scroll/tap.
-       With 9 elements using blur, the first render can take 2-3 seconds,
-       making the site appear to "not load" on iPhone.
-       
-       On mobile devices, we replace backdrop-filter with solid backgrounds.
-       The visual difference is minimal (slightly less translucent), but
-       performance improvement is 10-20x. */
-    @media not all and (hover: hover) and (pointer: fine) {
-      .hero,
-      .search-input,
-      .action-card,
-      .content,
-      .loader,
-      .resume-card,
-      .film-info-popup,
-      .tg-login-bar {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-      }
-      /* Provide solid fallback backgrounds */
-      .hero {
-        background: rgba(0, 0, 0, 0.85) !important;
-      }
-      .search-input {
-        background: rgba(28, 28, 30, 0.95) !important;
-      }
-      .action-card {
-        background: rgba(28, 28, 30, 0.95) !important;
-      }
-      .content {
-        background: rgba(0, 0, 0, 0.85) !important;
-      }
-      .loader {
-        background: rgba(0, 0, 0, 0.95) !important;
-      }
-      .resume-card {
-        background: rgba(28, 28, 30, 0.95) !important;
-      }
     }

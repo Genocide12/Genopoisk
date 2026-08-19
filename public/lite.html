@@ -175,38 +175,14 @@
       gap: 12px;
       margin-top: 16px;
     }
-    /* Random film mode — single card takes 95% of #content width */
-    .film-grid.random-mode {
+    /* Single film (random) — centered, same size as regular cards */
+    .film-grid.centered {
       display: flex;
       justify-content: center;
       align-items: flex-start;
       gap: 0;
-      min-height: 400px;
+      min-height: 300px;
       padding: 20px 0;
-    }
-    .film-grid.random-mode .film-card {
-      width: 95%;
-      max-width: 95%;
-      display: flex;
-      flex-direction: column;
-    }
-    .film-grid.random-mode .film-poster {
-      width: 100%;
-      height: auto;
-      aspect-ratio: 2 / 3;
-      max-height: 70vh;
-      object-fit: cover;
-    }
-    .film-grid.random-mode .film-info {
-      padding: 16px;
-    }
-    .film-grid.random-mode .film-title {
-      font-size: 20px;
-      text-align: center;
-    }
-    .film-grid.random-mode .film-meta {
-      justify-content: center;
-      font-size: 14px;
     }
     .film-card {
       background: #141414;
@@ -632,7 +608,7 @@
         if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
         return;
       }
-      filmGrid.classList.remove('random-mode');
+      filmGrid.classList.remove('centered');
       var frag = document.createDocumentFragment();
       films.forEach(function(film) {
         var filmId = film.filmId || film.kinopoiskId;
@@ -664,9 +640,9 @@
         frag.appendChild(card);
       });
       filmGrid.appendChild(frag);
-      // Random film mode — single card takes 95% of #content width
+      // Single film (random) — center it
       if (forceCenter && films.length === 1) {
-        filmGrid.classList.add('random-mode');
+        filmGrid.classList.add('centered');
       }
     }
 

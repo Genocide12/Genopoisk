@@ -577,10 +577,10 @@
     // Seek to saved position with retries. venoplayer may reset currentTime
     // to 0 after our seek (it calls play() which restarts from beginning).
     // We monitor currentTime after each seek and re-seek if it drops.
-    var seekConfirmed = false;  // flag to stop retry loop after success
+    var seekConfirmed = false;
     function attemptSeekToSaved() {
       if (!savedPos || !playerReady) return;
-      if (seekConfirmed) return;  // already done — don't retry
+      if (seekConfirmed) return;
       var target = savedPos.t;
       // If we're already close to target (within 10s), seek succeeded
       if (lastKnownTime > 0 && Math.abs(lastKnownTime - target) < 10) {
@@ -589,9 +589,9 @@
         isResuming = false;
         return;
       }
-      // If we've tried 5 times, give up (was 15 — reduced to avoid spam)
-      if (seekRetries >= 5) {
-        console.warn('[player] Seek failed after 5 retries, lastKnownTime:', lastKnownTime);
+      // If we've tried 8 times, give up (was 5 — venoplayer can be slow to load)
+      if (seekRetries >= 8) {
+        console.warn('[player] Seek failed after 8 retries, lastKnownTime:', lastKnownTime);
         isResuming = false;
         return;
       }
@@ -599,8 +599,8 @@
       isResuming = true;
       console.log('[player] Seek attempt ' + seekRetries + ' to', target, '(currentTime:', lastKnownTime + ')');
       sendToPlayer({ type: 'seek', time: target });
-      // Retry after 2s — give bridge.js time to complete its aggressive seek
-      setTimeout(attemptSeekToSaved, 2000);
+      // Retry after 1.5s — bridge.js needs time for canplay + aggressive seek
+      setTimeout(attemptSeekToSaved, 1500);
     }
 
     function maybeSavePosition(t) {

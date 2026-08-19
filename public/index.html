@@ -119,16 +119,16 @@
       padding: 24px 16px;
       text-align: center;
       cursor: pointer;
-      /* Smooth spring return when NOT tracking (touch release / mouseleave).
-         Cubic-bezier with overshoot gives a satisfying settle-to-neutral. */
       transition: border-color 0.3s, box-shadow 0.3s;
-      /* Prevent text selection on long press */
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
-      /* Mobile: disable tap highlight + prevent double-tap zoom */
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
+      /* Prevent disappearing on touch — force GPU layer */
+      will-change: transform;
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
     }
     /* Desktop-only: holo transform effect (tilt + translate) */
     @media (hover: hover) and (pointer: fine) {
@@ -155,14 +155,9 @@
       opacity: 0;
       transition: opacity 0.3s ease;
       z-index: -1;
+      pointer-events: none;
     }
-    /* Glow + border on hover (desktop only — JS detects mobile and
-       doesn't attach handlers there, so these rules are inert on mobile).
-       Subtle reaction — only border-color change + soft shadow. */
-    /* Action card hover/active effects — DESKTOP ONLY.
-       On touch devices (mobile, Telegram Mini App), :hover and :active
-       can stick after tap, causing visual glitches. Restrict to devices
-       with real hover support (mouse) and fine pointer. */
+    /* Desktop-only: hover/active effects */
     @media (hover: hover) and (pointer: fine) {
       .action-card:hover::before,
       .action-card.tracking::before { opacity: 1; }
@@ -173,11 +168,20 @@
       }
       .action-card:active { transform: perspective(800px) scale(0.94); }
     }
-    /* On touch devices — no hover/active effects at all */
+    /* On touch devices — NO hover/active effects at all.
+       Reset ALL visual states to prevent stuck :hover. */
     @media not all and (hover: hover) and (pointer: fine) {
       .action-card:hover,
       .action-card:active,
-      .action-card:hover::before { transform: none; opacity: 0; box-shadow: none; }
+      .action-card:focus {
+        transform: translateZ(0) !important;
+        box-shadow: none !important;
+        border-color: var(--separator) !important;
+      }
+      .action-card:hover::before,
+      .action-card:active::before {
+        opacity: 0 !important;
+      }
     }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;position:relative;z-index:1;}

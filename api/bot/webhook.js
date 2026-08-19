@@ -1837,7 +1837,16 @@ module.exports = async (req, res) => {
   // via BotFather and cluttered the '/' autocomplete menu.
   // Admin-only commands are still handled if typed manually, they're just
   // not advertised in the autocomplete.
-  await registerBotCommands();
+  // Register bot commands ASYNCHRONOUSLY — don't block the main handler.
+  // registerBotCommands makes 3 API calls to Telegram (deleteMyCommands,
+  // setMyCommands, setWebhook) which take 2-3 seconds. If we await this,
+  // the user's callback_query sits unanswered for 3 seconds, making
+  // buttons appear unresponsive (Telegram shows "spinning" indicator).
+  // By firing it without await, the callback is processed immediately
+  // while commands are registered in the background.
+  registerBotCommands().catch(function(e) {
+    console.warn('[bot] registerBotCommands background error:', e.message);
+  });
   // Check if any pending deploy has finished — notify admin
   checkPendingDeployStatus();
 

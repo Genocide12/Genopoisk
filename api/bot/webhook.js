@@ -1958,8 +1958,10 @@ async function handleInlineQuery(iq) {
     const results = [];
     const baseUrl = SITE_URL.replace(/\/$/, '');
 
-    // Process films in parallel (up to 20) — fetch details for each
-    const filmDetailsPromises = films.slice(0, 20).map(async function(film, i) {
+    // Process top 5 films in parallel — fetch details for each.
+    // Reduced from 20 to 5 to stay within Telegram's 5-second
+    // answerInlineQuery timeout. 5 films × 0.6s each (parallel) = ~1.2s total.
+    const filmDetailsPromises = films.slice(0, 5).map(async function(film, i) {
       const filmId = film.filmId || film.kinopoiskId;
       const title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
       const year = film.year || '';

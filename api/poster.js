@@ -65,7 +65,7 @@ module.exports = async (req, res) => {
   if (size === 'large') {
     pathSegment = 'kp';
   } else if (size === 'medium') {
-    pathSegment = 'kp_small';
+    pathSegment = 'kp';  // Fixed: was 'kp_small' (same as small). Now returns large size.
   } else {
     pathSegment = 'kp_small';
   }

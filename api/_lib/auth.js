@@ -66,22 +66,25 @@ function verifyInitData(initData, botToken) {
   }
 }
 
-// Extract a verified telegram_id from a request body.
+// Extract a verified telegram_id from a request body AND/OR cookies.
 //
-// Order of preference:
-//   1. body.initData — verified via HMAC. If signature is invalid or
-//      missing, we DON'T fall back to body.userId (an attacker could
-//      send a fake initData with the real userId inside).
-//   2. body.userId — accepted only if:
+// Auth priority:
+//   1. body.initData — verified via HMAC (Mini App). If signature is
+//      invalid, request is rejected — NO fallback to body.userId.
+//   2. tg_session cookie — signed HMAC cookie set by OIDC callback.
+//      Verified via SESSION_SECRET. Prevents IDOR on browser endpoints.
+//   3. body.userId — accepted only if:
 //        a) It's not empty
 //        b) It does NOT start with "web_" (those are guest IDs)
-//        c) No initData was provided at all (pure browser session)
+//        c) No initData and no session cookie were provided
+//      This is the LEGACY path — still IDOR-vulnerable, but kept for
+//      backward compat with old browser sessions that haven't logged in.
 //
 // Returns: { telegramId, username, source } or { telegramId: null, ... }
-function extractVerifiedUser(body, botToken) {
+function extractVerifiedUser(body, req) {
   const result = { telegramId: null, username: null, source: null };
 
-  if (!body) return result;
+  if (!body) body = {};
 
   // 1) Mini App path — verify initData signature
   if (body.initData) {
@@ -93,13 +96,22 @@ function extractVerifiedUser(body, botToken) {
       return result;
     }
     // initData was present but invalid — DO NOT fall back to userId.
-    // This prevents an attacker from sending a fake initData with a
-    // real userId inside to impersonate another user.
     result.source = 'invalid_initdata';
     return result;
   }
 
-  // 2) Browser path — accept userId only if it's not a guest ID
+  // 2) Session cookie path — verify signed cookie
+  if (req && req.headers && req.headers.cookie) {
+    var cookieSession = parseSessionCookie(req.headers.cookie);
+    if (cookieSession) {
+      result.telegramId = cookieSession;
+      result.username = body.username || '';
+      result.source = 'session';
+      return result;
+    }
+  }
+
+  // 3) Legacy browser path — accept userId only if not a guest ID
   if (body.userId) {
     const uid = String(body.userId);
     if (uid.startsWith('web_')) {
@@ -113,6 +125,42 @@ function extractVerifiedUser(body, botToken) {
   }
 
   return result;
+}
+
+// Parse and verify the tg_session cookie.
+// Cookie format: base64(telegramId:timestamp).hmac
+// Returns telegramId if valid, null otherwise.
+function parseSessionCookie(cookieHeader) {
+  try {
+    var cookies = {};
+    cookieHeader.split(';').forEach(function(c) {
+      var parts = c.trim().split('=');
+      if (parts.length >= 2) {
+        cookies[decodeURIComponent(parts[0])] = decodeURIComponent(parts.slice(1).join('='));
+      }
+    });
+    var sessionCookie = cookies['tg_session'];
+    if (!sessionCookie) return null;
+
+    var parts = sessionCookie.split('.');
+    if (parts.length !== 2) return null;
+
+    var payload = Buffer.from(parts[0], 'base64').toString('utf8');
+    var signature = parts[1];
+
+    var secret = process.env.SESSION_SECRET || process.env.TG_BOT_TOKEN || 'fallback-secret';
+    var crypto = require('crypto');
+    var expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+
+    if (expectedSig.length !== signature.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(signature))) return null;
+
+    // Extract telegramId from "telegramId:timestamp"
+    var telegramId = payload.split(':')[0];
+    return telegramId || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 module.exports = {

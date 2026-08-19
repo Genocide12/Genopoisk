@@ -138,6 +138,12 @@
       user-select: none;
     }
     .action-card:hover { background: #1a1a1a; }
+    .action-card:active {
+      transform: scale(0.95);
+      background: #007AFF;
+      color: #fff;
+      transition: transform 0.1s ease-out, background 0.1s;
+    }
     .action-card:focus, .action-card:focus-visible {
       outline: 2px solid #007AFF;
       outline-offset: 2px;

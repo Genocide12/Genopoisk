@@ -298,6 +298,32 @@ module.exports = async (req, res) => {
     // This avoids the issue where we couldn't message users who hadn't
     // pressed /start in the bot yet.
 
+    // Set a session cookie with the telegram_id. This cookie is HttpOnly
+    // (not accessible via JavaScript) and signed with a simple HMAC to
+    // prevent tampering. The API endpoints (my-films, last-film,
+    // user-check) verify this cookie to prevent IDOR attacks.
+    var sessionSecret = process.env.SESSION_SECRET || process.env.TG_BOT_TOKEN || 'fallback-secret';
+    var sessionPayload = telegramId + ':' + Date.now();
+    var sessionHmac = crypto.createHmac('sha256', sessionSecret).update(sessionPayload).digest('hex');
+    var sessionCookie = Buffer.from(sessionPayload).toString('base64') + '.' + sessionHmac;
+
+    var isProduction = process.env.NODE_ENV === 'production';
+    var sessionCookieStr = [
+      'tg_session=' + encodeURIComponent(sessionCookie),
+      'Max-Age=2592000', // 30 days
+      'Path=/',
+      'HttpOnly',
+      'SameSite=Lax',
+      isProduction ? 'Secure' : ''
+    ].filter(Boolean).join('; ');
+
+    // Clear OAuth cookies AND set session cookie
+    res.setHeader('Set-Cookie', [
+      'tg_oauth_state=; Max-Age=0; Path=/; HttpOnly',
+      'tg_oauth_verifier=; Max-Age=0; Path=/; HttpOnly',
+      sessionCookieStr
+    ]);
+
     // Redirect to site — pass telegramId (Bot API ID, same as Mini App uses)
     const redirectUrl = `/?telegram_login=success&tg_id=${encodeURIComponent(telegramId)}&tg_name=${encodeURIComponent(displayName)}&tg_username=${encodeURIComponent(username)}`;
 

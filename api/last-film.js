@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
-    const auth = extractVerifiedUser(body, process.env.TG_BOT_TOKEN);
+    const auth = extractVerifiedUser(body, req);
 
     let user = null;
     let telegramId = auth.telegramId;

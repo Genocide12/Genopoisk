@@ -7,7 +7,9 @@
   "rewrites": [
     { "source": "/api/kinopoisk/(.*)", "destination": "/api/kinopoisk?q=$1" },
     { "source": "/lite", "destination": "/lite.html" },
-    { "source": "/lite-player", "destination": "/lite-player.html" }
+    { "source": "/lite-player", "destination": "/lite-player.html" },
+    { "source": "/debug-index.html", "destination": "/api/debug-page?page=index" },
+    { "source": "/debug-player.html", "destination": "/api/debug-page?page=player" }
   ],
   "headers": [
     {

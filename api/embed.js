@@ -39,7 +39,13 @@ module.exports = async (req, res) => {
     // IMPORTANT: closing tag below uses backslash escape so HTML parser of THIS
     // file doesn't terminate the file's own script (this is a server-side JS string,
     // but we still escape to be safe).
-    const bridgeTag = '<script src="https://genopoisk.vercel.app/bridge.js"><\/script>';
+    // Use the request's host header to build the bridge URL.
+    // This way it works in preview deployments too (e.g.
+    // genopoisk-git-branch.vercel.app), not just production.
+    var host = req.headers.host || 'genopoisk.vercel.app';
+    var protocol = req.headers['x-forwarded-proto'] || 'https';
+    var bridgeUrl = protocol + '://' + host + '/bridge.js';
+    const bridgeTag = '<script src="' + bridgeUrl + '"><\/script>';
     const baseTag = '<base href="https://api.embess.ws/">';
 
     if (/<head[^>]*>/i.test(html)) {

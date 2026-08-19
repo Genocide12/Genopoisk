@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
 
   try {
     const body = req.body || {};
-    const auth = extractVerifiedUser(body, process.env.TG_BOT_TOKEN);
+    const auth = extractVerifiedUser(body, req);
 
     // No identifiers at all → not logged in, nothing to clear
     if (!auth.telegramId) return res.status(200).json({ reauth: false });

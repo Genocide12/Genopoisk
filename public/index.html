@@ -18,9 +18,9 @@
   <!-- Vercel Web Analytics (vanilla HTML CDN approach per Vercel docs) -->
   <script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
   <title>Genopoisk</title>
-  <script defer src="/js/error-handler.js?v=32"></script>
+  <script defer src="/js/error-handler.js?v=33"></script>
   <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.log('[tg] telegram-web-app.js unavailable (running outside Telegram Mini App — this is normal)')"></script>
-  <link rel="stylesheet" href="/css/app.css?v=32">
+  <link rel="stylesheet" href="/css/app.css?v=33">
 </head>
 <body>
   <div class="container">
@@ -41,17 +41,6 @@
         <button id="tgLoginBarClose" title="Скрыть" style="background:rgba(255,255,255,0.15);border:none;color:var(--text-primary);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;-webkit-tap-highlight-color:transparent;">✕</button>
       </div>
     </div>
-    <!-- Lite version banner — shown when user manually returns from lite (?from=lite) -->
-    <div class="lite-banner" id="liteBanner">
-      <div class="lite-text">
-        <span class="lite-icon">📺</span>
-        <span>Вы на полной версии сайта. Для проектора/TV рекомендуется <b>Lite-версия</b></span>
-      </div>
-      <a href="/lite.html" class="lite-link">Открыть Lite →</a>
-      <button class="lite-close" id="liteBannerClose" title="Скрыть">✕</button>
-    </div>
-    <!-- Hidden helper link for "save as projector" — used by lite.html -->
-    <a href="/?device=projector" id="saveAsProjectorLink" style="display:none">save</a>
     <div class="hero">
       <h1 class="hero-title" onclick="toggleTheme()" title="Цикл: тёмная → светлая → ночная → авто"><span id="premiumBadge" style="display:none;margin-right:6px;font-size:0.7em;vertical-align:middle;filter:none !important;">🔥</span>Genopoisk</h1>
       <p class="hero-subtitle" id="heroSubtitle" style="display:none;"></p>
@@ -123,18 +112,6 @@
     </div>
   </div>
   <div class="longpress-hint" id="longpressHint" data-i18n="longpressHint">💡 Зажмите карточку для информации</div>
-
-  <!-- On-screen D-pad for projectors / TVs without keyboard -->
-  <!-- Shown automatically on TV/projector/large non-touch screens, or toggleable via ?dpad=1 -->
-  <div class="on-screen-dpad" id="onScreenDpad">
-    <button class="dpad-toggle" id="dpadToggle" title="Скрыть D-pad">✕</button>
-    <button class="dpad-btn dpad-up"    data-dir="up"    title="Вверх">▲</button>
-    <button class="dpad-btn dpad-down"  data-dir="down"  title="Вниз">▼</button>
-    <button class="dpad-btn dpad-left"  data-dir="left"  title="Влево">◀</button>
-    <button class="dpad-btn dpad-right" data-dir="right" title="Вправо">▶</button>
-    <button class="dpad-btn dpad-ok"    data-dir="ok"    title="OK / Выбрать">OK</button>
-  </div>
-
-  <script defer src="/js/app.js?v=32"></script>
+  <script defer src="/js/app.js?v=33"></script>
 </body>
 </html>

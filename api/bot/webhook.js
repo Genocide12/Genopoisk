@@ -1984,8 +1984,10 @@ async function handleInlineQuery(iq) {
 
       var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
       var homeLink = 'https://t.me/Genopoiskbot?start=app';
+      var baseUrl = SITE_URL.replace(/\/$/, '');
+      var posterProxyUrl = baseUrl + '/api/poster?id=' + filmId + '&size=medium';
 
-      // Build message text: title + meta + short description
+      // Build message text: title + meta + short description + poster link
       var messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n';
       var metaParts = [];
       if (year) metaParts.push('📅 ' + year);
@@ -1995,6 +1997,8 @@ async function handleInlineQuery(iq) {
       }
       if (metaParts.length > 0) messageText += metaParts.join(' · ') + '\n';
       if (description) messageText += '\n' + escapeHtml(description) + '\n';
+      // Add poster as invisible link — Telegram shows it as link preview image
+      messageText += '\n<a href="' + posterProxyUrl + '">&#8205;</a>';
 
       return {
         type: 'article',

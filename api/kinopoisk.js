@@ -291,8 +291,7 @@ module.exports = async (req, res) => {
     return res.status(429).json({
       error: 'Kinopoisk API unavailable',
       message: 'Не удалось загрузить фильмы — Кинопоиск заблокировал запрос (403). ' +
-               'Что попробовать: отключите VPN, попробуйте через минуту, или откройте Lite-версию — она легче и иногда работает через блокировки.',
-      hint: 'lite',
+               'Что попробовать: отключите VPN, попробуйте через минуту.',
       tried: API_KEYS.length,
       total: API_KEYS.length
     });

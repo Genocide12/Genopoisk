@@ -365,18 +365,23 @@
         var targetTime = d.time;
         log('Seek requested to', targetTime, 'readyState:', video.readyState);
 
-        // venoplayer resets currentTime to 0 after play(). We need to seek
-        // MULTIPLE times to win the race: seek, wait, check if reset, re-seek.
-        // BUT: only post 'seeked' event ONCE (after the last attempt) to
-        // avoid flooding the parent with seeked events that cause infinite
-        // loops in the retry logic.
+        // Cancel any previous pending seek — only ONE seek can be in-flight
+        // at a time. Without this, multiple seek requests from player.html
+        // each register their own canplay listener, and when canplay fires
+        // ALL of them run aggressiveSeek → flood of seeked events.
+        if (window.__pendingSeekCleanup) {
+          try { window.__pendingSeekCleanup(); } catch(_) {}
+          window.__pendingSeekCleanup = null;
+        }
+        // Clear any previous seekedSent state
         var seekedSent = false;
+        var cancelled = false;
+
         function performSeek(isLast) {
+          if (cancelled) return;
           try {
             video.currentTime = targetTime;
             log('Seek set to', targetTime, '→ actual:', video.currentTime);
-            // Only send 'seeked' event on the LAST attempt to avoid
-            // flooding parent with events that trigger retry loops
             if (isLast && !seekedSent) {
               seekedSent = true;
               post({ type: 'seeked', currentTime: video.currentTime });
@@ -390,12 +395,11 @@
           }
         }
 
-        // Aggressive seek: repeat 3 times with 300ms interval (was 5 —
-        // reduced to avoid excessive events). Only the last attempt sends
-        // the 'seeked' event.
+        // Aggressive seek: 3 attempts, 300ms apart. Only last sends 'seeked'.
         var seekCount = 0;
         var MAX_SEEKS = 3;
         var aggressiveSeek = function() {
+          if (cancelled) return;
           seekCount++;
           var isLast = (seekCount >= MAX_SEEKS);
           performSeek(isLast);
@@ -404,30 +408,44 @@
           }
         };
 
-        if (video.readyState < 2) {
-          log('Video not ready, waiting for canplay...');
-          var seekOnCanPlay = function() {
+        // Cleanup function — removes listeners and marks this seek as cancelled
+        window.__pendingSeekCleanup = function() {
+          cancelled = true;
+          if (seekOnCanPlay) {
             video.removeEventListener('canplay', seekOnCanPlay);
             video.removeEventListener('loadeddata', seekOnCanPlay);
-            setTimeout(aggressiveSeek, 200);
+          }
+        };
+
+        var seekOnCanPlay = null;
+
+        if (video.readyState < 2) {
+          log('Video not ready, waiting for canplay...');
+          seekOnCanPlay = function() {
+            video.removeEventListener('canplay', seekOnCanPlay);
+            video.removeEventListener('loadeddata', seekOnCanPlay);
+            if (!cancelled) setTimeout(aggressiveSeek, 200);
           };
           video.addEventListener('canplay', seekOnCanPlay);
           video.addEventListener('loadeddata', seekOnCanPlay);
           // Safety timeout — if canplay never fires, force aggressive seek
           setTimeout(function() {
+            if (cancelled) return;
             video.removeEventListener('canplay', seekOnCanPlay);
             video.removeEventListener('loadeddata', seekOnCanPlay);
-            if (!seekedSent) aggressiveSeek();
+            if (!seekedSent && !cancelled) aggressiveSeek();
           }, 3000);
         } else {
           try {
             var playPromise = video.play();
             if (playPromise && playPromise.then) {
               playPromise.then(function() {
-                log('Video playing, aggressive seeking...');
-                setTimeout(aggressiveSeek, 100);
+                if (!cancelled) {
+                  log('Video playing, aggressive seeking...');
+                  setTimeout(aggressiveSeek, 100);
+                }
               }).catch(function() {
-                aggressiveSeek();
+                if (!cancelled) aggressiveSeek();
               });
             } else {
               aggressiveSeek();

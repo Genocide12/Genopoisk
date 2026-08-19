@@ -152,15 +152,26 @@
     /* Glow + border on hover (desktop only — JS detects mobile and
        doesn't attach handlers there, so these rules are inert on mobile).
        Subtle reaction — only border-color change + soft shadow. */
-    .action-card:hover::before,
-    .action-card.tracking::before { opacity: 1; }
-    .action-card:hover,
-    .action-card.tracking {
-      border-color: var(--ios-blue);
-      box-shadow: 0 8px 28px rgba(0,122,255,0.22);
+    /* Action card hover/active effects — DESKTOP ONLY.
+       On touch devices (mobile, Telegram Mini App), :hover and :active
+       can stick after tap, causing visual glitches. Restrict to devices
+       with real hover support (mouse) and fine pointer. */
+    @media (hover: hover) and (pointer: fine) {
+      .action-card:hover::before,
+      .action-card.tracking::before { opacity: 1; }
+      .action-card:hover,
+      .action-card.tracking {
+        border-color: var(--ios-blue);
+        box-shadow: 0 8px 28px rgba(0,122,255,0.22);
+      }
+      .action-card:active { transform: perspective(800px) scale(0.94); }
     }
-    /* .tracking is what JS adds for active mouse-following tilt */
-    .action-card:active { transform: perspective(800px) scale(0.94); }
+    /* On touch devices — no hover/active effects at all */
+    @media not all and (hover: hover) and (pointer: fine) {
+      .action-card:hover,
+      .action-card:active,
+      .action-card:hover::before { transform: none; opacity: 0; box-shadow: none; }
+    }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;position:relative;z-index:1;}
 

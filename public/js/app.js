@@ -2263,23 +2263,18 @@
           showEmptyState('В избранном пока пусто. Нажмите ☆ в плеере, чтобы добавить фильм.');
           return;
         }
-        // Fetch each film's details from kinopoisk (poster, year, rating).
-        // Do it in parallel for speed; cap at 30 to avoid hammering API.
-        const films = await Promise.all(favs.slice(0, 30).map(async function(f) {
-          try {
-            const r = await fetch('/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(f.filmId));
-            if (!r.ok) return null;
-            const j = await r.json();
-            return extractFilms({ films: [j] })[0] || null;
-          } catch (_) { return null; }
-        }));
-        // Filter out failed fetches
-        const valid = films.filter(Boolean);
-        if (valid.length === 0) {
-          showEmptyState('Не удалось загрузить постеры фильмов из избранного');
-          return;
-        }
-        displayFilms(valid);
+        // Build film objects directly from favorites data — no need to
+        // call kinopoisk API for each film (which may be blocked by 403).
+        // Poster is loaded via /api/poster proxy (different endpoint, works).
+        const films = favs.map(function(f) {
+          return {
+            filmId: f.filmId,
+            nameRu: f.title,
+            year: '—',
+            rating: 'Н/Д'
+          };
+        });
+        displayFilms(films);
       } catch (e) {
         showEmptyState('Ошибка загрузки избранного: ' + e.message);
       }

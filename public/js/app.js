@@ -171,6 +171,7 @@
       if (fixedBtn) {
         if (isInTelegram || isTVDevice) {
           fixedBtn.classList.add('hidden');
+          fixedBtn.classList.add('hidden-by-tv');
         } else {
           fixedBtn.classList.remove('hidden');
           if (fixedText && typeof t === 'function') fixedText.textContent = t('openInTelegram');
@@ -2412,8 +2413,23 @@
     });
 
     let scrollTimeout;
+    let lastScrollY = window.scrollY;
     window.addEventListener('scroll', () => {
       clearTimeout(scrollTimeout);
+      // Hide/show fixed Telegram button based on scroll direction
+      var currentScrollY = window.scrollY;
+      var fixedBtn = document.getElementById('fixedTelegramBtn');
+      if (fixedBtn && !fixedBtn.classList.contains('hidden-by-tv')) {
+        if (currentScrollY > lastScrollY + 10 && currentScrollY > 100) {
+          // Scrolling DOWN — hide button
+          fixedBtn.classList.add('hidden');
+        } else if (currentScrollY < lastScrollY - 10) {
+          // Scrolling UP — show button
+          fixedBtn.classList.remove('hidden');
+        }
+      }
+      lastScrollY = currentScrollY;
+
       scrollTimeout = setTimeout(() => {
         const scrollPosition = window.innerHeight + window.scrollY;
         const threshold = document.documentElement.scrollHeight - 800;

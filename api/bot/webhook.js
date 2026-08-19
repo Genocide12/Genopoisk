@@ -1953,42 +1953,87 @@ async function handleInlineQuery(iq) {
     }
 
     // Build inline results — up to 20 films
-    const results = films.slice(0, 20).map(function(film, i) {
+    // For each film, fetch detailed info (genres, description, rating) from
+    // the Kinopoisk API, then build a rich message with poster + details.
+    const results = [];
+    const baseUrl = SITE_URL.replace(/\/$/, '');
+
+    // Process films in parallel (up to 20) — fetch details for each
+    const filmDetailsPromises = films.slice(0, 20).map(async function(film, i) {
       const filmId = film.filmId || film.kinopoiskId;
       const title = film.nameRu || film.nameEn || film.nameOriginal || 'Без названия';
       const year = film.year || '';
       const rating = film.rating || film.ratingKinopoisk || '';
-
-      // Build description: "2024 · 8.5 ★"
-      var descParts = [];
-      if (year) descParts.push(year);
-      if (rating && rating !== 'null' && rating !== '0') {
-        descParts.push('★ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating));
-      }
-      if (film.genres && film.genres.length > 0) {
-        var genres = film.genres.slice(0, 2).map(function(g) { return g.genre; }).join(', ');
-        descParts.push(genres);
-      }
-      const description = descParts.join(' · ') || 'Нажмите чтобы открыть';
-
-      // Deep link to bot — opens film in player
-      const filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
-      // Thumbnail — use Kinopoisk's direct poster URL. Telegram can load
-      // these (it follows redirects for thumb_url). Our /api/poster proxy
-      // is too slow on first load (~2.5s) which causes Telegram to timeout.
       const thumbUrl = film.posterUrlPreview || film.posterUrl || '';
 
-      // Message sent when user clicks the result
-      const messageText = '🎬 <b>' + escapeHtml(title) + '</b>\n' +
-        (year ? '📅 ' + year + '\n' : '') +
-        (rating && rating !== 'null' && rating !== '0' ? '⭐ ' + (typeof rating === 'string' ? parseFloat(rating).toFixed(1) : rating) + '\n' : '') +
-        '\n<a href="' + filmDeepLink + '">▶ Открыть в Genopoisk</a>';
+      // Fetch detailed film info (genres, description, rating)
+      var genres = '';
+      var description = '';
+      var kpRating = '';
+      try {
+        var detailUrl = baseUrl + '/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(filmId);
+        var detailRes = await fetch(detailUrl);
+        if (detailRes.ok) {
+          var detail = await detailRes.json();
+          if (detail.genres && detail.genres.length > 0) {
+            genres = detail.genres.slice(0, 3).map(function(g) { return g.genre; }).join(', ');
+          }
+          description = (detail.shortDescription || detail.description || '').slice(0, 300);
+          if (description.length === 300) description += '...';
+          kpRating = detail.ratingKinopoisk || detail.ratingImdb || '';
+        }
+      } catch (e) {
+        console.warn('[inline] Details fetch failed for', filmId, ':', e.message);
+      }
+
+      // Build description for inline result list
+      var descParts = [];
+      if (year) descParts.push(year);
+      if (genres) descParts.push(genres);
+      if (kpRating && kpRating !== 'null' && kpRating !== '0') {
+        descParts.push('⭐ ' + (typeof kpRating === 'string' ? parseFloat(kpRating).toFixed(1) : kpRating));
+      }
+      var listDescription = descParts.join(' · ') || 'Нажмите чтобы открыть';
+
+      // Deep link to bot — opens film in player
+      var filmDeepLink = 'https://t.me/Genopoiskbot?start=film_' + filmId;
+      var playerUrl = baseUrl + '/player.html?id=' + filmId + '&title=' + encodeURIComponent(title);
+
+      // Build rich message text
+      var messageText = '';
+      // Title is NOT escaped because we want bold formatting
+      messageText += '🎬 <b>' + escapeHtml(title) + '</b>\n\n';
+
+      // Meta line: year · genres · rating
+      var metaParts = [];
+      if (year) metaParts.push('📅 ' + year);
+      if (genres) metaParts.push('🎭 ' + escapeHtml(genres));
+      if (kpRating && kpRating !== 'null' && kpRating !== '0') {
+        var ratingNum = typeof kpRating === 'string' ? parseFloat(kpRating).toFixed(1) : kpRating;
+        metaParts.push('⭐ ' + ratingNum + ' (Кинопоиск)');
+      }
+      if (metaParts.length > 0) {
+        messageText += metaParts.join(' · ') + '\n';
+      }
+
+      // Description
+      if (description) {
+        messageText += '\n' + escapeHtml(description) + '\n';
+      }
+
+      // Build inline keyboard: "Смотреть" (opens Mini App) + "Главная"
+      var keyboard = {
+        inline_keyboard: [[
+          { text: '▶ Смотреть', web_app: { url: playerUrl } },
+          { text: '🏠 Главная', callback_data: 'menu_main' }
+        ]]
+      };
 
       return {
         type: 'article',
         id: 'film_' + filmId + '_' + i,
         title: title,
-        description: description,
+        description: listDescription,
         thumb_url: thumbUrl || undefined,
         thumb_width: 100,
         thumb_height: 150,
@@ -1997,13 +2042,13 @@ async function handleInlineQuery(iq) {
           parse_mode: 'HTML',
           disable_web_page_preview: false
         },
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '▶ Смотреть', url: filmDeepLink }
-          ]]
-        }
+        reply_markup: keyboard
       };
     });
+
+    // Wait for all detail fetches to complete
+    const detailResults = await Promise.all(filmDetailsPromises);
+    results.push(...detailResults);
 
     await answerInlineQuery(iq.id, results, { cache_time: 60 });
     console.log('[inline] Returned', results.length, 'results for query:', query);

@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '45'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '46'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
     // We need to extract TG user ID from initData and store it in localStorage
@@ -1352,8 +1352,8 @@
     // On desktop, keep the original behavior (full 20 per page).
     // The "film buffer" holds films fetched but not yet displayed.
     let filmBuffer = [];
-    const MOBILE_INITIAL = 12;
-    const MOBILE_CHUNK = 8;
+    const MOBILE_INITIAL = 8;
+    const MOBILE_CHUNK = 6;
     const DESKTOP_PAGE_SIZE = 20;
 
     function isMobileView() {
@@ -1972,13 +1972,12 @@
         const year = film.year || 'Н/Д';
         const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
         const poster = filmId ? `/api/poster?id=${filmId}&size=small&_v=${SW_CACHE_VERSION}` : '';
-        // First 6 posters: high priority, no lazy loading (visible immediately)
-        // Rest: lazy + async (load when scrolled into view)
-        // Mobile pagination initial batch is 12 — eager-load all of them
-        // so they fire in parallel (multiple /api/poster lambdas at once,
-        // each racing 3 API keys = up to 36 parallel requests to Kinopoisk).
-        // Subsequent chunks (8 films) lazy-load when scrolled into view.
-        const isAboveFold = index < 12;
+        // On mobile: first 6 posters eager (visible above fold), rest lazy.
+        // On desktop: first 12 eager (larger screen shows more).
+        // This prevents Safari from trying to load 12 posters simultaneously
+        // (which causes random load order and slow rendering).
+        var eagerCount = isMobileView() ? 6 : 12;
+        const isAboveFold = index < eagerCount;
         const loadingAttr = isAboveFold ? 'eager' : 'lazy';
         const fetchPriority = isAboveFold ? 'fetchpriority="high"' : '';
         const card = document.createElement('div');

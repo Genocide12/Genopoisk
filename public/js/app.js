@@ -57,6 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
+    const SW_CACHE_VERSION = '45'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
     // We need to extract TG user ID from initData and store it in localStorage
@@ -1246,7 +1247,7 @@
         // Set poster image from our proxy
         var posterEl = document.getElementById('resumePoster');
         if (posterEl) {
-          posterEl.src = '/api/poster?id=' + encodeURIComponent(data.film.filmId) + '&size=small';
+          posterEl.src = '/api/poster?id=' + encodeURIComponent(data.film.filmId) + '&size=small&_v=' + SW_CACHE_VERSION;
           posterEl.style.display = 'block';
           posterEl.onerror = function() { this.style.display = 'none'; };
         }
@@ -1970,7 +1971,7 @@
         const title = film.nameRu || film.nameEn || 'Без названия';
         const year = film.year || 'Н/Д';
         const rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-        const poster = filmId ? `/api/poster?id=${filmId}&size=small` : '';
+        const poster = filmId ? `/api/poster?id=${filmId}&size=small&_v=${SW_CACHE_VERSION}` : '';
         // First 6 posters: high priority, no lazy loading (visible immediately)
         // Rest: lazy + async (load when scrolled into view)
         // Mobile pagination initial batch is 12 — eager-load all of them
@@ -2198,17 +2199,8 @@
           }
         } catch (_) {}
       }
-      // Show loading overlay before navigating to player
-      var loadingOverlay = document.createElement('div');
-      loadingOverlay.id = 'playerLoadingOverlay';
-      loadingOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:system-ui,sans-serif';
-      loadingOverlay.innerHTML = '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.2);border-top-color:#007AFF;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:20px"></div><div style="font-size:18px;font-weight:600">Загрузка плеера...</div><div style="font-size:14px;color:#888;margin-top:8px">' + escapeHtmlLite(title) + '</div>';
-      document.body.appendChild(loadingOverlay);
-
-      // Small delay to ensure request is sent + overlay is visible
-      setTimeout(function() {
-        window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
-      }, 200);
+      // Navigate to player immediately — no loading overlay
+      window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
 
     function escapeHtmlLite(s) {

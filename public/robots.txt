@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /debug-index.html
+Disallow: /debug-player.html
 
 Sitemap: https://genopoisk.vercel.app/sitemap.xml
+Host: https://genopoisk.vercel.app

@@ -125,13 +125,9 @@ function detectLanguage() {
       if (code && code.indexOf('en') === 0) return 'en';
     }
   } catch (_) {}
-  // Fall back to browser language
-  try {
-    var lang = navigator.language || navigator.userLanguage || 'ru';
-    if (lang.indexOf('ru') === 0) return 'ru';
-    if (lang.indexOf('en') === 0) return 'en';
-  } catch (_) {}
-  return 'ru'; // default
+  // Fall back to browser language — but default to Russian
+  // (site is primarily Russian, ignore browser language)
+  return 'ru'; // default — always Russian unless Telegram user is explicitly English
 }
 
 // Get translation for a key

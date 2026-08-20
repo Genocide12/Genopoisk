@@ -73,13 +73,21 @@ module.exports = async (req, res) => {
   const upstreamUrl = `${KINOPOISK_IMG_BASE}/${pathSegment}/${filmId}.jpg`;
   const cacheKey = `${filmId}_${size}`;
 
-  // Check in-memory cache
+  // Check in-memory cache — but skip if cached response is too small (placeholder)
   const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+  if (cached && cached.buffer.length > 5000 && Date.now() - cached.ts < CACHE_TTL) {
+    var cachedType = 'image/jpeg';
+    if (cached.buffer.length > 4 && cached.buffer[0] === 0x89 && cached.buffer[1] === 0x50) {
+      cachedType = 'image/png';
+    }
+    res.setHeader('Content-Type', cachedType);
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
     res.setHeader('X-Cache', 'HIT-MEMORY');
     return res.status(200).send(cached.buffer);
+  }
+  // If cached but small (placeholder), delete it — force re-fetch
+  if (cached && cached.buffer.length <= 5000) {
+    cache.delete(cacheKey);
   }
 
   // ====== Multi-threaded parallel key racing with fallback ======
@@ -112,10 +120,29 @@ module.exports = async (req, res) => {
 
       return fetch(upstreamUrl, {
         headers,
-        redirect: 'follow',
+        redirect: 'manual', // manually follow to pass headers to redirect target
         signal: ctrl.signal
       }).then(async (upstream) => {
         clearTimeout(timeoutId);
+        
+        // If redirect (301/302), manually follow with headers
+        if (upstream.status === 301 || upstream.status === 302) {
+          var location = upstream.headers.get('location');
+          if (location) {
+            console.log('[poster] Following redirect to:', location.slice(0, 60));
+            var redirectRes = await fetch(location, {
+              headers: headers, // pass same browser headers to redirect target
+              redirect: 'follow',
+              signal: ctrl.signal
+            });
+            if (!redirectRes.ok) {
+              throw new Error('Redirect fetch failed: ' + redirectRes.status);
+            }
+            const buffer = Buffer.from(await redirectRes.arrayBuffer());
+            return { buffer, winnerIdx: idx };
+          }
+        }
+        
         if (!upstream.ok) {
           throw new Error(`Key ${apiKey.slice(0, 6)} HTTP ${upstream.status}`);
         }
@@ -161,16 +188,26 @@ module.exports = async (req, res) => {
   }
 
   if (winner) {
-    // Save to in-memory cache (limit cache size to 500 posters ~50MB)
-    if (cache.size > 500) {
-      const oldest = cache.keys().next().value;
-      cache.delete(oldest);
+    // Don't cache placeholder images (small responses are likely the
+    // kinopoisk "no poster" gray placeholder, ~2401 bytes).
+    // Only cache if response is > 5KB (real poster).
+    if (winner.buffer.length > 5000) {
+      if (cache.size > 500) {
+        const oldest = cache.keys().next().value;
+        cache.delete(oldest);
+      }
+      cache.set(cacheKey, { buffer: winner.buffer, ts: Date.now() });
+    } else {
+      console.warn('[poster] Skipping cache for', filmId, '— response too small:', winner.buffer.length, 'bytes (likely placeholder)');
     }
-    cache.set(cacheKey, { buffer: winner.buffer, ts: Date.now() });
 
-    // Set aggressive caching
-    res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+    // Set content type based on actual content
+    var contentType = 'image/jpeg';
+    if (winner.buffer.length > 4 && winner.buffer[0] === 0x89 && winner.buffer[1] === 0x50) {
+      contentType = 'image/png'; // PNG signature
+    }
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).send(winner.buffer);
   }

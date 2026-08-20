@@ -1,0 +1,125 @@
+# Auto-posts a "Film of the Day" to @genopoisk_news channel every day at 12:00 Moscow time.
+# Uses Kinopoisk API (via our Vercel proxy) to fetch a random popular film,
+# then sends a rich post with poster + description + "Watch" button.
+
+name: Daily Film Post
+
+on:
+  schedule:
+    # 09:00 UTC = 12:00 Moscow time (MSK = UTC+3)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch film of the day
+        id: film
+        run: |
+          # Fetch top films page 1
+          FILMS_RESPONSE=$(curl -s "https://genopoisk.vercel.app/api/kinopoisk?q=v2.2/films/top?type=TOP_250_BEST_FILMS&page=1")
+          
+          # Get count and pick random film
+          FILM_COUNT=$(echo "$FILMS_RESPONSE" | jq '.films | length')
+          RANDOM_INDEX=$((RANDOM % FILM_COUNT))
+          
+          FILM_ID=$(echo "$FILMS_RESPONSE" | jq -r ".films[$RANDOM_INDEX].filmId")
+          FILM_TITLE=$(echo "$FILMS_RESPONSE" | jq -r ".films[$RANDOM_INDEX].nameRu // .films[$RANDOM_INDEX].nameEn")
+          FILM_RATING=$(echo "$FILMS_RESPONSE" | jq -r ".films[$RANDOM_INDEX].rating")
+          FILM_YEAR=$(echo "$FILMS_RESPONSE" | jq -r ".films[$RANDOM_INDEX].year")
+          FILM_POSTER=$(echo "$FILMS_RESPONSE" | jq -r ".films[$RANDOM_INDEX].posterUrlPreview")
+          
+          echo "film_id=$FILM_ID" >> $GITHUB_OUTPUT
+          echo "film_title=$FILM_TITLE" >> $GITHUB_OUTPUT
+          echo "film_rating=$FILM_RATING" >> $GITHUB_OUTPUT
+          echo "film_year=$FILM_YEAR" >> $GITHUB_OUTPUT
+          echo "film_poster=$FILM_POSTER" >> $GITHUB_OUTPUT
+          
+          echo "Selected film: $FILM_TITLE ($FILM_YEAR) - Rating: $FILM_RATING"
+          
+          # Fetch film details for description and genres
+          DETAILS_RESPONSE=$(curl -s "https://genopoisk.vercel.app/api/kinopoisk?q=v2.2/films/$FILM_ID")
+          
+          DESCRIPTION=$(echo "$DETAILS_RESPONSE" | jq -r '.shortDescription // .description // ""' | head -c 300)
+          GENRES=$(echo "$DETAILS_RESPONSE" | jq -r '[.genres[:3][].genre] | join(", ")')
+          
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "genres=$GENRES" >> $GITHUB_OUTPUT
+
+      - name: Post to Telegram channel
+        env:
+          TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          CHANNEL: '@genopoisk_news'
+          FILM_ID: ${{ steps.film.outputs.film_id }}
+          FILM_TITLE: ${{ steps.film.outputs.film_title }}
+          FILM_RATING: ${{ steps.film.outputs.film_rating }}
+          FILM_YEAR: ${{ steps.film.outputs.film_year }}
+          FILM_POSTER: ${{ steps.film.outputs.film_poster }}
+          DESCRIPTION: ${{ steps.film.outputs.description }}
+          GENRES: ${{ steps.film.outputs.genres }}
+        run: |
+          # Build caption text
+          CAPTION="🎬 <b>Фильм дня</b>\n\n"
+          CAPTION="${CAPTION}📺 <b>${FILM_TITLE}</b>\n"
+          
+          # Meta line
+          META=""
+          if [ -n "$FILM_YEAR" ] && [ "$FILM_YEAR" != "null" ]; then
+            META="📅 $FILM_YEAR"
+          fi
+          if [ -n "$GENRES" ] && [ "$GENRES" != "null" ]; then
+            if [ -n "$META" ]; then META="${META} · "; fi
+            META="${META}🎭 $GENRES"
+          fi
+          if [ -n "$FILM_RATING" ] && [ "$FILM_RATING" != "null" ] && [ "$FILM_RATING" != "0" ]; then
+            if [ -n "$META" ]; then META="${META} · "; fi
+            META="${META}⭐ $FILM_RATING"
+          fi
+          if [ -n "$META" ]; then
+            CAPTION="${CAPTION}${META}\n"
+          fi
+          
+          # Description
+          if [ -n "$DESCRIPTION" ] && [ "$DESCRIPTION" != "null" ]; then
+            CAPTION="${CAPTION}\n${DESCRIPTION}\n"
+          fi
+          
+          CAPTION="${CAPTION}\n▶ <b>Смотреть:</b> @Genopoiskbot"
+          
+          # Build keyboard
+          KEYBOARD='{"inline_keyboard":[[{"text":"▶ Смотреть фильм","url":"https://t.me/Genopoiskbot?start=film_'$FILM_ID'"},{"text":"🌐 Открыть сайт","url":"https://genopoisk.vercel.app/"}]]}'
+          
+          # Try to send with poster photo
+          if [ -n "$FILM_POSTER" ] && [ "$FILM_POSTER" != "null" ]; then
+            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendPhoto" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"chat_id\": \"${CHANNEL}\",
+                \"photo\": \"${FILM_POSTER}\",
+                \"caption\": \"$(echo -e "$CAPTION")\",
+                \"parse_mode\": \"HTML\",
+                \"reply_markup\": ${KEYBOARD}
+              }")
+          else
+            # Fallback: text only
+            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"chat_id\": \"${CHANNEL}\",
+                \"text\": \"$(echo -e "$CAPTION")\",
+                \"parse_mode\": \"HTML\",
+                \"reply_markup\": ${KEYBOARD}
+              }")
+          fi
+          
+          echo "Response: $RESPONSE"
+          
+          # Check if successful
+          OK=$(echo "$RESPONSE" | jq -r '.ok')
+          if [ "$OK" != "true" ]; then
+            echo "::error::Failed to post: $(echo "$RESPONSE" | jq -r '.description')"
+            exit 1
+          fi
+          
+          echo "✅ Posted successfully!"

@@ -45,7 +45,19 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
       '#__vconsole .vc-content, #__vconsole .vc-plugin-content { -webkit-overflow-scrolling: touch; }' +
       '#__vconsole .vc-item .vc-item-copy { display: block !important; opacity: 1 !important; visibility: visible !important; }' +
       '#__vconsole .vc-toolbar .vc-tool { pointer-events: auto !important; }' +
-      '#__vconsole .vc-log .vc-item .vc-item-content { word-break: break-all; }';
+      '#__vconsole .vc-log .vc-item .vc-item-content { word-break: break-all; }' +
+      // "Copy all logs" button — injected into vConsole toolbar
+      '#__vconsole .vc-copy-all-btn {' +
+        'position: absolute !important; top: 8px !important; right: 12px !important;' +
+        'z-index: 10 !important; background: rgba(255,255,255,0.12) !important;' +
+        'color: #fff !important; border: 1px solid rgba(255,255,255,0.2) !important;' +
+        'border-radius: 6px !important; padding: 4px 10px !important; font-size: 12px !important;' +
+        'cursor: pointer !important; -webkit-tap-highlight-color: transparent !important;' +
+        'font-family: monospace !important; line-height: 1.4 !important;' +
+        'transition: background 0.15s !important;' +
+      '}' +
+      '#__vconsole .vc-copy-all-btn:active { background: rgba(255,255,255,0.25) !important; }' +
+      '#__vconsole .vc-copy-all-btn.copied { background: #34C759 !important; border-color: #34C759 !important; }';
     return s;
   })());
 
@@ -91,6 +103,18 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
     window.addEventListener('pagehide', persist);
     window.addEventListener('beforeunload', persist);
     window.__getPreviousLogs = function() { return previousLogs; };
+
+    // Collect ALL logs (previous page + current page) as a single text block.
+    // Used by the "Copy all logs" button in vConsole.
+    window.__getAllLogsText = function() {
+      var all = previousLogs.concat(currentLogs);
+      return all.map(function(entry) {
+        var time = new Date(entry.t).toLocaleTimeString('ru-RU', { hour12: false }) +
+                   '.' + String(entry.t % 1000).padStart(3, '0');
+        var level = (entry.level || 'log').toUpperCase().padEnd(5);
+        return '[' + time + '] [' + level + '] ' + entry.msg;
+      }).join('\n');
+    };
   }
 
   // ----- vConsole init -----
@@ -151,6 +175,81 @@ console.log('[debug] vConsole lib loaded, VConsole type:', typeof window.VConsol
           console.log('— — — — — — — — — — — — — — — — — — — — —');
         }
       }
+
+      // Inject "Copy all logs" button into vConsole panel
+      if (vc && !vc.querySelector('.vc-copy-all-btn')) {
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'vc-copy-all-btn';
+        copyBtn.textContent = '📋 Копировать логи';
+        copyBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            var text = window.__getAllLogsText ? window.__getAllLogsText() : '';
+            if (!text) {
+              copyBtn.textContent = 'Нет логов';
+              setTimeout(function() { copyBtn.textContent = '📋 Копировать логи'; }, 1500);
+              return;
+            }
+            // Try modern clipboard API first (requires HTTPS or localhost)
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function() {
+                copyBtn.classList.add('copied');
+                copyBtn.textContent = '✅ Скопировано (' + text.split('\n').length + ' строк)';
+                setTimeout(function() {
+                  copyBtn.classList.remove('copied');
+                  copyBtn.textContent = '📋 Копировать логи';
+                }, 2000);
+              }).catch(function() {
+                fallbackCopy(text, copyBtn);
+              });
+            } else {
+              fallbackCopy(text, copyBtn);
+            }
+          } catch (err) {
+            copyBtn.textContent = '❌ Ошибка';
+            setTimeout(function() { copyBtn.textContent = '📋 Копировать логи'; }, 1500);
+            console.error('[debug] Copy logs failed:', err);
+          }
+        });
+        // Append to vc-panel (the main panel container)
+        var panel = vc.querySelector('.vc-panel');
+        if (panel) {
+          panel.style.position = 'relative';
+          panel.appendChild(copyBtn);
+        } else {
+          vc.appendChild(copyBtn);
+        }
+        console.log('[debug] Copy-all-logs button injected');
+      }
+
+      function fallbackCopy(text, btn) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) {
+            btn.classList.add('copied');
+            btn.textContent = '✅ Скопировано (' + text.split('\n').length + ' строк)';
+            setTimeout(function() {
+              btn.classList.remove('copied');
+              btn.textContent = '📋 Копировать логи';
+            }, 2000);
+          } else {
+            btn.textContent = '❌ execCommand failed';
+            setTimeout(function() { btn.textContent = '📋 Копировать логи'; }, 1500);
+          }
+        } catch (e) {
+          btn.textContent = '❌ ' + e.message;
+          setTimeout(function() { btn.textContent = '📋 Копировать логи'; }, 1500);
+        }
+      }
+
       return true;
     } catch (e) {
       console.warn('[debug] vConsole init failed', e);

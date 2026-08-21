@@ -150,8 +150,10 @@ module.exports = async (req, res) => {
   //   - 403 (IP block): all keys share the same Vercel egress IP, so
   //     second batch may also fail — but at least we tried
   //
-  // Per-request timeout: 6s. Promise.any returns as soon as one resolves.
-  const REQUEST_TIMEOUT_MS = 3000;
+  // Per-request timeout: 4s (was 3s). Promise.any returns as soon as one resolves.
+  // Total worst case: 4s (first batch) + 4s (fallback) + 1s delay + 4s (retry) = 13s
+  // But typically one key succeeds in <2s, so most requests finish in <2s.
+  const REQUEST_TIMEOUT_MS = 4000;
 
   // Realistic browser headers — Kinopoisk's edge (Cloudflare) returns 403
   // for bot-like User-Agents such as "Mozilla/5.0 (compatible; ...)".

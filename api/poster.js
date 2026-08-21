@@ -93,7 +93,7 @@ module.exports = async (req, res) => {
   // ====== Multi-threaded parallel key racing with fallback ======
   // Same strategy as kinopoisk.js: race 3 keys in parallel, fall back to
   // remaining 3 keys if first batch fails. Reduces poster load failures.
-  const REQUEST_TIMEOUT_MS = 6000;
+  const REQUEST_TIMEOUT_MS = 4000;
 
   // Realistic browser headers — bot-like UA gets 403 from Cloudflare.
   const BROWSER_HEADERS = {

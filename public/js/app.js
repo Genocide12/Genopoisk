@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '58'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '59'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -1125,13 +1125,30 @@
     // Uses ES5 syntax (var, function) for compatibility with old Chrome
     // versions on Android projectors (some run Chrome 50-70 which doesn't
     // support let/const/arrow functions).
+    //
+    // TIMEOUT: 8 seconds per attempt. Without this, fetch() waits up to
+    // Vercel's maxDuration (25s), and with retry that's ~50s — the user
+    // sees "вечная загрузка" (eternal loading). 8s is enough for a warm
+    // lambda + kinopoisk API (~2s), and fails fast enough to show the
+    // cached fallback.
     async function apiGet(url) {
       var lastErr = null;
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
-          var res = await fetch(url, {
-            headers: { 'Content-Type': 'application/json' }
-          });
+          // 8s timeout — prevents "eternal loading" on projectors
+          var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          var timeoutId = null;
+          if (controller) {
+            timeoutId = setTimeout(function() {
+              try { controller.abort(); } catch (_) {}
+            }, 8000);
+          }
+          var fetchOpts = { headers: { 'Content-Type': 'application/json' } };
+          if (controller) fetchOpts.signal = controller.signal;
+
+          var res = await fetch(url, fetchOpts);
+          if (timeoutId) clearTimeout(timeoutId);
+
           if (res.ok) return await res.json();
 
           // Try to parse JSON error response
@@ -1160,10 +1177,11 @@
           if (errData && errData.message) throw new Error(errData.message);
           throw new Error('HTTP ' + res.status + ': ' + res.statusText);
         } catch (e) {
-          // Network error — retry once
+          // Network error or timeout — retry once
+          if (timeoutId) clearTimeout(timeoutId);
           lastErr = e;
           if (attempt === 0) {
-            console.warn('[apiGet] Network error, retrying in 2s:', e.message);
+            console.warn('[apiGet] Network error/timeout, retrying in 500ms:', e.message);
             await new Promise(function(resolve) { setTimeout(resolve, 500); });
             continue;
           }
@@ -1670,6 +1688,14 @@
             break;
         }
         if (films.length > 0) {
+          // Cache films in localStorage for offline/fallback use.
+          // Key: category_page, Value: films array.
+          // TTL: 24 hours (films don't change often).
+          try {
+            var cacheKey = 'genopoisk_films_' + currentCategory + '_' + currentPage;
+            localStorage.setItem(cacheKey, JSON.stringify({ films: films, ts: Date.now() }));
+          } catch (_) {}
+
           currentPage++;
           if (isMobileView()) {
             // Mobile: show MOBILE_INITIAL on first load (empty grid),
@@ -1694,8 +1720,38 @@
           // Don't call hideLoader here — waitForPosters in appendFilms handles it
         }
       } catch (e) {
-        showEmptyState('Ошибка загрузки: ' + e.message);
-        hasMore = false;
+        // Fallback: try to load cached films from localStorage
+        var cachedFilms = null;
+        try {
+          var ck = 'genopoisk_films_' + currentCategory + '_' + currentPage;
+          var raw = localStorage.getItem(ck);
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            // Cache valid for 7 days (films don't change much)
+            if (parsed && parsed.films && (Date.now() - parsed.ts < 7 * 24 * 60 * 60 * 1000)) {
+              cachedFilms = parsed.films;
+              console.log('[cache] Using cached films for', currentCategory, 'page', currentPage);
+            }
+          }
+        } catch (_) {}
+
+        if (cachedFilms && cachedFilms.length > 0) {
+          currentPage++;
+          if (isMobileView()) {
+            const isFirstLoad = filmGrid.children.length === 0 ||
+                                filmGrid.querySelector('.empty-state');
+            const showNow = isFirstLoad
+              ? cachedFilms.slice(0, MOBILE_INITIAL)
+              : cachedFilms.slice(0, MOBILE_CHUNK);
+            filmBuffer = cachedFilms.slice(showNow.length);
+            appendFilms(showNow);
+          } else {
+            appendFilms(cachedFilms);
+          }
+        } else {
+          showEmptyState('Ошибка загрузки: ' + e.message + '<br><br><small>Попробуйте обновить страницу или зайдите позже.</small>');
+          hasMore = false;
+        }
       } finally {
         isLoading = false;
       }

@@ -81,7 +81,7 @@ module.exports = async (req, res) => {
       cachedType = 'image/png';
     }
     res.setHeader('Content-Type', cachedType);
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=86400');
     res.setHeader('X-Cache', 'HIT-MEMORY');
     return res.status(200).send(cached.buffer);
   }
@@ -207,7 +207,7 @@ module.exports = async (req, res) => {
       contentType = 'image/png'; // PNG signature
     }
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=86400');
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).send(winner.buffer);
   }

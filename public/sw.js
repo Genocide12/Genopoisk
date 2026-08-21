@@ -6,7 +6,7 @@
 //   - API endpoints: network-only (always need live data)
 //   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
 
-const CACHE_NAME = 'genopoisk-v57';
+const CACHE_NAME = 'genopoisk-v58';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -33,17 +33,23 @@ self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
-// Activate: clean up old caches
+// Activate: clean up old caches + take control immediately
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(names) {
       return Promise.all(
         names.filter(function(name) { return name !== CACHE_NAME; })
-             .map(function(name) { return caches.delete(name); })
+             .map(function(name) {
+               console.log('[sw] Deleting old cache:', name);
+               return caches.delete(name);
+             })
       );
+    }).then(function() {
+      // Force claim all clients — needed for old projectors that don't
+      // support skipWaiting() properly (Chrome < 40).
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 // Fetch handler

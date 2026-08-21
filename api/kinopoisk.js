@@ -307,6 +307,6 @@ module.exports = async (req, res) => {
   res.setHeader('X-Cache', 'MISS');
   res.setHeader('X-Race-Winner', winner.key.slice(0, 8));
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600');
   return res.status(200).json(winner.data);
 };

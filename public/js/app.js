@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '59'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '60'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -670,19 +670,55 @@
     // Fire async — don't block page load
     loadResumeCard();
 
-    // Prefetch BOTH lambdas on page load to warm them up:
-    // 1. /api/poster — first call takes 2+ seconds (cold start),
-    //    subsequent calls are 40ms (Vercel Edge cache).
-    // 2. /api/kinopoisk — first call also slow (cold start + upstream fetch),
-    //    subsequent calls are 250ms (cache hit).
-    // By firing prefetches on page load, we warm BOTH caches BEFORE the
-    // user clicks a category. When they click "Популярные", both lambdas
-    // are already warm — films + posters load in <500ms total.
-    // Also prefetch "popular" films list (most clicked category).
+    // ====== AGGRESSIVE PREFETCH — warm ALL caches on page load ======
+    // Strategy: fire ALL category requests + sample posters IMMEDIATELY
+    // when the page loads. By the time user clicks any category, the
+    // response is already in Vercel Edge cache → loads in <50ms.
+    //
+    // Also store results in localStorage so they're available even if
+    // the API goes down later.
+    //
+    // Requests fired (all non-blocking, all .catch to suppress errors):
+    //   1. /api/poster?id=251733  — warms poster lambda
+    //   2. /api/kinopoisk top-250 page 1  — warms kinopoisk lambda
+    //   3. /api/kinopoisk popular page 1  — most clicked category
+    //   4. /api/kinopoisk new page 1      — current year films
+    //   5. /api/kinopoisk top-250 page 2  — second page (for scroll)
+    //   6. Sample posters from top-250    — warm poster cache for first 12 films
     try {
+      // Warm lambdas
       fetch('/api/poster?id=251733&size=small', { method: 'GET' }).catch(function(){});
-      fetch('/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1', { method: 'GET' }).catch(function(){});
-      fetch('/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=1', { method: 'GET' }).catch(function(){});
+
+      // Prefetch ALL categories and cache to localStorage
+      var prefetchUrls = [
+        { cat: 'top250', page: 1, url: '/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1' },
+        { cat: 'popular', page: 1, url: '/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=1' },
+        { cat: 'new', page: 1, url: '/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=' + new Date().getFullYear() + '&yearTo=' + new Date().getFullYear() + '&page=1' },
+        { cat: 'top250', page: 2, url: '/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=2' }
+      ];
+
+      prefetchUrls.forEach(function(p) {
+        fetch(p.url, { method: 'GET' })
+          .then(function(res) { return res.ok ? res.json() : null; })
+          .then(function(data) {
+            if (!data) return;
+            var films = data.films || data.items || data.results || [];
+            if (films.length === 0) return;
+            // Cache to localStorage for offline/instant fallback
+            try {
+              var cacheKey = 'genopoisk_films_' + p.cat + '_' + p.page;
+              localStorage.setItem(cacheKey, JSON.stringify({ films: films, ts: Date.now() }));
+            } catch (_) {}
+            // Prefetch posters for first 12 films (above-the-fold)
+            films.slice(0, 12).forEach(function(f) {
+              var fid = f.filmId || f.kinopoiskId;
+              if (fid) {
+                fetch('/api/poster?id=' + fid + '&size=small&_v=' + SW_CACHE_VERSION).catch(function(){});
+              }
+            });
+          })
+          .catch(function(){});
+      });
     } catch(_) {}
 
     // Retry after window load — ONLY if we're in Telegram Mini App
@@ -1126,29 +1162,18 @@
     // versions on Android projectors (some run Chrome 50-70 which doesn't
     // support let/const/arrow functions).
     //
-    // TIMEOUT: 8 seconds per attempt. Without this, fetch() waits up to
-    // Vercel's maxDuration (25s), and with retry that's ~50s — the user
-    // sees "вечная загрузка" (eternal loading). 8s is enough for a warm
-    // lambda + kinopoisk API (~2s), and fails fast enough to show the
-    // cached fallback.
+    // NO TIMEOUT — user wants instant loading. Instead of timing out, we
+    // rely on:
+    //   1. Aggressive prefetch on page load (warms Vercel Edge cache)
+    //   2. Cached films in localStorage (instant fallback if API is slow)
+    //   3. Vercel's own 25s maxDuration as the natural upper bound
     async function apiGet(url) {
       var lastErr = null;
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
-          // 8s timeout — prevents "eternal loading" on projectors
-          var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-          var timeoutId = null;
-          if (controller) {
-            timeoutId = setTimeout(function() {
-              try { controller.abort(); } catch (_) {}
-            }, 8000);
-          }
-          var fetchOpts = { headers: { 'Content-Type': 'application/json' } };
-          if (controller) fetchOpts.signal = controller.signal;
-
-          var res = await fetch(url, fetchOpts);
-          if (timeoutId) clearTimeout(timeoutId);
-
+          var res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' }
+          });
           if (res.ok) return await res.json();
 
           // Try to parse JSON error response
@@ -1163,13 +1188,8 @@
           if (isRetryable && attempt === 0) {
             var msg = (errData && errData.message) || ('HTTP ' + res.status);
             lastErr = new Error(msg);
-            console.warn('[apiGet] Got ' + res.status + ', retrying in 2s...', msg);
-            // Show a friendly hint to the user
-            var filmGridEl = document.getElementById('filmGrid');
-            if (filmGridEl && filmGridEl.children.length === 0) {
-              filmGridEl.innerHTML = '<div class="empty-state">⏳ Кинопоиск временно недоступен (VPN/блокировка). Пробую ещё раз...</div>';
-            }
-            await new Promise(function(resolve) { setTimeout(resolve, 500); });
+            console.warn('[apiGet] Got ' + res.status + ', retrying...', msg);
+            await new Promise(function(resolve) { setTimeout(resolve, 300); });
             continue;
           }
 
@@ -1177,12 +1197,11 @@
           if (errData && errData.message) throw new Error(errData.message);
           throw new Error('HTTP ' + res.status + ': ' + res.statusText);
         } catch (e) {
-          // Network error or timeout — retry once
-          if (timeoutId) clearTimeout(timeoutId);
+          // Network error — retry once
           lastErr = e;
           if (attempt === 0) {
-            console.warn('[apiGet] Network error/timeout, retrying in 500ms:', e.message);
-            await new Promise(function(resolve) { setTimeout(resolve, 500); });
+            console.warn('[apiGet] Network error, retrying:', e.message);
+            await new Promise(function(resolve) { setTimeout(resolve, 300); });
             continue;
           }
           throw e;
@@ -1601,6 +1620,36 @@
           if (film) displayFilms([film], true);
           else showEmptyState('Не удалось загрузить случайный фильм');
         } else {
+          // INSTANT: show cached films immediately (if available)
+          // This makes the category feel instant — user sees films in <50ms
+          // even on a slow projector. The actual API fetch happens in
+          // loadMoreFilms() and updates the grid when it completes.
+          try {
+            var cachedRaw = localStorage.getItem('genopoisk_films_' + category + '_1');
+            if (cachedRaw) {
+              var cached = JSON.parse(cachedRaw);
+              if (cached && cached.films && cached.films.length > 0) {
+                // Cache valid for 7 days
+                if (Date.now() - cached.ts < 7 * 24 * 60 * 60 * 1000) {
+                  // Show cached films INSTANTLY
+                  if (isMobileView()) {
+                    var showNow = cached.films.slice(0, MOBILE_INITIAL);
+                    filmBuffer = cached.films.slice(showNow.length);
+                    appendFilms(showNow);
+                  } else {
+                    appendFilms(cached.films);
+                  }
+                  currentPage = 2; // already showed page 1
+                  hideLoader();
+                  console.log('[cache] Instant load from cache:', category, cached.films.length, 'films');
+                  // Now fetch fresh data in background — update if different
+                  loadMoreFilms();
+                  return;
+                }
+              }
+            }
+          } catch (_) {}
+          // No cache — load from API (will cache result for next time)
           await loadMoreFilms();
         }
       } catch (e) {

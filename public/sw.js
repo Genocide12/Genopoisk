@@ -6,7 +6,7 @@
 //   - API endpoints: network-only (always need live data)
 //   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
 
-const CACHE_NAME = 'genopoisk-v53';
+const CACHE_NAME = 'genopoisk-v54';
 const APP_SHELL = [
   '/',
   '/index.html',

@@ -4,26 +4,18 @@
 // Two auth contexts:
 //   1) Telegram Mini App — sends signed `initData` string. We verify the
 //      HMAC signature with the bot token, then trust the user.id inside.
-//   2) Browser — no signed payload. We rely on the `userId` field which
-//      the OIDC callback set in localStorage. This is a weaker guarantee
-//      (anyone who knows a telegram_id can read another user's data),
-//      but it's the best we can do without adding HttpOnly session cookies.
-//      To fully close this gap, a session-token system would be needed.
+//   2) Browser — verified via `tg_session` cookie (signed HMAC, set by
+//      OIDC callback). Falls back to body.userId for legacy sessions.
 //
-// What this module DOES improve (vs. the previous code):
-//   - Mini App requests now have their initData signature VERIFIED in
-//     every endpoint (previously only /api/track verified it; my-films,
-//     last-film, user-check trusted the unsigned user.id field inside
-//     initData).
-//   - Guest `web_*` IDs are universally rejected for user-data endpoints.
+// IDOR protection:
+//   - Mini App: initData signature is verified — cannot be forged.
+//   - Browser: tg_session cookie is signed with SESSION_SECRET — cannot
+//     be forged. The legacy body.userId path is still IDOR-vulnerable,
+//     but kept for backward compat with old browser sessions that
+//     haven't logged in yet.
 //
-// What it does NOT solve:
-//   - Browser IDOR (Insecure Direct Object Reference) on /api/my-films
-//     and /api/last-film: an attacker who knows a real telegram_id can
-//     still POST { userId: "<that id>" } and read the victim's data.
-//     Fixing this requires adding a session cookie issued at OIDC login
-//     and verifying it on every user-data request — a larger refactor
-//     deferred to a later commit.
+// Guest web_* IDs are accepted as real users (tracked in Supabase).
+// They are migrated to the real Telegram account on OIDC login.
 
 const crypto = require('crypto');
 
@@ -114,10 +106,10 @@ function extractVerifiedUser(body, req) {
     }
   }
 
-  // 3) Legacy browser path — accept userId only if not a guest ID
+  // 3) Legacy browser path — accept userId.
+  //    Guest web_* IDs are accepted as guest users (tracked in Supabase).
   if (body.userId) {
     const uid = String(body.userId);
-    // web_* IDs are now allowed as guest users (tracked in Supabase)
     result.telegramId = uid;
     result.username = body.username || '';
     result.source = 'browser';

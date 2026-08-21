@@ -57,11 +57,11 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '53'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '54'; // bump when poster cache needs invalidation
 
-    // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
-    // We need to extract TG user ID from initData and store it in localStorage
-    // BEFORE getBrowserUserId() reads it, so profiles are linked.
+    // --- Telegram WebApp init ---
+    // Extract TG user ID from initData and store it in localStorage so
+    // getUserId() picks it up on subsequent calls.
     let tgInitData = '';
     let tg = null;
     function initTelegramWebApp() {
@@ -95,25 +95,9 @@
     // --- User identification ---
     // Priority: 1) Stored TG user ID (from previous Telegram visit, in localStorage)
     //           2) Stable localStorage web_ ID (persists across VPN changes)
-    function getBrowserUserId() {
-      const tgId = localStorage.getItem('genopoisk_tg_user_id');
-      if (tgId) {
-        console.log('[user] Using stored TG ID:', tgId);
-        return tgId;
-      }
-      let id = localStorage.getItem('genopoisk_user_id');
-      if (!id) {
-        const rand = Math.random().toString(36).slice(2, 11);
-        const time = Date.now().toString(36);
-        id = `web_${time}_${rand}`;
-        localStorage.setItem('genopoisk_user_id', id);
-      }
-      return id;
-    }
-    // DYNAMIC userId — re-reads localStorage EVERY TIME (not a const!)
-    // This fixes the core bug: telegram-web-app.js loads async and stores
-    // TG user ID in localStorage AFTER getBrowserUserId() was first called.
-    // With a const, all subsequent trackEvent calls used the old web_ ID.
+    // DYNAMIC userId — re-reads localStorage EVERY TIME (not a const!).
+    // This handles the case where telegram-web-app.js loads async and stores
+    // TG user ID in localStorage AFTER this function was first called.
     function getUserId() {
       const tgId = localStorage.getItem('genopoisk_tg_user_id');
       if (tgId) return tgId;
@@ -127,28 +111,16 @@
       return id;
     }
 
-    // --- Telegram OIDC Login bar ---
-    // Two states:
-    //   A) Not logged in → show "Войти через Telegram" (login button)
-    //   B) Logged in → show "Открыть в Telegram" (link to bot) + ✕ close button
-    // User can dismiss state B with ✕ — it remembers the dismissal in
-    // sessionStorage so it stays hidden during the browsing session.
-    // In Mini App (running inside Telegram already) the bar is hidden entirely.
-    const tgLoginBar = document.getElementById('tgLoginBar');
-    const tgLoginStateLoggedOut = document.getElementById('tgLoginStateLoggedOut');
-    const tgLoginStateLoggedIn = document.getElementById('tgLoginStateLoggedIn');
-    const tgLoginBarCloseBtn = document.getElementById('tgLoginBarClose');
-
+    // --- Telegram login button (bottom fixed bar) ---
+    // The old top "tgLoginBar" was removed from HTML; only the bottom
+    // #fixedTelegramBtn remains. This function configures it based on
+    // login state and device type.
     function checkTgLoginBar() {
       const isInTelegram = !!(tg && tg.initData);
       const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
       const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
       const isLoggedIn = !!(storedTgId || storedTgUsername);
 
-      // Always hide the top login bar — we only use the bottom button now.
-      tgLoginBar.classList.remove('visible');
-
-      // Configure the fixed bottom button
       var fixedBtn = document.getElementById('fixedTelegramBtn');
       var fixedText = document.getElementById('fixedTelegramText');
       var isTVDevice = (function() {
@@ -184,13 +156,6 @@
           }
         }
       }
-    }
-
-    if (tgLoginBarCloseBtn) {
-      tgLoginBarCloseBtn.addEventListener('click', function() {
-        sessionStorage.setItem('genopoisk_tg_bar_dismissed', '1');
-        tgLoginBar.classList.remove('visible');
-      });
     }
     // DON'T call checkTgLoginBar yet — wait for telegram-web-app.js to load
     // (it's async, so tg might be null on first run even in Mini App)
@@ -1502,7 +1467,7 @@
       // Loader text
       var lt = document.querySelector('.loader-text');
       if (lt) lt.textContent = t('loading');
-      // Login buttons
+      // Login buttons (legacy — elements may not exist)
       var loginBtn = document.getElementById('tgLoginBtn');
       if (loginBtn) {
         // Find text node inside (after SVG)
@@ -1511,16 +1476,6 @@
           if (n.nodeType === 3 && n.textContent.trim()) textNode = n;
         });
         if (textNode) textNode.textContent = ' ' + t('loginTelegram') + ' ';
-      }
-      var openBtn = document.querySelector('#tgLoginStateLoggedIn a');
-      if (openBtn) {
-        // Find the text node (not inside a <span>) — it's the direct
-        // text child of <a>
-        openBtn.childNodes.forEach(function(n) {
-          if (n.nodeType === 3 && n.textContent.trim()) {
-            n.textContent = ' ' + t('openInTelegram') + ' ';
-          }
-        });
       }
       // Theme toggle labels
       window.__themeLabels = {

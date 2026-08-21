@@ -1,9 +1,9 @@
 // Returns the current user's last watched film (cross-device resume).
 //
-// Auth:
-//   - Mini App: initData signature is VERIFIED via api/_lib/auth.js.
-//   - Browser: body.userId is accepted (must NOT start with "web_").
-//     Still IDOR-vulnerable — see note in api/_lib/auth.js.
+// Auth (via api/_lib/auth.js):
+//   - Mini App: initData signature is VERIFIED.
+//   - Browser: tg_session cookie (signed HMAC) verified, OR body.userId.
+//   - Guest web_* IDs are accepted — they have their own Supabase row.
 
 const { getUser, getUserByOidcSub } = require('./_lib/supabase');
 const { extractVerifiedUser } = require('./_lib/auth');
@@ -20,8 +20,9 @@ module.exports = async (req, res) => {
     let user = null;
     let telegramId = auth.telegramId;
 
-    // Legacy fallback: long OIDC sub → resolve via oidc_sub
-    if (telegramId && telegramId.length > 12 && auth.source === 'browser') {
+    // Legacy fallback: long OIDC sub → resolve via oidc_sub.
+    // Skip for web_* guest IDs (they're not OIDC subs — avoids a wasted DB query).
+    if (telegramId && telegramId.length > 12 && !telegramId.startsWith('web_') && auth.source === 'browser') {
       const resolved = await getUserByOidcSub(telegramId);
       if (resolved) telegramId = resolved.telegram_id;
     }

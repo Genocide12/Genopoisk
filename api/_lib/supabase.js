@@ -1,6 +1,8 @@
-// Supabase helper — single source of truth for user data
-// Uses telegram_id as PRIMARY KEY (unique per Telegram account)
-// NO more web_ IDs, NO more OIDC sub, NO more duplicates.
+// Supabase helper — single source of truth for user data.
+// Uses telegram_id as PRIMARY KEY (unique per Telegram account).
+// Guest web_* IDs are also stored here as real rows; they are migrated
+// to the real Telegram account when the guest logs in via OIDC
+// (see api/auth/telegram/callback.js).
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;

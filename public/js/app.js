@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '55'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '56'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -151,7 +151,16 @@
               fixedBtn.href = 'https://t.me/Genopoiskbot?start=app';
             } else {
               fixedText.textContent = 'Открыть Telegram';
-              fixedBtn.href = '/api/auth/telegram/login';
+              // Pass guest_id (web_* ID) to login flow so the OIDC callback
+              // can migrate the guest's watched_films/favorites/events to
+              // the real Telegram account. Only pass if it's a web_* ID
+              // (not a real telegram_id from a previous login).
+              var guestId = localStorage.getItem('genopoisk_user_id');
+              if (guestId && guestId.indexOf('web_') === 0) {
+                fixedBtn.href = '/api/auth/telegram/login?guest_id=' + encodeURIComponent(guestId);
+              } else {
+                fixedBtn.href = '/api/auth/telegram/login';
+              }
             }
           }
         }
@@ -172,6 +181,11 @@
       localStorage.setItem('genopoisk_tg_user_id', String(tgIdFromUrl));
       if (tgNameFromUrl) localStorage.setItem('genopoisk_tg_user_name', tgNameFromUrl);
       if (tgUsernameFromUrl) localStorage.setItem('genopoisk_tg_username', tgUsernameFromUrl);
+      // Clear the guest ID — its data has been migrated server-side by callback.js
+      // Keeping it would cause getUserId() to use the old guest ID instead of the
+      // new Telegram ID (since getUserId prefers genopoisk_tg_user_id, this isn't
+      // strictly necessary, but it's cleaner to remove the stale guest ID).
+      localStorage.removeItem('genopoisk_user_id');
       console.log('[tg] OIDC login successful, TG ID:', tgIdFromUrl, 'username:', tgUsernameFromUrl);
       // Clean URL
       history.replaceState(null, '', window.location.pathname);

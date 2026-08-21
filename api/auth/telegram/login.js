@@ -22,14 +22,19 @@ module.exports = (req, res) => {
     return res.status(500).send('Server misconfigured: missing TELEGRAM_CLIENT_ID or TELEGRAM_REDIRECT_URI');
   }
 
+  // Capture guest_id from query (set by frontend) so the OIDC callback can
+  // migrate the guest's watched_films/favorites/events to the real Telegram
+  // account. Stored in a short-lived cookie because Telegram OAuth redirect
+  // doesn't preserve query params.
+  const guestId = req.query && req.query.guest_id ? String(req.query.guest_id) : '';
+  const isProduction = process.env.NODE_ENV === 'production';
+
   // Generate state and PKCE code verifier
   const state = base64url(crypto.randomBytes(32));
   const codeVerifier = base64url(crypto.randomBytes(32));
   const codeChallenge = base64url(
     crypto.createHash('sha256').update(codeVerifier).digest()
   );
-
-  const isProduction = process.env.NODE_ENV === 'production';
 
   // Store state + verifier in HttpOnly cookies
   const stateCookie = [
@@ -50,7 +55,23 @@ module.exports = (req, res) => {
     isProduction ? 'Secure' : ''
   ].filter(Boolean).join('; ');
 
-  res.setHeader('Set-Cookie', [stateCookie, verifierCookie]);
+  // Store guest_id in cookie (if provided) for callback to read.
+  // Only accept web_* IDs — anything else is suspicious.
+  var cookies = [stateCookie, verifierCookie];
+  if (guestId && guestId.indexOf('web_') === 0 && guestId.length < 100) {
+    var guestCookie = [
+      `tg_guest_id=${encodeURIComponent(guestId)}`,
+      'Max-Age=600',
+      'Path=/',
+      'HttpOnly',
+      'SameSite=Lax',
+      isProduction ? 'Secure' : ''
+    ].filter(Boolean).join('; ');
+    cookies.push(guestCookie);
+    console.log('[auth] Saved guest_id for migration:', guestId.substring(0, 30) + '...');
+  }
+
+  res.setHeader('Set-Cookie', cookies);
 
   // Build Telegram OAuth URL
   const params = new URLSearchParams({

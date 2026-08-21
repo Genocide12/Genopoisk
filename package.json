@@ -5,5 +5,12 @@
   "description": "Genopoisk — Telegram Mini App for movie search and playback",
   "engines": {
     "node": "22.x"
+  },
+  "scripts": {
+    "lint": "eslint api/ public/js/ --no-error-on-unmatched-pattern || true",
+    "lint:check": "eslint api/ public/js/ --no-error-on-unmatched-pattern"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
   }
 }

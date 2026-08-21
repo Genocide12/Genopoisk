@@ -271,9 +271,85 @@ module.exports = async (req, res) => {
       console.log('[auth] Created new user:', telegramId, username);
     }
 
-    // 6) Cleanup ghost users: delete any rows with the same username but
-    //    telegram_id starting with "web_" (created by track.js before login
-    //    was enforced). These are temp browser IDs that fragment user data.
+    // 6) Guest migration: prefer guest_id cookie (reliable), then fall back
+    //    to username matching (legacy, unreliable for anonymous guests).
+    //
+    //    guest_id flow (NEW, reliable):
+    //      Frontend passes ?guest_id=web_... on login click → login.js stores
+    //      in tg_guest_id cookie → callback reads it → looks up the guest
+    //      row directly by telegram_id = guest_id → migrates data.
+    //      Works for ALL guests, even anonymous ones (no username).
+    //
+    //    username flow (OLD, fallback):
+    //      Iterates ALL users, finds rows with same username AND telegram_id
+    //      starting with "web_". Only works if guest somehow had a username
+    //      set (rare — most guests are anonymous).
+    //
+    //    Both paths use the same migrateGuest() helper to avoid duplication.
+    async function migrateGuest(g, targetUser) {
+      console.log('[auth] Migrating guest:', g.telegram_id, '→', telegramId);
+      try {
+        var migratedData = {};
+        if (g.watched_films && g.watched_films.length > 0) {
+          var existingWatched = (targetUser.watched_films || []);
+          var mergedWatched = existingWatched.slice();
+          g.watched_films.forEach(function(f) {
+            if (!mergedWatched.some(function(e) { return String(e.filmId) === String(f.filmId); })) {
+              mergedWatched.unshift(f);
+            }
+          });
+          migratedData.watched_films = mergedWatched;
+        }
+        if (g.favorite_films && g.favorite_films.length > 0) {
+          var existingFavs = (targetUser.favorite_films || []);
+          var mergedFavs = existingFavs.slice();
+          g.favorite_films.forEach(function(f) {
+            if (!mergedFavs.some(function(e) { return String(e.filmId) === String(f.filmId); })) {
+              mergedFavs.unshift(f);
+            }
+          });
+          migratedData.favorite_films = mergedFavs;
+        }
+        if (g.last_film) { migratedData.last_film = g.last_film; }
+        // Merge events_by_type
+        var gEbt = g.events_by_type || {};
+        var eEbt = (targetUser.events_by_type || {});
+        Object.keys(gEbt).forEach(function(k) {
+          eEbt[k] = (eEbt[k] || 0) + gEbt[k];
+        });
+        migratedData.events_by_type = eEbt;
+        migratedData.events_count = (targetUser.events_count || 0) + (g.events_count || 0);
+        if (Object.keys(migratedData).length > 0) {
+          await updateUser(telegramId, migratedData);
+          console.log('[auth] Migrated', Object.keys(migratedData).length, 'fields to', telegramId);
+        }
+        // Refresh existingUser so subsequent migrations see the merged data
+        existingUser = await getUser(telegramId);
+        targetUser = existingUser;
+      } catch (e) { console.warn('[auth] Migration failed:', e.message); }
+      // Now delete the ghost
+      try { await deleteUser(g.telegram_id); } catch (e) { console.warn('[auth] Guest delete failed:', e.message); }
+      return targetUser;
+    }
+
+    // 6a) NEW: migrate by guest_id cookie (reliable, works for anonymous guests)
+    var guestIdCookie = cookies.tg_guest_id;
+    if (guestIdCookie && guestIdCookie.indexOf('web_') === 0 && guestIdCookie !== telegramId) {
+      try {
+        var guest = await getUser(guestIdCookie);
+        if (guest && String(guest.telegram_id || '').indexOf('web_') === 0) {
+          existingUser = await migrateGuest(guest, existingUser);
+          console.log('[auth] guest_id migration complete for:', guestIdCookie.substring(0, 30) + '...');
+        } else if (guest) {
+          // Found a row but it's not a web_ ID — suspicious, skip
+          console.warn('[auth] guest_id matched non-web row, skipping:', guestIdCookie);
+        }
+      } catch (e) {
+        console.warn('[auth] guest_id migration failed (non-fatal):', e.message);
+      }
+    }
+
+    // 6b) LEGACY: migrate by username match (fallback for old guests without guest_id)
     if (username) {
       try {
         const { getAllUsers } = require('../../_lib/supabase');
@@ -281,52 +357,15 @@ module.exports = async (req, res) => {
         const ghosts = allUsers.filter(u =>
           u.username === username &&
           u.telegram_id !== telegramId &&
-          String(u.telegram_id || '').startsWith('web_')
+          String(u.telegram_id || '').startsWith('web_') &&
+          // Skip if already migrated above via guest_id
+          u.telegram_id !== guestIdCookie
         );
         for (const g of ghosts) {
-          console.log('[auth] Migrating ghost user:', g.telegram_id, '→', telegramId);
-          // Migrate watched_films, favorites, events to the real user
-          try {
-            var migratedData = {};
-            if (g.watched_films && g.watched_films.length > 0) {
-              var existingWatched = (existingUser.watched_films || []);
-              var mergedWatched = existingWatched.slice();
-              g.watched_films.forEach(function(f) {
-                if (!mergedWatched.some(function(e) { return String(e.filmId) === String(f.filmId); })) {
-                  mergedWatched.unshift(f);
-                }
-              });
-              migratedData.watched_films = mergedWatched;
-            }
-            if (g.favorite_films && g.favorite_films.length > 0) {
-              var existingFavs = (existingUser.favorite_films || []);
-              var mergedFavs = existingFavs.slice();
-              g.favorite_films.forEach(function(f) {
-                if (!mergedFavs.some(function(e) { return String(e.filmId) === String(f.filmId); })) {
-                  mergedFavs.unshift(f);
-                }
-              });
-              migratedData.favorite_films = mergedFavs;
-            }
-            if (g.last_film) { migratedData.last_film = g.last_film; }
-            // Merge events_by_type
-            var gEbt = g.events_by_type || {};
-            var eEbt = (existingUser.events_by_type || {});
-            Object.keys(gEbt).forEach(function(k) {
-              eEbt[k] = (eEbt[k] || 0) + gEbt[k];
-            });
-            migratedData.events_by_type = eEbt;
-            migratedData.events_count = (existingUser.events_count || 0) + (g.events_count || 0);
-            if (Object.keys(migratedData).length > 0) {
-              await updateUser(telegramId, migratedData);
-              console.log('[auth] Migrated', Object.keys(migratedData).length, 'fields to', telegramId);
-            }
-          } catch (e) { console.warn('[auth] Migration failed:', e.message); }
-          // Now delete the ghost
-          try { await deleteUser(g.telegram_id); } catch (e) { console.warn('[auth] Ghost delete failed:', e.message); }
+          existingUser = await migrateGuest(g, existingUser);
         }
       } catch (e) {
-        console.warn('[auth] Ghost cleanup failed (non-fatal):', e.message);
+        console.warn('[auth] Legacy ghost cleanup failed (non-fatal):', e.message);
       }
     }
 
@@ -359,6 +398,7 @@ module.exports = async (req, res) => {
     res.setHeader('Set-Cookie', [
       'tg_oauth_state=; Max-Age=0; Path=/; HttpOnly',
       'tg_oauth_verifier=; Max-Age=0; Path=/; HttpOnly',
+      'tg_guest_id=; Max-Age=0; Path=/; HttpOnly',
       sessionCookieStr
     ]);
 

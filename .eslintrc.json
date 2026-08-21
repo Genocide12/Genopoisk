@@ -1,0 +1,37 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2020": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-undef": "warn",
+    "no-unused-vars": "warn",
+    "no-redeclare": "warn",
+    "no-dupe-keys": "warn",
+    "no-unreachable": "warn",
+    "no-cond-assign": "warn",
+    "no-extra-semi": "warn",
+    "no-trailing-spaces": "off",
+    "semi": "off",
+    "quotes": "off",
+    "indent": "off",
+    "comma-dangle": "off",
+    "no-mixed-spaces-and-tabs": "warn",
+    "eqeqeq": "off",
+    "no-var": "off",
+    "prefer-const": "off",
+    "object-shorthand": "off"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "public/debug-*.html",
+    "public/lite*.html",
+    "genopoisk_scan/"
+  ]
+}

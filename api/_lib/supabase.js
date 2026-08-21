@@ -7,6 +7,29 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// fetch with retry on NETWORK errors only (not HTTP errors).
+// This prevents double-counting: if the request reached Supabase but
+// the response was lost (network drop), we don't retry. If fetch threw
+// before the request was sent (DNS error, connection refused), we retry.
+//
+// Attempts: 2 (1 initial + 1 retry). Backoff: 200ms.
+// Used by upsertUser and updateUser to make event recording resilient
+// to transient network glitches without risking data duplication.
+async function fetchWithRetry(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch (firstErr) {
+    console.warn('[supabase] fetch failed (network), retrying in 200ms:', firstErr.message);
+    await new Promise(function(r) { setTimeout(r, 200); });
+    try {
+      return await fetch(url, options);
+    } catch (secondErr) {
+      console.error('[supabase] fetch retry also failed:', secondErr.message);
+      throw secondErr;
+    }
+  }
+}
+
 function sbHeaders() {
   return {
     'apikey': SUPABASE_KEY,
@@ -28,7 +51,7 @@ async function upsertUser(telegramId, data) {
     telegram_id: String(telegramId),
     ...data
   };
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify(body)
@@ -44,7 +67,7 @@ async function upsertUser(telegramId, data) {
     delete fallbackBody.sessions;
     delete fallbackBody.is_premium;
     delete fallbackBody.premium_since;
-    const res2 = await fetch(url, {
+    const res2 = await fetchWithRetry(url, {
       method: 'POST',
       headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify(fallbackBody)
@@ -133,7 +156,7 @@ async function getUserByOidcSub(oidcSub) {
 // Update user fields. Same defensive retry as upsertUser.
 async function updateUser(telegramId, updates) {
   const url = SUPABASE_URL + '/rest/v1/users?telegram_id=eq.' + encodeURIComponent(telegramId);
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'PATCH',
     headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
     body: JSON.stringify(updates)
@@ -148,7 +171,7 @@ async function updateUser(telegramId, updates) {
     delete fallbackUpdates.sessions;
     delete fallbackUpdates.is_premium;
     delete fallbackUpdates.premium_since;
-    const res2 = await fetch(url, {
+    const res2 = await fetchWithRetry(url, {
       method: 'PATCH',
       headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
       body: JSON.stringify(fallbackUpdates)

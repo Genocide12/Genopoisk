@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '54'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '55'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -1230,6 +1230,8 @@
         // Set poster image
         var posterEl = document.getElementById('resumePoster');
         if (posterEl) {
+          posterEl.loading = 'eager'; // above the fold
+          posterEl.decoding = 'async';
           posterEl.src = '/api/poster?id=' + encodeURIComponent(filmData.filmId) + '&size=small&_v=' + SW_CACHE_VERSION;
           posterEl.style.display = 'block';
           posterEl.onerror = function() { this.style.display = 'none'; };
@@ -2090,6 +2092,8 @@
       pendingFilmTitle = title;
 
       if (poster) {
+        fipPoster.loading = 'lazy'; // popup is below fold + on-demand
+        fipPoster.decoding = 'async';
         fipPoster.src = poster;
         fipPoster.style.display = 'block';
       } else {

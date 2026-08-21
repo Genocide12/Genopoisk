@@ -70,12 +70,41 @@ async function getUser(telegramId) {
   return rows[0] || null;
 }
 
-// Get all users
+// Get all users (paginated internally — fetches all rows in batches of 200).
+// Returns the same flat array as before, so callers don't need changes.
+// Uses Supabase's Range header for pagination (offset-based, deterministic
+// when combined with order=telegram_id.asc).
 async function getAllUsers() {
-  const url = SUPABASE_URL + '/rest/v1/users?order=last_seen.desc&limit=1000';
-  const res = await fetch(url, { headers: sbHeaders() });
-  if (!res.ok) return [];
-  return await res.json();
+  const PAGE_SIZE = 200;
+  const all = [];
+  let offset = 0;
+  // Hard upper bound of 50 pages (10K users) to prevent infinite loops
+  // if something goes wrong with the API.
+  for (let i = 0; i < 50; i++) {
+    const url = SUPABASE_URL + '/rest/v1/users?order=telegram_id.asc&select=*';
+    const res = await fetch(url, {
+      headers: { ...sbHeaders(), 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }
+    });
+    if (!res.ok) {
+      // If first page fails, return empty (matches old behavior)
+      if (i === 0) return [];
+      break;
+    }
+    const rows = await res.json();
+    if (!rows || rows.length === 0) break;
+    all.push(...rows);
+    // Last page (partial) — stop
+    if (rows.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+  // Sort by last_seen desc (old behavior) — done in-memory after fetch
+  // since we paginated by telegram_id for deterministic ordering.
+  all.sort(function(a, b) {
+    var aTs = a.last_seen || '';
+    var bTs = b.last_seen || '';
+    return aTs < bTs ? 1 : (aTs > bTs ? -1 : 0);
+  });
+  return all;
 }
 
 // Get user by username (legacy fallback — prefer telegram_id / oidc_sub lookups)

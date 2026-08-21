@@ -6,10 +6,11 @@
 //   - API endpoints: network-only (always need live data)
 //   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
 
-const CACHE_NAME = 'genopoisk-v54';
+const CACHE_NAME = 'genopoisk-v55';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/offline.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -93,7 +94,11 @@ self.addEventListener('fetch', function(event) {
         });
         return res;
       }).catch(function() {
-        // Offline and not cached — return index.html as fallback
+        // Offline and not cached — return offline.html for navigations,
+        // or index.html for other assets
+        if (req.mode === 'navigate') {
+          return caches.match('/offline.html') || caches.match('/index.html');
+        }
         return caches.match('/index.html');
       });
     })

@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '46'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '51'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
     // We need to extract TG user ID from initData and store it in localStorage
@@ -145,13 +145,12 @@
       const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
       const isLoggedIn = !!(storedTgId || storedTgUsername);
 
-      // Hide/show fixed bottom Telegram button
+      // Always hide the top login bar — we only use the bottom button now.
+      tgLoginBar.classList.remove('visible');
+
+      // Configure the fixed bottom button
       var fixedBtn = document.getElementById('fixedTelegramBtn');
       var fixedText = document.getElementById('fixedTelegramText');
-      // Detect TV/projector/large non-touch screen — hide the fixed Telegram
-      // button there (it clutters the bottom of the screen and gets in the
-      // way of D-pad navigation). User can still open Telegram via the top
-      // login bar.
       var isTVDevice = (function() {
         var ua = (navigator.userAgent || '').toLowerCase();
         var tvPatterns = ['tv', 'television', 'googletv', 'android tv', 'smarttv', 'smart tv',
@@ -160,40 +159,31 @@
         for (var i = 0; i < tvPatterns.length; i++) {
           if (ua.indexOf(tvPatterns[i]) !== -1) return true;
         }
-        // Android tablet-like with large screen + no real touch = projector
         var isAndroid = ua.indexOf('android') !== -1;
         var hasRealTouch = (navigator.maxTouchPoints || 0) > 0;
         if (isAndroid && window.innerWidth >= 1024 && !hasRealTouch) return true;
-        // Removed: "no touch + large screen" check — caused false positives
-        // on desktop monitors (1920px+ is common for Full HD/2K/4K monitors).
-        // Real TVs/projectors are caught by UA keywords above.
         return false;
       })();
+
       if (fixedBtn) {
         if (isInTelegram || isTVDevice) {
           fixedBtn.classList.add('hidden');
           fixedBtn.classList.add('hidden-by-tv');
         } else {
           fixedBtn.classList.remove('hidden');
-          if (fixedText && typeof t === 'function') fixedText.textContent = t('openInTelegram');
+          // Show "Войти через Telegram" if not logged in,
+          // "Открыть в Telegram" if logged in
+          if (fixedText) {
+            if (isLoggedIn) {
+              fixedText.textContent = '🤖 Открыть в Telegram';
+              fixedBtn.href = 'https://t.me/Genopoiskbot?start=app';
+            } else {
+              fixedText.textContent = '🤖 Войти через Telegram';
+              fixedBtn.href = '/api/auth/telegram/login';
+            }
+          }
         }
       }
-
-      // Top bar: only show login button if NOT logged in.
-      // If logged in — hide top bar entirely (fixed bottom button handles it).
-      if (isInTelegram) {
-        tgLoginBar.classList.remove('visible');
-        return;
-      }
-      if (isLoggedIn) {
-        // Logged in — hide top bar, fixed bottom button is enough
-        tgLoginBar.classList.remove('visible');
-        return;
-      }
-      // Not logged in — show login button in top bar
-      tgLoginStateLoggedOut.style.display = '';
-      tgLoginStateLoggedIn.style.display = 'none';
-      tgLoginBar.classList.add('visible');
     }
 
     if (tgLoginBarCloseBtn) {
@@ -1187,39 +1177,67 @@
     let resumeFilm = null;
 
     async function loadResumeCard() {
-      // Note: removed sessionStorage dismissal check — card should always show
-      // if user has a recently watched film.
       try {
         var uid = getUserId();
         var initData = getTgInitData();
         console.log('[resume] loadResumeCard called, uid:', uid, 'initData:', initData ? 'yes' : 'no');
-        const res = await fetch('/api/last-film', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            initData: initData,
-            userId: uid || ''
-          })
-        });
-        if (!res.ok) { console.warn('[resume] last-film HTTP', res.status); return; }
-        const data = await res.json();
-        console.log('[resume] last-film response:', data.film ? data.film.title : 'null');
-        if (!data.film) return;
-        // Only show if watched in last 48h
-        const age = Date.now() - new Date(data.film.ts).getTime();
-        if (age > 48 * 60 * 60 * 1000) return;
-        resumeFilm = data.film;
 
-        // Resolve the best position to display + use for resume:
-        //   1. Server-provided position (cross-device, saved by player.html on another device)
-        //   2. localStorage position (this device's last session)
-        // Server wins because it's the most recent across all devices.
-        let bestPosition = 0;
-        if (typeof data.film.position === 'number' && data.film.position > 5) {
-          bestPosition = data.film.position;
-        } else {
+        // Try server first (for logged-in users with cross-device sync)
+        var filmData = null;
+        if (uid && !uid.startsWith('web_')) {
           try {
-            const raw = localStorage.getItem(`genopoisk_position_${data.film.filmId}`);
+            const res = await fetch('/api/last-film', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData: initData, userId: uid })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.film) filmData = data.film;
+            }
+          } catch (e) { console.warn('[resume] server fetch failed:', e); }
+        }
+
+        // If not logged in OR server returned nothing, check localStorage
+        // for a locally-saved last film (guest users)
+        if (!filmData) {
+          try {
+            var localLast = localStorage.getItem('genopoisk_last_watched_film');
+            if (localLast) {
+              var parsed = JSON.parse(localLast);
+              // Check if watched in last 48h
+              var age = Date.now() - new Date(parsed.ts).getTime();
+              if (age <= 48 * 60 * 60 * 1000) {
+                filmData = {
+                  filmId: parsed.filmId,
+                  title: parsed.title,
+                  ts: parsed.ts,
+                  position: parsed.position || 0,
+                  duration: parsed.duration || 0
+                };
+                console.log('[resume] Using localStorage film:', filmData.title);
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!filmData) { console.log('[resume] No film found'); return; }
+
+        // Check 48h age
+        const age = Date.now() - new Date(filmData.ts).getTime();
+        if (age > 48 * 60 * 60 * 1000) { console.log('[resume] Film too old'); return; }
+
+        resumeFilm = filmData;
+
+        // Resolve the best position
+        var bestPosition = 0;
+        if (typeof filmData.position === 'number' && filmData.position > 5) {
+          bestPosition = filmData.position;
+        }
+        // Also check localStorage for this specific film
+        if (bestPosition === 0) {
+          try {
+            const raw = localStorage.getItem(`genopoisk_position_${filmData.filmId}`);
             if (raw) {
               const pos = JSON.parse(raw);
               if (pos && pos.t && pos.t > 5) bestPosition = pos.t;
@@ -1227,27 +1245,27 @@
           } catch (_) {}
         }
 
-        // Save server position to localStorage so player.html picks it up
-        // even if it doesn't read ?t= URL param.
+        // Save to localStorage so player.html picks it up
         if (bestPosition > 5) {
           try {
-            localStorage.setItem(`genopoisk_position_${data.film.filmId}`, JSON.stringify({
+            localStorage.setItem(`genopoisk_position_${filmData.filmId}`, JSON.stringify({
               t: bestPosition,
-              d: data.film.duration || 0,
+              d: filmData.duration || 0,
               ts: new Date().toISOString(),
-              title: data.film.title
+              title: filmData.title
             }));
           } catch (_) {}
-          resumeTitle.textContent = data.film.title;
+          resumeTitle.textContent = filmData.title;
           resumeMeta.textContent = '▶ с ' + formatResumeTime(bestPosition);
         } else {
-          resumeTitle.textContent = data.film.title;
+          resumeTitle.textContent = filmData.title;
           resumeMeta.textContent = 'Продолжить просмотр';
         }
-        // Set poster image from our proxy
+
+        // Set poster image
         var posterEl = document.getElementById('resumePoster');
         if (posterEl) {
-          posterEl.src = '/api/poster?id=' + encodeURIComponent(data.film.filmId) + '&size=small&_v=' + SW_CACHE_VERSION;
+          posterEl.src = '/api/poster?id=' + encodeURIComponent(filmData.filmId) + '&size=small&_v=' + SW_CACHE_VERSION;
           posterEl.style.display = 'block';
           posterEl.onerror = function() { this.style.display = 'none'; };
         }
@@ -2173,6 +2191,16 @@
 
     async function openPlayer(filmId, title) {
       const tgUsername = localStorage.getItem('genopoisk_tg_username') || '';
+      // Save to localStorage for guest users (resume without login)
+      try {
+        localStorage.setItem('genopoisk_last_watched_film', JSON.stringify({
+          filmId: String(filmId),
+          title: title,
+          ts: new Date().toISOString(),
+          position: 0,
+          duration: 0
+        }));
+      } catch (_) {}
       const payload = JSON.stringify({
         type: 'movies_opened',
         initData: getTgInitData(),

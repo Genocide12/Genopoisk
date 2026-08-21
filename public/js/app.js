@@ -1515,7 +1515,7 @@
       var openBtn = document.querySelector('#tgLoginStateLoggedIn a');
       if (openBtn) {
         // Find the text node (not inside a <span>) — it's the direct
-        // text child of <a> after the <span>🤖</span>
+        // text child of <a>
         openBtn.childNodes.forEach(function(n) {
           if (n.nodeType === 3 && n.textContent.trim()) {
             n.textContent = ' ' + t('openInTelegram') + ' ';

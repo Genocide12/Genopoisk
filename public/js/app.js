@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '51'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '52'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
     // We need to extract TG user ID from initData and store it in localStorage
@@ -175,10 +175,10 @@
           // "Открыть в Telegram" if logged in
           if (fixedText) {
             if (isLoggedIn) {
-              fixedText.textContent = '🤖 Открыть в Telegram';
+              fixedText.textContent = 'Открыть Telegram';
               fixedBtn.href = 'https://t.me/Genopoiskbot?start=app';
             } else {
-              fixedText.textContent = '🤖 Войти через Telegram';
+              fixedText.textContent = 'Открыть Telegram';
               fixedBtn.href = '/api/auth/telegram/login';
             }
           }

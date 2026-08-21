@@ -85,14 +85,12 @@ module.exports = async (req, res) => {
     }
 
     // 2) Browser: use stored userId (Bot API ID, set by OIDC callback)
-    //    SKIP web_* IDs — they are temp browser IDs, not real Telegram IDs.
-    //    Tracking them would create ghost users that fragment data.
+    //    Guest browser sessions (web_*) are NOW tracked as guest users
+    //    in Supabase. When the guest later logs in via Telegram OIDC,
+    //    the callback merges the web_ guest into the real Telegram user.
     if (!telegramId && body.userId) {
       const uid = String(body.userId);
-      if (uid.startsWith('web_')) {
-        // Guest browser session — silently skip
-        return res.status(200).json({ ok: true, skipped: true, reason: 'guest_web_id' });
-      }
+      // Use web_* IDs as guest telegram_id — they'll be migrated on login
       telegramId = uid;
       username = body.username || '';
     }

@@ -47,9 +47,9 @@
   <script src="/i18n.js"></script>
   <!-- Vercel Web Analytics (vanilla HTML CDN approach per Vercel docs) -->
   <script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
-  <script defer src="/js/error-handler.js?v=51"></script>
+  <script defer src="/js/error-handler.js?v=52"></script>
   <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.log('[tg] telegram-web-app.js unavailable (running outside Telegram Mini App — this is normal)')"></script>
-  <link rel="stylesheet" href="/css/app.css?v=51">
+  <link rel="stylesheet" href="/css/app.css?v=52">
   <script>try{fetch("/api/poster?id=251733&size=small").catch(function(){});fetch("/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1").catch(function(){});fetch("/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=1").catch(function(){});}catch(e){}</script>
   <!-- Structured Data for Search Engines (JSON-LD) -->
   <script type="application/ld+json">
@@ -190,8 +190,7 @@
   </div>
   <!-- Fixed "Open in Telegram" button — always visible at bottom on scroll -->
   <a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener" id="fixedTelegramBtn" style="position:fixed;bottom:0;left:0;right:0;z-index:999;background:linear-gradient(135deg,#229ED9 0%,#2AABEE 100%);color:#fff;text-align:center;padding:14px 20px;text-decoration:none;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 -4px 20px rgba(0,0,0,0.4);transition:transform 0.3s,opacity 0.3s;calc(env(safe-area-inset-bottom) + 14px) padding-bottom;">
-    <span style="font-size:18px;">🤖</span>
-    <span id="fixedTelegramText">Открыть в Telegram</span>
+    <span id="fixedTelegramText">Открыть Telegram</span>
   </a>
   <!-- Long-press film info popup (mobile only — desktop uses :hover) -->
   <div class="film-info-overlay" id="filmInfoOverlay">

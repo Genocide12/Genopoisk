@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '52'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '53'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init (MUST run BEFORE getBrowserUserId) ---
     // We need to extract TG user ID from initData and store it in localStorage

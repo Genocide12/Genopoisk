@@ -117,10 +117,7 @@ function extractVerifiedUser(body, req) {
   // 3) Legacy browser path — accept userId only if not a guest ID
   if (body.userId) {
     const uid = String(body.userId);
-    if (uid.startsWith('web_')) {
-      result.source = 'guest';
-      return result;
-    }
+    // web_* IDs are now allowed as guest users (tracked in Supabase)
     result.telegramId = uid;
     result.username = body.username || '';
     result.source = 'browser';

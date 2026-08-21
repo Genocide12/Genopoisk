@@ -70,7 +70,7 @@ async function getUser(telegramId) {
 
 // Get all users
 async function getAllUsers() {
-  const url = SUPABASE_URL + '/rest/v1/users?order=last_seen.desc&limit=100';
+  const url = SUPABASE_URL + '/rest/v1/users?order=last_seen.desc&limit=1000';
   const res = await fetch(url, { headers: sbHeaders() });
   if (!res.ok) return [];
   return await res.json();
@@ -366,7 +366,8 @@ async function recordEvent(telegramId, eventType, data) {
     createData.sessions = upsertSession([], platform, device, data.ip, nowIso);
     createData.favorite_films = [];
     createData.search_history = [];
-    await upsertUser(telegramId, createData); // upsertUser has fallback
+    var newUser = await upsertUser(telegramId, createData);
+    if (!newUser) { console.error('[supabase] Failed to create user:', telegramId); return { isNewUser: false }; }
     // If movies_opened, add to watched_films
     if (eventType === 'movies_opened' && data.filmId) {
       await updateUser(telegramId, {

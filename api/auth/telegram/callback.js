@@ -73,7 +73,7 @@ module.exports = async (req, res) => {
     }
 
     // CSRF protection: verify state
-    if (!crypto.timingSafeEqual(Buffer.from(state), Buffer.from(savedState))) {
+    const stateBuf = Buffer.from(state); const savedBuf = Buffer.from(savedState); if (stateBuf.length !== savedBuf.length || !crypto.timingSafeEqual(stateBuf, savedBuf)) {
       return res.redirect(302, '/?telegram_login=error&message=invalid_state');
     }
 
@@ -284,7 +284,45 @@ module.exports = async (req, res) => {
           String(u.telegram_id || '').startsWith('web_')
         );
         for (const g of ghosts) {
-          console.log('[auth] Cleaning up ghost user:', g.telegram_id, '(username:', username, ')');
+          console.log('[auth] Migrating ghost user:', g.telegram_id, '→', telegramId);
+          // Migrate watched_films, favorites, events to the real user
+          try {
+            var migratedData = {};
+            if (g.watched_films && g.watched_films.length > 0) {
+              var existingWatched = (existingUser.watched_films || []);
+              var mergedWatched = existingWatched.slice();
+              g.watched_films.forEach(function(f) {
+                if (!mergedWatched.some(function(e) { return String(e.filmId) === String(f.filmId); })) {
+                  mergedWatched.unshift(f);
+                }
+              });
+              migratedData.watched_films = mergedWatched;
+            }
+            if (g.favorite_films && g.favorite_films.length > 0) {
+              var existingFavs = (existingUser.favorite_films || []);
+              var mergedFavs = existingFavs.slice();
+              g.favorite_films.forEach(function(f) {
+                if (!mergedFavs.some(function(e) { return String(e.filmId) === String(f.filmId); })) {
+                  mergedFavs.unshift(f);
+                }
+              });
+              migratedData.favorite_films = mergedFavs;
+            }
+            if (g.last_film) { migratedData.last_film = g.last_film; }
+            // Merge events_by_type
+            var gEbt = g.events_by_type || {};
+            var eEbt = (existingUser.events_by_type || {});
+            Object.keys(gEbt).forEach(function(k) {
+              eEbt[k] = (eEbt[k] || 0) + gEbt[k];
+            });
+            migratedData.events_by_type = eEbt;
+            migratedData.events_count = (existingUser.events_count || 0) + (g.events_count || 0);
+            if (Object.keys(migratedData).length > 0) {
+              await updateUser(telegramId, migratedData);
+              console.log('[auth] Migrated', Object.keys(migratedData).length, 'fields to', telegramId);
+            }
+          } catch (e) { console.warn('[auth] Migration failed:', e.message); }
+          // Now delete the ghost
           try { await deleteUser(g.telegram_id); } catch (e) { console.warn('[auth] Ghost delete failed:', e.message); }
         }
       } catch (e) {

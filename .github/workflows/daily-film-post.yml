@@ -1,10 +1,7 @@
-# Auto-posts a "Film of the Day" to @genopoisk_news channel every day at 12:00 Moscow time.
-
 name: Daily Film Post
 
 on:
   schedule:
-    # 09:00 UTC = 12:00 Moscow time (MSK = UTC+3)
     - cron: '0 9 * * *'
   workflow_dispatch:
 
@@ -18,7 +15,7 @@ jobs:
           CHANNEL: '@genopoisk_news'
         run: |
           python3 << 'PYEOF'
-          import json, urllib.request, random, os
+          import json, urllib.request, urllib.error, random, os, html as html_lib
 
           tg_token = os.environ['TG_TOKEN']
           channel = os.environ['CHANNEL']
@@ -26,19 +23,17 @@ jobs:
 
           # 1. Fetch top films
           print('Fetching films...')
-          url = f'{base_url}/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1'
-          with urllib.request.urlopen(url) as resp:
+          with urllib.request.urlopen(f'{base_url}/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1') as resp:
               data = json.loads(resp.read())
 
           films = data.get('films', [])
           if not films:
-              print('No films found!')
-              exit(1)
+              print('No films found!'); exit(1)
 
           # 2. Pick random film
           film = random.choice(films)
           film_id = film.get('filmId')
-          title = film.get('nameRu') or film.get('nameEn') or 'Без названия'
+          title = html_lib.escape(film.get('nameRu') or film.get('nameEn') or 'Без названия')
           rating = film.get('rating', '')
           year = film.get('year', '')
           poster = film.get('posterUrlPreview') or film.get('posterUrl', '')
@@ -48,76 +43,56 @@ jobs:
           genres = ''
           description = ''
           try:
-              detail_url = f'{base_url}/api/kinopoisk?q=v2.2/films/{film_id}'
-              with urllib.request.urlopen(detail_url) as resp:
+              with urllib.request.urlopen(f'{base_url}/api/kinopoisk?q=v2.2/films/{film_id}') as resp:
                   detail = json.loads(resp.read())
-              genres = ', '.join([g['genre'] for g in detail.get('genres', [])[:3]])
-              description = (detail.get('shortDescription') or detail.get('description') or '')[:200]
-              if len(description) == 200:
-                  description += '...'
-              if not rating or rating == 'null':
-                  rating = detail.get('ratingKinopoisk', '')
+              genres = html_lib.escape(', '.join([g['genre'] for g in detail.get('genres', [])[:3]]))
+              description = html_lib.escape((detail.get('shortDescription') or detail.get('description') or '')[:200])
+              if len(description) == 200: description += '...'
+              if not rating or rating == 'null': rating = detail.get('ratingKinopoisk', '')
           except Exception as e:
               print(f'Details fetch failed: {e}')
 
           # 4. Build caption
-          caption = f'🎬 <b>Фильм дня</b>\n\n'
-          caption += f'📺 <b>{title}</b>\n'
-
+          caption = f'🎬 <b>Фильм дня</b>\n\n📺 <b>{title}</b>\n'
           meta_parts = []
-          if year and year != 'null':
-              meta_parts.append(f'📅 {year}')
-          if genres:
-              meta_parts.append(f'🎭 {genres}')
-          if rating and rating != 'null' and rating != '0':
-              meta_parts.append(f'⭐ {rating}')
-          if meta_parts:
-              caption += ' · '.join(meta_parts) + '\n'
-
-          if description:
-              caption += f'\n{description}\n'
-
+          if year and year != 'null': meta_parts.append(f'📅 {year}')
+          if genres: meta_parts.append(f'🎭 {genres}')
+          if rating and rating != 'null' and rating != '0': meta_parts.append(f'⭐ {rating}')
+          if meta_parts: caption += ' · '.join(meta_parts) + '\n'
+          if description: caption += f'\n{description}\n'
           caption += f'\n▶ <b>Смотреть:</b> @Genopoiskbot'
 
           # 5. Build keyboard
-          keyboard = {
-              "inline_keyboard": [[
-                  {"text": "▶ Смотреть фильм", "url": f"https://t.me/Genopoiskbot?start=film_{film_id}"},
-                  {"text": "🌐 Открыть сайт", "url": "https://genopoisk.vercel.app/"}
-              ]]
-          }
+          keyboard = {"inline_keyboard": [[
+              {"text": "▶ Смотреть фильм", "url": f"https://t.me/Genopoiskbot?start=film_{film_id}"},
+              {"text": "🌐 Открыть сайт", "url": "https://genopoisk.vercel.app/"}
+          ]]}
 
           # 6. Send to channel
           if poster:
-              payload = {
-                  "chat_id": channel,
-                  "photo": poster,
-                  "caption": caption,
-                  "parse_mode": "HTML",
-                  "reply_markup": keyboard
-              }
+              payload = {"chat_id": channel, "photo": poster, "caption": caption, "parse_mode": "HTML", "reply_markup": keyboard}
               api_method = 'sendPhoto'
           else:
-              payload = {
-                  "chat_id": channel,
-                  "text": caption,
-                  "parse_mode": "HTML",
-                  "reply_markup": keyboard
-              }
+              payload = {"chat_id": channel, "text": caption, "parse_mode": "HTML", "reply_markup": keyboard}
               api_method = 'sendMessage'
 
-          print(f'Sending {api_method} to {channel}...')
-          req = urllib.request.Request(
-              f'https://api.telegram.org/bot{tg_token}/{api_method}',
-              data=json.dumps(payload).encode(),
-              headers={'Content-Type': 'application/json'},
-              method='POST'
-          )
-          with urllib.request.urlopen(req) as resp:
-              result = json.loads(resp.read())
-              if result.get('ok'):
-                  print(f'✅ Posted! Message ID: {result["result"]["message_id"]}')
-              else:
-                  print(f'❌ Failed: {result}')
-                  exit(1)
+          print(f'Sending {api_method}...')
+          try:
+              req = urllib.request.Request(
+                  f'https://api.telegram.org/bot{tg_token}/{api_method}',
+                  data=json.dumps(payload).encode(),
+                  headers={'Content-Type': 'application/json'},
+                  method='POST'
+              )
+              with urllib.request.urlopen(req) as resp:
+                  result = json.loads(resp.read())
+                  if result.get('ok'):
+                      print(f'✅ Posted! Message ID: {result["result"]["message_id"]}')
+                  else:
+                      print(f'❌ Failed: {result}'); exit(1)
+          except urllib.error.HTTPError as e:
+              print(f'❌ HTTP Error: {e.code} {e.reason}')
+              print(e.read().decode()); exit(1)
+          except Exception as e:
+              print(f'❌ Error: {e}'); exit(1)
           PYEOF

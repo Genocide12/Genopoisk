@@ -1224,8 +1224,8 @@
         if (!filmData) { console.log('[resume] No film found'); return; }
 
         // Check 48h age
-        const age = Date.now() - new Date(filmData.ts).getTime();
-        if (age > 48 * 60 * 60 * 1000) { console.log('[resume] Film too old'); return; }
+        const filmAge = Date.now() - new Date(filmData.ts).getTime();
+        if (filmAge > 48 * 60 * 60 * 1000) { console.log('[resume] Film too old'); return; }
 
         resumeFilm = filmData;
 

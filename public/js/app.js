@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '64'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '65'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -116,10 +116,16 @@
     // #fixedTelegramBtn remains. This function configures it based on
     // login state and device type.
     function checkTgLoginBar() {
-      const isInTelegram = !!(tg && tg.initData);
-      const storedTgId = localStorage.getItem('genopoisk_tg_user_id');
-      const storedTgUsername = localStorage.getItem('genopoisk_tg_username');
-      const isLoggedIn = !!(storedTgId || storedTgUsername);
+      // Detect Telegram Mini App — check multiple signals:
+      // 1. tg.initData (signed payload, set after tg.ready())
+      // 2. tg.platform !== 'unknown' (set even before initData)
+      // 3. window.Telegram.WebApp exists (script loaded)
+      var tgPlatform = (tg && tg.platform) ? tg.platform : 'unknown';
+      var isInTelegram = !!(tg && tg.initData) ||
+                         (tg && tgPlatform && tgPlatform !== 'unknown');
+      var storedTgId = localStorage.getItem('genopoisk_tg_user_id');
+      var storedTgUsername = localStorage.getItem('genopoisk_tg_username');
+      var isLoggedIn = !!(storedTgId || storedTgUsername);
 
       var fixedBtn = document.getElementById('fixedTelegramBtn');
       var fixedText = document.getElementById('fixedTelegramText');
@@ -139,7 +145,7 @@
 
       if (fixedBtn) {
         if (isInTelegram) {
-          // Inside Telegram Mini App — hide the bar, user is already authenticated
+          // Inside Telegram Mini App (including Desktop) — hide bar
           fixedBtn.classList.add('hidden');
           fixedBtn.classList.add('hidden-by-tv');
         } else if (isTVDevice && !isLoggedIn) {

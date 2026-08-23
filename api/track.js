@@ -50,7 +50,9 @@ function validateInitData(initData, botToken) {
       .map(([k, v]) => `${k}=${v}`).join('\n');
     const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
     const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-    if (calculatedHash !== hash) return null;
+    // Constant-time comparison to prevent timing attacks
+    if (calculatedHash.length !== hash.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(calculatedHash), Buffer.from(hash))) return null;
     const userJson = params.get('user');
     if (!userJson) return null;
     return JSON.parse(userJson);
@@ -162,6 +164,6 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true });
   } catch (e) {
     console.error('[track] error:', e);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: 'internal_error' });
   }
 };

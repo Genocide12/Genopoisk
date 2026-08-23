@@ -43,6 +43,7 @@ module.exports = async (req, res) => {
       is_premium: !!(user.is_premium || (user.events_by_type && user.events_by_type.premium))
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    console.error('[my-films] error:', e);
+    return res.status(500).json({ error: 'internal_error' });
   }
 };

@@ -53,6 +53,7 @@ module.exports = async (req, res) => {
       username: user.username
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    console.error('[last-film] error:', e);
+    return res.status(500).json({ error: 'internal_error' });
   }
 };

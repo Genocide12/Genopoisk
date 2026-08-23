@@ -129,9 +129,26 @@ module.exports = async (req, res) => {
         if (upstream.status === 301 || upstream.status === 302) {
           var location = upstream.headers.get('location');
           if (location) {
-            console.log('[poster] Following redirect to:', location.slice(0, 60));
+            // SSRF protection: only allow redirects to known kinopoisk/yandex hosts
+            try {
+              var redirectUrl = new URL(location);
+              var allowedHosts = ['avatars.mds.yandex.net', 'st.kp.yandex.net',
+                                  'kinopoiskapiunofficial.tech', 'avatars.yandex.net'];
+              var isAllowed = allowedHosts.some(function(h) {
+                return redirectUrl.hostname === h || redirectUrl.hostname.endsWith('.' + h);
+              });
+              if (!isAllowed) {
+                throw new Error('Redirect to untrusted host: ' + redirectUrl.hostname);
+              }
+              if (redirectUrl.protocol !== 'https:') {
+                throw new Error('Redirect to non-HTTPS protocol: ' + redirectUrl.protocol);
+              }
+            } catch (urlErr) {
+              throw new Error('Invalid redirect URL: ' + urlErr.message);
+            }
+            console.log('[poster] Following redirect to:', redirectUrl.hostname);
             var redirectRes = await fetch(location, {
-              headers: headers, // pass same browser headers to redirect target
+              headers: headers,
               redirect: 'follow',
               signal: ctrl.signal
             });

@@ -140,7 +140,11 @@ function parseSessionCookie(cookieHeader) {
     var payload = Buffer.from(parts[0], 'base64').toString('utf8');
     var signature = parts[1];
 
-    var secret = process.env.SESSION_SECRET || process.env.TG_BOT_TOKEN || 'fallback-secret';
+    var secret = process.env.SESSION_SECRET || process.env.TG_BOT_TOKEN;
+    if (!secret) {
+      console.error('[auth] SESSION_SECRET and TG_BOT_TOKEN both missing — cannot verify session cookie');
+      return null;
+    }
     var crypto = require('crypto');
     var expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 

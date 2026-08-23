@@ -166,6 +166,7 @@
       box-shadow:0 4px 12px rgba(0,0,0,0.5);
       pointer-events:none;
     }
+    .toast.visible { display:block; }
     .loading-overlay {
       position:absolute;
       inset:0;
@@ -335,7 +336,7 @@
     if (startTime && parseInt(startTime, 10) > 0) {
       console.log('[player] Resume from t=' + startTime + 's');
     }
-    document.getElementById('videoTitle').textContent = decodeURIComponent(title);
+    document.getElementById('videoTitle').textContent = title;
     var iframe = document.getElementById('playerIframe');
     var playerMain = document.getElementById('playerMain');
     var toastEl = document.getElementById('toast');
@@ -344,7 +345,7 @@
     var loadingSubtitle = document.getElementById('loadingSubtitle');
 
     // Show film title + resume position in the loading overlay (preloader)
-    if (loadingTitle) loadingTitle.textContent = decodeURIComponent(title);
+    if (loadingTitle) loadingTitle.textContent = title;
     if (loadingSubtitle) {
       var startSec = parseInt(startTime, 10) || 0;
       if (startSec > 5) {
@@ -822,7 +823,7 @@
       }
       // Don't show if we don't have a film ID
       if (!kid) return;
-      if (rateFilmNameEl) rateFilmNameEl.textContent = decodeURIComponent(title);
+      if (rateFilmNameEl) rateFilmNameEl.textContent = title;
       rateOverlay.classList.add('visible');
       console.log('[rate] Overlay shown for film', kid);
     }
@@ -887,7 +888,7 @@
         userId: uid,
         username: localStorage.getItem('genopoisk_tg_username') || '',
         filmId: kid,
-        title: decodeURIComponent(title),
+        title: title,
         rating: rating
       });
       try {

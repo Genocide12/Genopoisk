@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '60'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '61'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -465,46 +465,6 @@
       } catch (e) { console.warn('track error:', e); }
     }
 
-
-    // --- Holo card repel + glow tracking (production) ---
-    // Cards repel from cursor (tilt away) + glow follows cursor
-    document.addEventListener('mousemove', function(e) {
-      document.querySelectorAll('.action-card').forEach(function(card) {
-        var rect = card.getBoundingClientRect();
-        var x = e.clientX - rect.left;
-        var y = e.clientY - rect.top;
-        // Track cursor within 150px of card (for repel + glow)
-        if (x >= -150 && x <= rect.width + 150 && y >= -150 && y <= rect.height + 150) {
-          // Glow position (0-100%)
-          var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
-          var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
-          card.style.setProperty('--mx', px + '%');
-          card.style.setProperty('--my', py + '%');
-
-          // Repel: card tilts AWAY from cursor
-          // Center of card = (width/2, height/2)
-          // Cursor offset from center: -1 to 1
-          var cx = (x / rect.width) - 0.5;   // -0.5 (left) to 0.5 (right)
-          var cy = (y / rect.height) - 0.5;   // -0.5 (top) to 0.5 (bottom)
-          // Tilt: cursor on left → card tilts right (repel)
-          var maxTilt = 15; // max degrees
-          var maxShift = 8; // max pixels shift
-          var rx = -cy * maxTilt * 2;  // negate Y for natural tilt
-          var ry = cx * maxTilt * 2;
-          var tx = cx * maxShift * 2;
-          var ty = cy * maxShift * 2;
-          // Smooth clamp
-          rx = Math.max(-maxTilt, Math.min(maxTilt, rx));
-          ry = Math.max(-maxTilt, Math.min(maxTilt, ry));
-          tx = Math.max(-maxShift, Math.min(maxShift, tx));
-          ty = Math.max(-maxShift, Math.min(maxShift, ty));
-          card.style.setProperty('--rx', rx + 'deg');
-          card.style.setProperty('--ry', ry + 'deg');
-          card.style.setProperty('--tx', tx + 'px');
-          card.style.setProperty('--ty', ty + 'px');
-        }
-      });
-    });
 
     // Track initial page view
     trackEvent('page_views', { path: '/' });
@@ -1102,13 +1062,6 @@
       setupTouchPressEffect();
       setupHeroTitleGlow();
     }
-    // Also re-run after translations apply (in case cards were re-rendered)
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        setupActionCardEffects();
-        setupHeroTitleGlow();
-      }, 100);
-    });
 
     // Check premium status and show crown badge if premium
     async function checkPremiumStatus() {
@@ -1274,59 +1227,6 @@
       loader.classList.add('hidden');
     }
 
-    // Show loader until all posters in the grid have loaded.
-    // Called after appendFilms — waits for every <img> to fire onload/onerror.
-    // Uses a Map to track which images are still pending.
-    var posterLoadTimeout = null;
-    function waitForPosters() {
-      // Clear any previous timeout
-      if (posterLoadTimeout) clearTimeout(posterLoadTimeout);
-      // Get only NEW posters (not yet loaded — no .loaded or .error class)
-      var imgs = filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)');
-      if (imgs.length === 0) {
-        hideLoader();
-        return;
-      }
-      var pending = imgs.length;
-      function check() {
-        pending--;
-        if (pending <= 0) {
-          hideLoader();
-          if (posterLoadTimeout) { clearTimeout(posterLoadTimeout); posterLoadTimeout = null; }
-        }
-      }
-      imgs.forEach(function(img) {
-        if (img.complete) {
-          // Already loaded or errored
-          if (img.naturalWidth > 0) {
-            img.classList.add('loaded');
-          } else {
-            img.classList.add('error');
-          }
-          check();
-        } else {
-          img.addEventListener('load', function() {
-            this.classList.add('loaded');
-            check();
-          }, { once: true });
-          img.addEventListener('error', function() {
-            this.classList.add('error');
-            check();
-          }, { once: true });
-        }
-      });
-      // Safety timeout — hide loader after 4s even if not all posters
-      // loaded (was 10s — too long, made the site feel slow).
-      // Posters will still load in the background and appear as they arrive.
-      posterLoadTimeout = setTimeout(function() {
-        // Force-load any remaining images
-        filmGrid.querySelectorAll('img.film-poster:not(.loaded):not(.error)').forEach(function(img) {
-          img.classList.add(img.naturalWidth > 0 ? 'loaded' : 'error');
-        });
-        hideLoader();
-      }, 4000);
-    }
-
     function clearFilms() {
       filmGrid.innerHTML = '';
       filmGrid.classList.remove('centered');
@@ -1393,8 +1293,6 @@
       filmGrid.appendChild(frag);
       // Hide loader IMMEDIATELY — don't wait for posters.
       // Posters load in background and appear as they arrive.
-      // This fixes the "cards don't load" issue on mobile where
-      // waitForPosters could block the UI for up to 4 seconds.
       hideLoader();
       if (forceCenter || films.length === 1) {
         // Single film (random or search with 1 result) — center it
@@ -1761,7 +1659,6 @@
         } else {
           hasMore = false;
           if (filmGrid.children.length === 0) showEmptyState('Фильмы не найдены');
-          // Don't call hideLoader here — waitForPosters in appendFilms handles it
         }
       } catch (e) {
         // Fallback: try to load cached films from localStorage

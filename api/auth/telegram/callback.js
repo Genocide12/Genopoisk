@@ -379,7 +379,11 @@ module.exports = async (req, res) => {
     // (not accessible via JavaScript) and signed with a simple HMAC to
     // prevent tampering. The API endpoints (my-films, last-film,
     // user-check) verify this cookie to prevent IDOR attacks.
-    var sessionSecret = process.env.SESSION_SECRET || process.env.TG_BOT_TOKEN || 'fallback-secret';
+    var sessionSecret = process.env.SESSION_SECRET || process.env.TG_BOT_TOKEN;
+    if (!sessionSecret) {
+      console.error('[auth] SESSION_SECRET and TG_BOT_TOKEN both missing — cannot create session cookie');
+      return res.redirect(302, '/?telegram_login=error&message=server_misconfigured');
+    }
     var sessionPayload = telegramId + ':' + Date.now();
     var sessionHmac = crypto.createHmac('sha256', sessionSecret).update(sessionPayload).digest('hex');
     var sessionCookie = Buffer.from(sessionPayload).toString('base64') + '.' + sessionHmac;

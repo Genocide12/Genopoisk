@@ -1601,11 +1601,6 @@
       window.location.href = `player.html?id=${filmId}&title=${encodeURIComponent(title)}`;
     }
 
-    function escapeHtmlLite(s) {
-      if (!s) return '';
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-
     async function loadCategory(category) {
       currentCategory = category;
       currentPage = 1;
@@ -1959,14 +1954,4 @@
         }, 600);
       }
     }
-
-    // ====== Lite version banner — show on TV / projector / large non-touch screens ======
-    // Detection heuristics (any one triggers the banner):
-    //   - User-Agent contains "TV", "GoogleTV", "AndroidTV", "SmartTV", "projector", "Bravia", "WebOS", "Tizen"
-    //   - No touch support ('ontouchstart' not in window) AND viewport width >= 1280px
-    //     (large screen + no touch = likely a TV/projector/HTPC)
-    //   - navigator.userAgentData.brand has "TV" hints (Android TV)
-    //
-    // Banner is dismissible — dismissal stored in sessionStorage so it
-    // doesn't pop back up on every page load.
 

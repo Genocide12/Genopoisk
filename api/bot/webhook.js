@@ -348,6 +348,69 @@ async function cmdStart(chatId, user, text) {
     return;
   }
 
+  // QR Login: /start qr_<sessionId> — user scanned QR code on projector
+  // This confirms the login session and links the projector to their Telegram account
+  if (startParam.indexOf('qr_') === 0) {
+    const sessionId = startParam.slice(3);
+    try {
+      // Import the shared QR sessions map
+      const { qrSessions } = require('../auth/qr/generate');
+      const session = qrSessions.get(sessionId);
+
+      if (!session) {
+        await sendMessage(chatId, '❌ <b>QR-код недействителен</b>\n\nСессия истекла или не найдена. Попросите проектор показать новый QR-код и попробуйте снова.', {
+          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+        });
+        return;
+      }
+
+      if (session.expiresAt < Date.now()) {
+        qrSessions.delete(sessionId);
+        await sendMessage(chatId, '⏰ <b>QR-код истёк</b>\n\nВремя действия кода (5 минут) прошло. Попросите проектор показать новый QR-код.', {
+          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+        });
+        return;
+      }
+
+      if (session.confirmed) {
+        await sendMessage(chatId, '⚠️ <b>Этот QR-код уже использован</b>\n\nВойдите на проекторе заново с новым кодом.', {
+          reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+        });
+        return;
+      }
+
+      // Confirm the session — link to this Telegram user
+      const displayName = user.first_name
+        ? (user.first_name + (user.last_name ? ' ' + user.last_name : ''))
+        : ('@' + (user.username || 'Telegram'));
+
+      session.confirmed = true;
+      session.telegramId = String(user.id);
+      session.username = user.username || '';
+      session.displayName = displayName;
+
+      console.log('[bot] QR login confirmed:', user.id, '→ session', sessionId.substring(0, 12) + '...');
+
+      await sendMessage(chatId,
+        '✅ <b>Вход подтверждён!</b>\n\n' +
+        'Проектор <b>' + escapeHtml(displayName) + '</b> успешно привязан к вашему аккаунту.\n\n' +
+        'Теперь на проекторе:\n' +
+        '• История просмотров синхронизируется\n' +
+        '• Коллекция доступна\n' +
+        '• Позиция фильма продолжается с любого устройства\n\n' +
+        'QR-код действителен ещё 5 минут — проектор должен автоматически обновиться.', {
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+      });
+      return;
+    } catch (e) {
+      console.error('[bot] QR login error:', e);
+      await sendMessage(chatId, '❌ Ошибка при подтверждении входа. Попробуйте с новым QR-кодом.', {
+        reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] }
+      });
+      return;
+    }
+  }
+
   // /start film_<ID> — shared film deep link. Opens the player directly.
   if (startParam.indexOf('film_') === 0) {
     const filmId = startParam.slice(5);

@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '61'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '62'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -138,17 +138,35 @@
       })();
 
       if (fixedBtn) {
-        if (isInTelegram || isTVDevice) {
+        if (isInTelegram) {
+          // Inside Telegram Mini App — hide the bar, user is already authenticated
+          fixedBtn.classList.add('hidden');
+          fixedBtn.classList.add('hidden-by-tv');
+        } else if (isTVDevice && !isLoggedIn) {
+          // TV/projector not logged in — show QR login button
+          fixedBtn.classList.remove('hidden');
+          fixedBtn.classList.remove('hidden-by-tv');
+          if (fixedText) {
+            fixedText.textContent = '📱 Войти по QR-коду';
+          }
+          fixedBtn.href = '#';
+          fixedBtn.onclick = function(e) {
+            e.preventDefault();
+            showQrLoginModal();
+            return false;
+          };
+        } else if (isTVDevice && isLoggedIn) {
+          // TV/projector already logged in — hide bar
           fixedBtn.classList.add('hidden');
           fixedBtn.classList.add('hidden-by-tv');
         } else {
+          // Regular browser — show login/Telegram button
           fixedBtn.classList.remove('hidden');
-          // Show "Войти через Telegram" if not logged in,
-          // "Открыть в Telegram" if logged in
           if (fixedText) {
             if (isLoggedIn) {
               fixedText.textContent = 'Открыть Telegram';
               fixedBtn.href = 'https://t.me/Genopoiskbot?start=app';
+              fixedBtn.onclick = null;
             } else {
               fixedText.textContent = 'Открыть Telegram';
               // Pass guest_id (web_* ID) to login flow so the OIDC callback
@@ -161,9 +179,150 @@
               } else {
                 fixedBtn.href = '/api/auth/telegram/login';
               }
+              fixedBtn.onclick = null;
             }
           }
         }
+      }
+    }
+
+    // ====== QR Login Modal (for projectors/TVs) ======
+    // Shows a QR code that the user scans with their phone's Telegram app.
+    // The bot confirms the login, and the projector gets authenticated.
+    var qrPollTimer = null;
+    var qrModalEl = null;
+
+    function showQrLoginModal() {
+      // Remove any existing modal
+      hideQrLoginModal();
+
+      // Create modal
+      qrModalEl = document.createElement('div');
+      qrModalEl.id = 'qrLoginModal';
+      qrModalEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+      qrModalEl.innerHTML =
+        '<div style="background:#1c1c1e;color:#fff;border-radius:20px;padding:32px 24px;max-width:360px;width:100%;text-align:center;font-family:inherit;box-shadow:0 8px 32px rgba(0,0,0,0.5);">' +
+          '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">📱 Вход по QR-коду</div>' +
+          '<div style="font-size:14px;color:rgba(255,255,255,0.7);margin-bottom:20px;line-height:1.5;">Отсканируйте код камерой телефона или в Telegram, чтобы войти на проекторе</div>' +
+          '<div id="qrCodeContainer" style="background:#fff;padding:16px;border-radius:12px;margin-bottom:16px;display:inline-block;">' +
+            '<div style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;color:#666;font-size:14px;">Генерация...</div>' +
+          '</div>' +
+          '<div id="qrStatus" style="font-size:14px;color:rgba(255,255,255,0.7);margin-bottom:16px;">⏳ Ожидание сканирования...</div>' +
+          '<div id="qrTimer" style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;"></div>' +
+          '<button id="qrCloseBtn" style="width:100%;background:rgba(255,255,255,0.1);color:#fff;border:none;padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;">Отмена</button>' +
+        '</div>';
+      document.body.appendChild(qrModalEl);
+
+      // Close button
+      var closeBtn = qrModalEl.querySelector('#qrCloseBtn');
+      if (closeBtn) {
+        closeBtn.onclick = function() { hideQrLoginModal(); };
+      }
+      // Close on overlay click
+      qrModalEl.addEventListener('click', function(e) {
+        if (e.target === qrModalEl) hideQrLoginModal();
+      });
+
+      // Generate QR session
+      generateQrCode();
+    }
+
+    function hideQrLoginModal() {
+      if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+      if (qrModalEl) { qrModalEl.remove(); qrModalEl = null; }
+    }
+
+    async function generateQrCode() {
+      try {
+        var res = await fetch('/api/auth/qr/generate', { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+        var sessionId = data.sessionId;
+        var qrUrl = data.qrUrl;
+        var expiresAt = data.expiresAt;
+
+        // Render QR code using Google Charts API (reliable, no dependency)
+        var qrImg = qrModalEl.querySelector('#qrCodeContainer');
+        if (qrImg) {
+          var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qrUrl);
+          qrImg.innerHTML = '<img src="' + qrSrc + '" width="200" height="200" alt="QR код для входа" style="display:block;border-radius:4px;" loading="eager">';
+        }
+
+        // Start polling for confirmation
+        if (qrPollTimer) clearInterval(qrPollTimer);
+        qrPollTimer = setInterval(function() { pollQrStatus(sessionId); }, 2000);
+
+        // Start countdown timer
+        updateQrTimer(expiresAt);
+        setInterval(function() { updateQrTimer(expiresAt); }, 1000);
+      } catch (e) {
+        console.error('[qr] Generate failed:', e);
+        var container = qrModalEl ? qrModalEl.querySelector('#qrCodeContainer') : null;
+        if (container) {
+          container.innerHTML = '<div style="color:#ff6b6b;font-size:14px;">Ошибка генерации QR-кода. Попробуйте обновить страницу.</div>';
+        }
+      }
+    }
+
+    function updateQrTimer(expiresAt) {
+      if (!qrModalEl) return;
+      var timerEl = qrModalEl.querySelector('#qrTimer');
+      if (!timerEl) return;
+      var remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      if (remaining <= 0) {
+        timerEl.textContent = '⏰ QR-код истёк';
+        var statusEl = qrModalEl.querySelector('#qrStatus');
+        if (statusEl) statusEl.textContent = 'Попросите показать новый QR-код';
+        if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+        return;
+      }
+      var mins = Math.floor(remaining / 60);
+      var secs = remaining % 60;
+      timerEl.textContent = 'Действителен ещё: ' + mins + ':' + (secs < 10 ? '0' : '') + secs;
+    }
+
+    async function pollQrStatus(sessionId) {
+      try {
+        var res = await fetch('/api/auth/qr/status?session=' + encodeURIComponent(sessionId));
+        if (!res.ok) return;
+        var data = await res.json();
+
+        if (data.status === 'confirmed' && data.telegramId) {
+          // Login confirmed! Store user data and reload.
+          if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+          localStorage.setItem('genopoisk_tg_user_id', String(data.telegramId));
+          if (data.username) localStorage.setItem('genopoisk_tg_username', data.username);
+          if (data.displayName) localStorage.setItem('genopoisk_tg_user_name', data.displayName);
+          localStorage.removeItem('genopoisk_user_id');
+
+          // Update UI
+          if (qrModalEl) {
+            var statusEl = qrModalEl.querySelector('#qrStatus');
+            if (statusEl) {
+              statusEl.innerHTML = '✅ <b style="color:#34C759;">Вход выполнен!</b><br>Перенаправление...';
+            }
+            var container = qrModalEl.querySelector('#qrCodeContainer');
+            if (container) {
+              container.innerHTML = '<div style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;font-size:64px;">✅</div>';
+            }
+          }
+
+          // Reload after 1.5s
+          setTimeout(function() {
+            window.location.reload();
+          }, 1500);
+          return;
+        }
+
+        if (data.status === 'expired') {
+          if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
+          var statusEl2 = qrModalEl ? qrModalEl.querySelector('#qrStatus') : null;
+          if (statusEl2) {
+            statusEl2.innerHTML = '⏰ <b style="color:#ff6b6b;">QR-код истёк</b><br><button onclick="showQrLoginModal()" style="margin-top:12px;background:var(--ios-blue);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-size:14px;cursor:pointer;">Новый QR-код</button>';
+          }
+        }
+      } catch (e) {
+        console.warn('[qr] Poll failed:', e);
       }
     }
     // DON'T call checkTgLoginBar yet — wait for telegram-web-app.js to load

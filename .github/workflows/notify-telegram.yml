@@ -101,21 +101,47 @@ jobs:
           echo "Payload:"
           echo "$PAYLOAD" | jq .
 
-          # POST with x-notify-token header
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
-            -H "Content-Type: application/json" \
-            -H "x-notify-token: $NOTIFY_TOKEN" \
-            -d "$PAYLOAD" \
-            "$NOTIFY_URL")
+          # Vercel deployment takes 1-2 minutes after push. The GitHub Action
+          # fires immediately, so the first request often hits 404
+          # DEPLOYMENT_NOT_FOUND. Retry with delays until deployment is ready.
+          # Total wait: up to ~3 minutes (30s initial + 6 × 25s retries).
+          echo "Waiting 30s for Vercel deployment to start..."
+          sleep 30
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          echo "HTTP $HTTP_CODE"
-          echo "Response: $BODY"
+          MAX_RETRIES=6
+          RETRY_DELAY=25
+          ATTEMPT=0
 
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Notification failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
+          while [ $ATTEMPT -lt $MAX_RETRIES ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "--- Attempt $ATTEMPT/$MAX_RETRIES ---"
 
-          echo "✅ Notification sent successfully"
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
+              -H "Content-Type: application/json" \
+              -H "x-notify-token: $NOTIFY_TOKEN" \
+              -d "$PAYLOAD" \
+              "$NOTIFY_URL" 2>&1) || true
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "HTTP $HTTP_CODE"
+            echo "Response: $BODY"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Notification sent successfully"
+              exit 0
+            fi
+
+            # 404 = deployment not ready yet, retry
+            # 5xx = server error, retry
+            # 4xx (other) = real error, but still retry (token mismatch etc)
+            if [ $ATTEMPT -lt $MAX_RETRIES ]; then
+              echo "⏳ Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+
+          # Don't fail the workflow — notification is non-critical.
+          # The commit is already deployed, just the Telegram notification failed.
+          echo "::warning::Notification failed after $MAX_RETRIES attempts (HTTP $HTTP_CODE). Deployment is likely still in progress."
+          exit 0

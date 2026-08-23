@@ -530,7 +530,7 @@
       var uid = getUserId();
       if (!uid || String(uid).indexOf('web_') === 0) return;
       try {
-        var res = await fetch('/api/my-films', {
+        var res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: uid, initData: tgInitData })

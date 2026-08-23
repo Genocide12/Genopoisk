@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '63'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '64'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -371,7 +371,7 @@
       if (!tgId && !tgUsername) return; // not logged in at all
       if (tg && tg.initData) return; // Mini App — always authenticated
       try {
-        const res = await fetch('/api/user-check', {
+        const res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: tgId, username: tgUsername, initData: getTgInitData() })
@@ -645,14 +645,14 @@
         var filmData = null;
         if (uid && !uid.startsWith('web_')) {
           try {
-            const res = await fetch('/api/last-film', {
+            const res = await fetch('/api/me', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ initData: initData, userId: uid })
             });
             if (res.ok) {
               const data = await res.json();
-              if (data.film) filmData = data.film;
+              if (data.last_film) filmData = data.last_film;
             }
           } catch (e) { console.warn('[resume] server fetch failed:', e); }
         }
@@ -1227,7 +1227,7 @@
       try {
         var uid = getUserId();
         if (!uid || String(uid).indexOf('web_') === 0) return; // guest
-        var res = await fetch('/api/my-films', {
+        var res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: uid, initData: getTgInitData() })
@@ -1723,7 +1723,7 @@
         return;
       }
       try {
-        const res = await fetch('/api/my-films', {
+        const res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: uid, initData: getTgInitData() })

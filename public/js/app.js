@@ -57,7 +57,7 @@
     };
 
     const API_BASE = '/api/kinopoisk'; // server-side proxy hides the API key
-    const SW_CACHE_VERSION = '62'; // bump when poster cache needs invalidation
+    const SW_CACHE_VERSION = '63'; // bump when poster cache needs invalidation
 
     // --- Telegram WebApp init ---
     // Extract TG user ID from initData and store it in localStorage so
@@ -234,7 +234,7 @@
 
     async function generateQrCode() {
       try {
-        var res = await fetch('/api/auth/qr/generate', { method: 'POST' });
+        var res = await fetch('/api/auth/qr', { method: 'POST' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
         var sessionId = data.sessionId;
@@ -283,7 +283,7 @@
 
     async function pollQrStatus(sessionId) {
       try {
-        var res = await fetch('/api/auth/qr/status?session=' + encodeURIComponent(sessionId));
+        var res = await fetch('/api/auth/qr?session=' + encodeURIComponent(sessionId));
         if (!res.ok) return;
         var data = await res.json();
 

@@ -354,7 +354,7 @@ async function cmdStart(chatId, user, text) {
     const sessionId = startParam.slice(3);
     try {
       // Import the shared QR sessions map
-      const { qrSessions } = require('../auth/qr/generate');
+      const { qrSessions } = require('../auth/qr');
       const session = qrSessions.get(sessionId);
 
       if (!session) {

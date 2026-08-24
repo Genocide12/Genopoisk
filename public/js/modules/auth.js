@@ -93,6 +93,7 @@
         var res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ userId: tgId, username: tgUsername, initData: App.CORE.getTgInitData() })
         });
         var data = await res.json();

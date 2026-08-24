@@ -23,6 +23,7 @@
         await fetch('/api/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(body)
         });
       } catch (e) { console.warn('track error:', e); }
@@ -39,6 +40,7 @@
             var res = await fetch('/api/me', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({ initData: initData, userId: uid })
             });
             if (res.ok) {

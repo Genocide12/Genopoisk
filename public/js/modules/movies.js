@@ -223,6 +223,7 @@
         var res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ userId: uid, initData: App.CORE.getTgInitData() })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);

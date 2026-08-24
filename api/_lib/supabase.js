@@ -441,6 +441,19 @@ async function recordEvent(telegramId, eventType, data) {
     events_count: (user.events_count || 0) + 1
   };
 
+  // Auto-cleanup: remove watched_films older than 90 days (privacy retention)
+  if (user.watched_films && user.watched_films.length > 0) {
+    var ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    var cleanedWatched = user.watched_films.filter(function(f) {
+      if (!f.ts) return true; // keep if no timestamp
+      try { return new Date(f.ts).getTime() > ninetyDaysAgo; } catch (_) { return true; }
+    });
+    if (cleanedWatched.length < user.watched_films.length) {
+      updates.watched_films = cleanedWatched;
+      console.log('[supabase] Auto-cleanup: removed', user.watched_films.length - cleanedWatched.length, 'old watched films for', telegramId);
+    }
+  }
+
   // Update events_by_type
   const ebt = user.events_by_type || {};
   ebt[eventType] = (ebt[eventType] || 0) + 1;

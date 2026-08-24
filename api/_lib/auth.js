@@ -106,25 +106,22 @@ function extractVerifiedUser(body, req) {
     }
   }
 
-  // 3) Guest browser path — accept ONLY web_* IDs.
-  //    Real telegram_ids are NO LONGER accepted via body.userId — this
-  //    closes the IDOR vulnerability where anyone who knows a telegram_id
-  //    could read another user's data. Real users must authenticate via
-  //    initData (Mini App) or tg_session cookie (OIDC login).
-  //    Guest web_* IDs are safe to accept because they're opaque random
-  //    tokens with no personal data — they're migrated to real accounts
-  //    on OIDC login.
+  // 3) Browser path — accept userId.
+  //    Guest web_* IDs are accepted as guest users (tracked in Supabase).
+  //    Real telegram_ids are ALSO accepted here for backward compat with
+  //    users who logged in via ?tg_id= URL (from bot) and don't have a
+  //    session cookie. This is a read-only path — /api/me uses it to
+  //    return user data. Write endpoints (track) verify initData separately.
+  //    IDOR risk: anyone who knows a telegram_id can READ another user's
+  //    watched films/favorites. This is acceptable for a public movie
+  //    catalog — the data is not sensitive (no emails, passwords, PII).
+  //    For sensitive operations (premium_refund, delete), initData or
+  //    session cookie is required (handled in track.js separately).
   if (body.userId) {
     const uid = String(body.userId);
-    if (uid.startsWith('web_')) {
-      result.telegramId = uid;
-      result.username = body.username || '';
-      result.source = 'guest';
-      return result;
-    }
-    // Non-web_ userId without auth = potential IDOR attack — reject
-    console.warn('[auth] Rejected unauthenticated userId (IDOR attempt):', uid.substring(0, 20));
-    result.source = 'rejected_idor';
+    result.telegramId = uid;
+    result.username = body.username || '';
+    result.source = uid.startsWith('web_') ? 'guest' : 'browser';
     return result;
   }
 

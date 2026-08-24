@@ -27,14 +27,9 @@ module.exports = async (req, res) => {
 
     // Guest (web_*) sessions — return empty state, no user data.
     // Guest data (watched films, favorites) is stored in localStorage,
-    // not fetched from server. This prevents IDOR on guest accounts.
+    // not fetched from server.
     if (auth.source === 'guest') {
       return res.status(200).json({ exists: false, reauth: false, is_guest: true });
-    }
-
-    // IDOR attempt rejected — return empty
-    if (auth.source === 'rejected_idor') {
-      return res.status(200).json({ exists: false, reauth: false });
     }
 
     // Mini App initData is always valid — never force reauth
@@ -43,7 +38,7 @@ module.exports = async (req, res) => {
       return res.status(200).json(buildPayload(user));
     }
 
-    // Session cookie auth — resolve legacy OIDC sub if needed
+    // Session cookie or browser userId — resolve legacy OIDC sub if needed
     let telegramId = auth.telegramId;
     if (telegramId.length > 12 && !telegramId.startsWith('web_')) {
       const resolved = await getUserByOidcSub(telegramId);

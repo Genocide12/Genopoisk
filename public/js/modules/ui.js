@@ -67,7 +67,11 @@
         var title = film.nameRu || film.nameEn || 'Без названия';
         var year = film.year || 'Н/Д';
         var rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-        var poster = filmId ? '/api/poster?id=' + filmId + '&size=small&_v=' + SW : '';
+        // Use direct poster URL from API data (faster — no proxy needed).
+        // Fallback to /api/poster proxy if direct URL fails.
+        var directPoster = film.posterUrlPreview || film.posterUrl || '';
+        var proxyPoster = filmId ? '/api/poster?id=' + filmId + '&size=small&_v=' + SW : '';
+        var poster = directPoster || proxyPoster;
         var isAboveFold = index < eagerCount;
         var loadingAttr = isAboveFold ? 'eager' : 'lazy';
         var fetchPriority = isAboveFold ? 'fetchpriority="high"' : '';
@@ -75,9 +79,34 @@
         var card = document.createElement('div');
         card.className = 'film-card';
         if (index < 10) card.style.animationDelay = (index * 0.04) + 's';
-        card.innerHTML =
-          '<img src="' + poster + '" class="film-poster" alt="' + App.CORE.escapeHtml(title) + '" loading="' + loadingAttr + '" ' + fetchPriority + ' decoding="async" onload="this.classList.add(\'loaded\')" onerror="this.classList.add(\'error\');this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>\'">' +
-          '<div class="film-info"><div class="film-title">' + App.CORE.escapeHtml(title) + '</div><div class="film-meta"><span>' + year + '</span>' + (rating !== 'Н/Д' ? '<span class="rating">⭐ ' + rating + '</span>' : '') + '</div></div>';
+
+        var img = document.createElement('img');
+        img.src = poster;
+        img.alt = title;
+        img.loading = loadingAttr;
+        img.decoding = 'async';
+        if (fetchPriority) img.setAttribute('fetchpriority', 'high');
+        img.classList.add('film-poster');
+        img.onload = function() { this.classList.add('loaded'); };
+        img.onerror = function() {
+          if (directPoster && proxyPoster) {
+            // Try proxy as fallback
+            this.onerror = function() {
+              this.classList.add('error');
+              this.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>';
+            };
+            this.src = proxyPoster;
+          } else {
+            this.classList.add('error');
+            this.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%232C2C2E%22 width=%22200%22 height=%22300%22/><text x=%22100%22 y=%22160%22 text-anchor=%22middle%22 fill=%22%2398989D%22 font-size=%2214%22>Нет постера</text></svg>';
+          }
+        };
+        card.appendChild(img);
+
+        var info = document.createElement('div');
+        info.className = 'film-info';
+        info.innerHTML = '<div class="film-title">' + App.CORE.escapeHtml(title) + '</div><div class="film-meta"><span>' + year + '</span>' + (rating !== 'Н/Д' ? '<span class="rating">⭐ ' + rating + '</span>' : '') + '</div>';
+        card.appendChild(info);
         card.dataset.filmId = filmId || '';
         card.dataset.title = title;
         card.dataset.year = year;

@@ -75,14 +75,44 @@
   // ====== Track initial page view ======
   App.TRACKING.trackEvent('page_views', { path: '/' });
 
-  // ====== Action card clicks ======
-  document.querySelectorAll('.action-card').forEach(function(card) {
-    card.addEventListener('click', function() {
-      var cat = card.dataset.cat;
-      if (cat === 'favorites') App.MOVIES.loadFavorites();
-      else App.MOVIES.loadCategory(cat);
-    });
+  // ====== Action card clicks + touch press effect ======
+  function setupTouchPressEffect(el) {
+    el.addEventListener('touchstart', function() {
+      el.classList.add('pressing');
+    }, { passive: true });
+    el.addEventListener('touchend', function() { el.classList.remove('pressing'); }, { passive: true });
+    el.addEventListener('touchcancel', function() { el.classList.remove('pressing'); }, { passive: true });
+    el.addEventListener('mousedown', function() { el.classList.add('pressing'); });
+    el.addEventListener('mouseup', function() { el.classList.remove('pressing'); });
+    el.addEventListener('mouseleave', function() { el.classList.remove('pressing'); });
+  }
+
+  document.querySelectorAll('.action-card, .film-card, .resume-card').forEach(function(card) {
+    setupTouchPressEffect(card);
+    if (card.classList.contains('action-card')) {
+      card.addEventListener('click', function() {
+        var cat = card.dataset.cat;
+        if (cat === 'favorites') App.MOVIES.loadFavorites();
+        else App.MOVIES.loadCategory(cat);
+      });
+    }
   });
+
+  // Re-apply touch press effect to dynamically added film cards
+  var filmGrid = document.getElementById('filmGrid');
+  if (filmGrid) {
+    var observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node && node.classList && node.classList.contains('film-card') && !node.dataset.pressSetup) {
+            node.dataset.pressSetup = '1';
+            setupTouchPressEffect(node);
+          }
+        });
+      });
+    });
+    observer.observe(filmGrid, { childList: true });
+  }
 
   // ====== Search ======
   var searchInput = document.getElementById('searchInput');
@@ -171,7 +201,17 @@
       return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window.navigator.standalone === true);
     } catch (_) { return false; }
   }
-  function pwaIsTelegramMiniApp() { return App.DEVICE.isTelegramMiniApp(tg); }
+  function pwaIsTelegramMiniApp() {
+    // Check multiple signals — tg may not be ready yet on first call
+    if (tg && tg.initData) return true;
+    if (tg && tg.platform && tg.platform !== 'unknown') return true;
+    try {
+      var t = window.Telegram && window.Telegram.WebApp;
+      if (t && t.initData) return true;
+      if (t && t.platform && t.platform !== 'unknown') return true;
+    } catch (_) {}
+    return false;
+  }
   function pwaIsIOS() { return App.DEVICE.isIOS(); }
   function pwaIsMobile() { return App.DEVICE.isMobile(); }
 
@@ -221,7 +261,8 @@
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay || e.target.id === 'pwaAndroidClose') overlay.remove(); });
   }
-  pwaShowInstallInfoButton();
+  // Delay PWA button check — let Telegram script load first
+  setTimeout(pwaShowInstallInfoButton, 2000);
 
   // ====== Long-press film info popup ======
   var LONGPRESS_DURATION = 500;

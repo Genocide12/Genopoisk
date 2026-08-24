@@ -188,6 +188,12 @@
       </div>
     </div>
   </div>
+  <!-- Module scripts (loaded before app.js, attach to GenopoiskApp namespace) -->
+  <script defer src="/js/modules/core.js?v=67"></script>
+  <script defer src="/js/modules/device.js?v=67"></script>
+  <script defer src="/js/modules/ui.js?v=67"></script>
+  <script defer src="/js/modules/movies.js?v=67"></script>
+  <!-- Main app (orchestrator — uses modules) -->
   <script defer src="/js/app.js?v=67"></script>
 </body>
 </html>

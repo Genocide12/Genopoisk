@@ -80,6 +80,7 @@
     card.addEventListener('click', function() {
       var cat = card.dataset.cat;
       if (cat === 'favorites') App.MOVIES.loadFavorites();
+      else if (cat === 'mood') App.MOOD.showMoodSelector();
       else App.MOVIES.loadCategory(cat);
     });
   });

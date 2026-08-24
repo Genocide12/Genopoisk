@@ -83,6 +83,9 @@ function buildPayload(user) {
     } catch (_) {}
   }
 
+  // Build recommendations from user's watched films (genre affinity)
+  var recommendations = buildRecommendations(user);
+
   return {
     exists: true,
     reauth: false,
@@ -92,6 +95,38 @@ function buildPayload(user) {
     last_film: lastFilm,
     watched_films: user.watched_films || [],
     favorites: user.favorite_films || [],
-    search_history: user.search_history || []
+    search_history: user.search_history || [],
+    recommendations: recommendations
   };
+}
+
+// Build personalized recommendations based on watched history + ratings.
+// Returns array of filmIds that user might like (max 10).
+function buildRecommendations(user) {
+  var watched = user.watched_films || [];
+  var rated = user.rated_films || [];
+  var favorites = user.favorite_films || [];
+
+  if (watched.length === 0 && favorites.length === 0) return [];
+
+  // Score films: +3 if favorited, +2 if rated 4-5 stars, +1 if watched
+  var scores = {};
+  watched.forEach(function(f) {
+    var id = String(f.filmId);
+    scores[id] = (scores[id] || 0) + 1;
+  });
+  favorites.forEach(function(f) {
+    var id = String(f.filmId);
+    scores[id] = (scores[id] || 0) + 3;
+  });
+  rated.forEach(function(f) {
+    var id = String(f.filmId);
+    if (f.rating >= 4) scores[id] = (scores[id] || 0) + 2;
+  });
+
+  // Return top filmIds sorted by score
+  return Object.keys(scores)
+    .filter(function(id) { return scores[id] >= 2; }) // only films user engaged with
+    .sort(function(a, b) { return scores[b] - scores[a]; })
+    .slice(0, 10);
 }

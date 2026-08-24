@@ -32,7 +32,10 @@ function loadApiKeys() {
 
 const API_KEYS = loadApiKeys();
 
-// In-memory cache (per-instance, lasts for warm function lifetime)
+// Distributed cache (Vercel KV if configured, else in-memory per-instance)
+const distCache = require('./_lib/cache');
+const CACHE_TTL_SECONDS = 30 * 60; // 30 minutes in seconds
+// Keep in-memory as a fast L1 layer
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes — reduces Kinopoisk API calls
 
@@ -132,14 +135,26 @@ module.exports = async (req, res) => {
 
   const targetUrl = `${KINOPOISK_BASE}/${path.replace(/^\//, '')}${otherParams ? '?' + otherParams : ''}`;
 
-  // Check cache
+  // Check L1 cache (in-memory, per-instance)
   const cacheKey = targetUrl;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('X-Cache', 'HIT-MEMORY');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.status(200).json(cached.data);
   }
+
+  // Check L2 cache (Vercel KV / distributed, shared across instances)
+  try {
+    var distCached = await distCache.get('kp:' + cacheKey);
+    if (distCached) {
+      // Populate L1 from L2
+      cache.set(cacheKey, { data: distCached, ts: Date.now() });
+      res.setHeader('X-Cache', 'HIT-KV');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.status(200).json(distCached);
+    }
+  } catch (_) {}
 
   // ====== Multi-threaded parallel key racing with fallback ======
   // First batch: race 3 keys in parallel via Promise.any.
@@ -299,12 +314,15 @@ module.exports = async (req, res) => {
     });
   }
 
-  // Save to cache (limit cache size)
+  // Save to L1 cache (in-memory)
   if (cache.size > 100) {
     const oldest = cache.keys().next().value;
     cache.delete(oldest);
   }
   cache.set(cacheKey, { data: winner.data, ts: Date.now() });
+
+  // Save to L2 cache (distributed, async — don't block response)
+  distCache.set('kp:' + cacheKey, winner.data, CACHE_TTL_SECONDS).catch(function(){});
 
   res.setHeader('X-Cache', 'MISS');
   res.setHeader('X-Race-Winner', winner.key.slice(0, 8));

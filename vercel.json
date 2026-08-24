@@ -8,6 +8,14 @@
     {
       "source": "/api/kinopoisk/(.*)",
       "destination": "/api/kinopoisk?q=$1"
+    },
+    {
+      "source": "/film/:id(\\d+)",
+      "destination": "/film.html?id=:id"
+    },
+    {
+      "source": "/movie/:id(\\d+)",
+      "destination": "/film.html?id=:id"
     }
   ],
   "headers": [
@@ -25,6 +33,15 @@
         {
           "key": "Access-Control-Allow-Headers",
           "value": "Content-Type"
+        }
+      ]
+    },
+    {
+      "source": "/film/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600"
         }
       ]
     }

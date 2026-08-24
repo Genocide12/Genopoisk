@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>Смотреть фильм онлайн — Genopoisk</title>
+  <meta name="description" content="Смотрите фильм онлайн в хорошем качестве на Genopoisk. Бесплатный кинотеатр в Telegram.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://genopoisk.vercel.app/">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="video.movie">
+  <meta property="og:title" content="Смотреть фильм — Genopoisk">
+  <meta property="og:description" content="Смотрите фильм онлайн бесплатно в хорошем качестве. Кинотеатр в Telegram.">
+  <meta property="og:image" content="https://genopoisk.vercel.app/icon-512.png">
+  <meta property="og:site_name" content="Genopoisk">
+  <meta property="og:locale" content="ru_RU">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Смотреть фильм — Genopoisk">
+  <meta name="twitter:description" content="Смотрите фильм онлайн бесплатно в хорошем качестве.">
+  <meta name="twitter:image" content="https://genopoisk.vercel.app/icon-512.png">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #000; color: #fff; line-height: 1.6;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 20px; text-align: center;
+    }
+    .container { max-width: 500px; }
+    .logo { font-size: 32px; font-weight: 800; margin-bottom: 20px;
+            background: linear-gradient(135deg, #007AFF 0%, #5856D6 50%, #FF2D55 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .title { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+    .desc { font-size: 15px; color: rgba(255,255,255,0.7); margin-bottom: 24px; }
+    .btn {
+      display: inline-block; background: linear-gradient(135deg, #229ED9 0%, #2AABEE 100%);
+      color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 12px;
+      font-size: 16px; font-weight: 700; border: none; cursor: pointer; font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { transform: scale(0.96); }
+    .loading { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🎬 Genopoisk</div>
+    <h1 class="title" id="filmTitle">Загрузка фильма...</h1>
+    <p class="desc" id="filmDesc">Бесплатный кинотеатр в Telegram. Смотрите фильмы онлайн в хорошем качестве.</p>
+    <button class="btn" id="watchBtn" onclick="redirectToPlayer()">▶ Смотреть фильм</button>
+    <div class="loading" id="loadingStatus">Получение информации о фильме...</div>
+  </div>
+
+  <!-- Noscript content for search engines -->
+  <noscript>
+    <h1>Genopoisk — Смотреть фильмы онлайн</h1>
+    <p>Бесплатный онлайн кинотеатр в Telegram. Смотрите фильмы онлайн в хорошем качестве HD 1080, без рекламы и без регистрации.</p>
+    <p>Каталог включает: популярные фильмы, топ-250 лучших фильмов по версии Кинопоиска, новинки кино 2026 года.</p>
+    <p><a href="https://t.me/Genopoiskbot">Открыть бота @Genopoiskbot в Telegram</a></p>
+    <p><a href="https://genopoisk.vercel.app/">Открыть сайт Genopoisk</a></p>
+  </noscript>
+
+  <!-- Structured Data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "Фильм — Genopoisk",
+    "description": "Смотрите фильм онлайн бесплатно в хорошем качестве на Genopoisk",
+    "uploadDate": "2026-01-01",
+    "thumbnailUrl": "https://genopoisk.vercel.app/icon-512.png",
+    "contentUrl": "https://genopoisk.vercel.app/",
+    "embedUrl": "https://genopoisk.vercel.app/player.html"
+  }
+  </script>
+
+  <script>
+    // Extract film ID from URL (?id=251733 or /film/251733)
+    var params = new URLSearchParams(window.location.search);
+    var filmId = params.get('id');
+    if (!filmId) {
+      var pathParts = window.location.pathname.split('/');
+      filmId = pathParts[pathParts.length - 1];
+    }
+
+    function redirectToPlayer() {
+      if (filmId) {
+        window.location.href = '/player.html?id=' + encodeURIComponent(filmId);
+      } else {
+        window.location.href = '/';
+      }
+    }
+
+    // Fetch film details for SEO + display
+    if (filmId && /^\d+$/.test(filmId)) {
+      fetch('/api/kinopoisk?q=v2.2/films/' + encodeURIComponent(filmId))
+        .then(function(res) { return res.ok ? res.json() : null; })
+        .then(function(data) {
+          if (!data) { document.getElementById('loadingStatus').textContent = ''; return; }
+          var title = data.nameRu || data.nameEn || 'Фильм';
+          var year = data.year || '';
+          var rating = data.ratingKinopoisk || data.rating || '';
+          var desc = data.shortDescription || data.description || '';
+          var genres = (data.genres || []).slice(0, 3).map(function(g) { return g.genre; }).join(', ');
+
+          document.title = title + (year ? ' (' + year + ')' : '') + ' — Genopoisk';
+          document.getElementById('filmTitle').textContent = title + (year ? ' (' + year + ')' : '');
+
+          var descParts = [];
+          if (genres) descParts.push(genres);
+          if (rating) descParts.push('⭐ ' + rating);
+          if (desc) descParts.push(desc.substring(0, 150));
+          if (descParts.length > 0) {
+            document.getElementById('filmDesc').textContent = descParts.join(' · ');
+          }
+
+          // Update meta tags
+          document.querySelector('meta[name="description"]').setAttribute('content',
+            title + (year ? ' ' + year : '') + ' — смотреть онлайн бесплатно в хорошем качестве. ' + desc.substring(0, 120));
+          document.querySelector('meta[property="og:title"]').setAttribute('content', title + ' — Genopoisk');
+          document.querySelector('meta[property="og:description"]').setAttribute('content', desc.substring(0, 150));
+
+          document.getElementById('loadingStatus').textContent = '';
+
+          // Auto-redirect after 3s (let search engines index)
+          setTimeout(redirectToPlayer, 3000);
+        })
+        .catch(function() {
+          document.getElementById('loadingStatus').textContent = '';
+        });
+    } else {
+      document.getElementById('loadingStatus').textContent = '';
+    }
+  </script>
+</body>
+</html>

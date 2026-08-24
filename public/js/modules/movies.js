@@ -30,7 +30,18 @@
       var lastErr = null;
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
-          var res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+          // 7s timeout — prevents eternal loading on slow projectors
+          var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          var timeoutId = null;
+          if (controller) {
+            timeoutId = setTimeout(function() { try { controller.abort(); } catch (_) {} }, 7000);
+          }
+          var fetchOpts = { headers: { 'Content-Type': 'application/json' } };
+          if (controller) fetchOpts.signal = controller.signal;
+
+          var res = await fetch(url, fetchOpts);
+          if (timeoutId) clearTimeout(timeoutId);
+
           if (res.ok) return await res.json();
           var errData = null;
           try { errData = await res.json(); } catch (_) {}
@@ -43,6 +54,7 @@
           if (errData && errData.message) throw new Error(errData.message);
           throw new Error('HTTP ' + res.status);
         } catch (e) {
+          if (timeoutId) clearTimeout(timeoutId);
           lastErr = e;
           if (attempt === 0) { await new Promise(function(r) { setTimeout(r, 300); }); continue; }
           throw e;

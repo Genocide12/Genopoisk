@@ -8,9 +8,12 @@
   },
   "scripts": {
     "lint": "eslint api/ public/js/ --no-error-on-unmatched-pattern || true",
-    "lint:check": "eslint api/ public/js/ --no-error-on-unmatched-pattern"
+    "lint:check": "eslint api/ public/js/ --no-error-on-unmatched-pattern",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "eslint": "^9.0.0"
+    "eslint": "^9.0.0",
+    "vitest": "^1.0.0"
   }
 }

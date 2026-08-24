@@ -113,33 +113,62 @@
 
     getResumeFilm: function() { return resumeFilm; },
 
-    // --- Prefetch ---
+    // --- Tiered prefetch ---
+    // Tier 1 (immediate): popular page 1 + poster lambda warm
+    // Tier 2 (idle, 2s): top250 + new
+    // Tier 3 (idle, 5s): top250 page 2 + posters for all
     prefetchAll: function() {
       var SW = App.CORE.SW_CACHE_VERSION;
+      var year = new Date().getFullYear();
+
+      // Tier 1: immediate — most clicked category
       try {
         fetch('/api/poster?id=251733&size=small', { method: 'GET' }).catch(function(){});
-        var year = new Date().getFullYear();
-        var prefetchUrls = [
-          { cat: 'top250', page: 1, url: '/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1' },
-          { cat: 'popular', page: 1, url: '/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=1' },
-          { cat: 'new', page: 1, url: '/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=' + year + '&yearTo=' + year + '&page=1' },
-          { cat: 'top250', page: 2, url: '/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=2' }
-        ];
-        prefetchUrls.forEach(function(p) {
-          fetch(p.url, { method: 'GET' })
-            .then(function(res) { return res.ok ? res.json() : null; })
+        fetch('/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=7&ratingTo=10&yearFrom=2020&yearTo=2025&page=1')
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) { if (data) App.TRACKING.cacheFilms('popular', 1, data); })
+          .catch(function(){});
+      } catch(_) {}
+
+      // Tier 2: after 2s idle — top250 + new
+      setTimeout(function() {
+        try {
+          fetch('/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=1')
+            .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
               if (!data) return;
-              var films = data.films || data.items || data.results || [];
-              if (films.length === 0) return;
-              try { localStorage.setItem('genopoisk_films_' + p.cat + '_' + p.page, JSON.stringify({ films: films, ts: Date.now() })); } catch (_) {}
+              App.TRACKING.cacheFilms('top250', 1, data);
+              // Prefetch posters for first 12 films
+              var films = data.films || data.items || [];
               films.slice(0, 12).forEach(function(f) {
                 var fid = f.filmId || f.kinopoiskId;
                 if (fid) fetch('/api/poster?id=' + fid + '&size=small&_v=' + SW).catch(function(){});
               });
             })
             .catch(function(){});
-        });
+          fetch('/api/kinopoisk?q=v2.2/films&order=NUM_VOTE&type=FILM&ratingFrom=0&ratingTo=10&yearFrom=' + year + '&yearTo=' + year + '&page=1')
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) { if (data) App.TRACKING.cacheFilms('new', 1, data); })
+            .catch(function(){});
+        } catch(_) {}
+      }, 2000);
+
+      // Tier 3: after 5s — page 2 of top250 (for scroll)
+      setTimeout(function() {
+        try {
+          fetch('/api/kinopoisk?q=v2.2/films/top&type=TOP_250_BEST_FILMS&page=2')
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) { if (data) App.TRACKING.cacheFilms('top250', 2, data); })
+            .catch(function(){});
+        } catch(_) {}
+      }, 5000);
+    },
+
+    cacheFilms: function(cat, page, data) {
+      try {
+        var films = data.films || data.items || data.results || [];
+        if (films.length === 0) return;
+        localStorage.setItem('genopoisk_films_' + cat + '_' + page, JSON.stringify({ films: films, ts: Date.now() }));
       } catch(_) {}
     }
   };

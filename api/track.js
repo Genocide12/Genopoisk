@@ -27,15 +27,30 @@ const ALLOWED_TYPES = [
 ];
 
 function getClientIp(req) {
+  // We NO LONGER store raw IP addresses (privacy/legal compliance).
+  // Instead, we hash the IP so we can still detect repeat visitors
+  // without storing personally identifiable data.
+  const crypto = require('crypto');
   const xff = req.headers['x-forwarded-for'];
-  if (xff) return String(xff).split(',')[0].trim();
-  if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
-  if (req.headers['x-vercel-ip']) return String(req.headers['x-vercel-ip']);
-  return null;
+  var rawIp = null;
+  if (xff) rawIp = String(xff).split(',')[0].trim();
+  if (!rawIp && req.headers['x-real-ip']) rawIp = String(req.headers['x-real-ip']);
+  if (!rawIp && req.headers['x-vercel-ip']) rawIp = String(req.headers['x-vercel-ip']);
+  if (!rawIp) return null;
+  // Hash IP for privacy — can detect repeats, can't reverse to real IP.
+  // Only first 3 octets kept (subnet-level, not individual IP).
+  var ipParts = rawIp.split('.');
+  if (ipParts.length === 4) {
+    rawIp = ipParts[0] + '.' + ipParts[1] + '.' + ipParts[2] + '.0';
+  }
+  return 'sha256:' + crypto.createHash('sha256').update(rawIp + (process.env.SESSION_SECRET || 'salt')).digest('hex').substring(0, 16);
 }
 
 function getUserAgent(req) {
-  return req.headers['user-agent'] || '';
+  // We NO LONGER store full User-Agent strings (privacy).
+  // Only extract device type for analytics (e.g. "iPhone / Safari").
+  const { parseUserAgent } = require('./_lib/supabase');
+  return parseUserAgent(req.headers['user-agent'] || '');
 }
 
 function validateInitData(initData, botToken) {
@@ -139,7 +154,9 @@ module.exports = async (req, res) => {
         const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
         const platformLabel = eventResult.platform === 'miniapp' ? '📱 Mini App' : '🌐 Браузер';
         const device = eventResult.device || 'неизвестно';
-        const ipStr = eventResult.ip || '—';
+        // Privacy: NO LONGER send IP to Telegram (cross-border PII transfer).
+        // Only send telegram_id, username, platform, device — all of which
+        // the user already shared with Telegram by using the bot.
         const usernameStr = eventResult.username ? '@' + eventResult.username : '—';
         const eventLabel = {
           page_views: 'просмотр страницы',
@@ -154,7 +171,6 @@ module.exports = async (req, res) => {
               'ID: <code>' + telegramId + '</code>\n' +
               'Username: ' + usernameStr + '\n' +
               'Платформа: ' + platformLabel + ' — ' + device + '\n' +
-              'IP: <code>' + ipStr + '</code>\n' +
               'Первое действие: ' + eventLabel,
               { reply_markup: { inline_keyboard: [[{ text: '🏠 На главную', callback_data: 'menu_main' }]] } }
             );

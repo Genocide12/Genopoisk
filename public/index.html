@@ -47,9 +47,9 @@
   <script src="/i18n.js"></script>
   <!-- Vercel Web Analytics (vanilla HTML CDN approach per Vercel docs) -->
   <script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
-  <script defer src="/js/error-handler.js?v=66"></script>
+  <script defer src="/js/error-handler.js?v=67"></script>
   <script async src="https://telegram.org/js/telegram-web-app.js" onerror="console.log('[tg] telegram-web-app.js unavailable (running outside Telegram Mini App — this is normal)')"></script>
-  <link rel="stylesheet" href="/css/app.css?v=66">
+  <link rel="stylesheet" href="/css/app.css?v=67">
   <!-- Structured Data for Search Engines (JSON-LD) -->
   <script type="application/ld+json">
   {
@@ -170,6 +170,8 @@
     </div>
     </div>
   </div>
+  <!-- Privacy policy link (fixed, bottom-left, small) -->
+  <a href="/privacy.html" style="position:fixed;bottom:4px;left:8px;z-index:998;color:rgba(255,255,255,0.3);font-size:11px;text-decoration:none;font-family:inherit;">Политика конфиденциальности</a>
   <!-- Fixed "Open in Telegram" button — always visible at bottom on scroll -->
   <a href="https://t.me/Genopoiskbot?start=app" target="_blank" rel="noopener" id="fixedTelegramBtn" style="position:fixed;bottom:0;left:0;right:0;z-index:999;background:linear-gradient(135deg,#229ED9 0%,#2AABEE 100%);color:#fff;text-align:center;padding:14px 20px;text-decoration:none;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 -4px 20px rgba(0,0,0,0.4);transition:transform 0.3s,opacity 0.3s;padding-bottom: calc(env(safe-area-inset-bottom) + 14px);">
     <span id="fixedTelegramText">Открыть Telegram</span>
@@ -186,6 +188,6 @@
       </div>
     </div>
   </div>
-  <script defer src="/js/app.js?v=66"></script>
+  <script defer src="/js/app.js?v=67"></script>
 </body>
 </html>

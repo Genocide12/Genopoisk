@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>Политика конфиденциальности — Genopoisk</title>
+  <meta name="robots" content="index, follow">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #000; color: #fff; line-height: 1.7;
+      padding: 20px; max-width: 800px; margin: 0 auto;
+    }
+    h1 { font-size: 28px; margin: 32px 0 16px; color: #fff; }
+    h2 { font-size: 20px; margin: 28px 0 12px; color: #007AFF; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #5856D6; }
+    p { margin: 12px 0; color: rgba(255,255,255,0.85); font-size: 15px; }
+    ul { margin: 12px 0; padding-left: 24px; }
+    li { margin: 6px 0; color: rgba(255,255,255,0.85); font-size: 15px; }
+    code {
+      background: rgba(255,255,255,0.1); padding: 2px 6px;
+      border-radius: 4px; font-family: monospace; font-size: 14px;
+    }
+    .header {
+      text-align: center; padding: 40px 0 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 32px;
+    }
+    .header h1 { margin-top: 0; }
+    .updated { color: rgba(255,255,255,0.5); font-size: 13px; text-align: center; }
+    .back-link {
+      display: inline-block; margin: 20px 0; color: #007AFF;
+      text-decoration: none; font-size: 14px;
+    }
+    .back-link:hover { text-decoration: underline; }
+    .highlight {
+      background: rgba(0,122,255,0.1); border-left: 3px solid #007AFF;
+      padding: 12px 16px; margin: 16px 0; border-radius: 4px;
+    }
+    table {
+      width: 100%; border-collapse: collapse; margin: 16px 0;
+    }
+    th, td {
+      text-align: left; padding: 10px 12px; font-size: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    th { color: #007AFF; font-weight: 600; }
+    td { color: rgba(255,255,255,0.85); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Политика конфиденциальности</h1>
+    <p class="updated">Последнее обновление: 24 августа 2026 г.</p>
+  </div>
+
+  <a href="/" class="back-link">← Вернуться на главную</a>
+
+  <h2>1. Общие положения</h2>
+  <p>Настоящая Политика конфиденциальности (далее — «Политика») определяет порядок обработки и защиты персональных данных пользователей сервиса Genopoisk (далее — «Сервис»), доступного по адресу <code>https://genopoisk.vercel.app</code> и через Telegram-бота <code>@Genopoiskbot</code>.</p>
+  <p>Используя Сервис, вы подтверждаете согласие с условиями данной Политики. Если вы не согласны с каким-либо условием, прекратите использование Сервиса.</p>
+
+  <h2>2. Какие данные мы собираем</h2>
+  <div class="highlight">
+    <strong>Принцип минимизации:</strong> мы собираем только данные, необходимые для работы основных функций Сервиса. Мы НЕ собираем IP-адреса в открытом виде, полные User-Agent строки, поисковые запросы или данные банковских карт.
+  </div>
+
+  <h3>Данные, которые мы храним:</h3>
+  <table>
+    <tr><th>Тип данных</th><th>Назначение</th><th>Срок хранения</th></tr>
+    <tr><td>Telegram ID</td><td>Идентификация пользователя, кросс-устройственная синхронизация</td><td>До удаления аккаунта</td></tr>
+    <tr><td>Username Telegram</td><td>Отображение имени, уведомления</td><td>До удаления аккаунта</td></tr>
+    <tr><td>История просмотров</td><td>Функция «Продолжить просмотр», «Мои фильмы»</td><td>90 дней</td></tr>
+    <tr><td>Избранное</td><td>Функция «Коллекция»</td><td>До удаления аккаунта</td></tr>
+    <tr><td>Позиция просмотра</td><td>Возможность продолжить с места остановки</td><td>48 часов</td></tr>
+    <tr><td>Хэш IP-адреса</td><td>Защита от спама, обнаружение повторных визитов</td><td>30 дней</td></tr>
+    <tr><td>Тип устройства</td><td>Адаптация интерфейса (мобильный/десктоп/ТВ)</td><td>30 дней</td></tr>
+    <tr><td>Cookie сессии</td><td>Авторизация без повторного входа</td><td>30 дней</td></tr>
+  </table>
+
+  <h3>Данные, которые мы НЕ собираем:</h3>
+  <ul>
+    <li>IP-адреса в открытом виде (хранится только хэш первых 3 октетов)</li>
+    <li>Полные строки User-Agent (хранится только тип браузера/устройства)</li>
+    <li>Поисковые запросы (история поиска не сохраняется)</li>
+    <li>Геолокация</li>
+    <li>Контактные данные (телефон, email)</li>
+    <li>Данные банковских карт (платежи через Telegram Stars)</li>
+  </ul>
+
+  <h2>3. Куда передаются данные</h2>
+  <p>Ваш данные обрабатываются следующими сервисами:</p>
+  <table>
+    <tr><th>Сервис</th><th>Юрисдикция</th><th>Какие данные</th><th>Цель</th></tr>
+    <tr><td>Supabase (база данных)</td><td>ЕС / США</td><td>Все хранимые данные из таблицы выше</td><td>Хранение профиля и истории</td></tr>
+    <tr><td>Vercel (хостинг)</td><td>США</td><td>IP-хэш, тип устройства (временно в логах)</td><td>Обработка API-запросов</td></tr>
+    <tr><td>Telegram Bot API</td><td>ОАЭ / Великобритания</td><td>Telegram ID, username (только для бота)</td><td>Авторизация, уведомления</td></tr>
+    <tr><td>Kinopoisk API</td><td>РФ</td><td>Не передаётся (запросы делаются сервером)</td><td>Получение каталога фильмов</td></tr>
+  </table>
+
+  <div class="highlight">
+    <strong>Трансграничная передача:</strong> ваши данные передаются в Supabase (ЕС/США), Vercel (США) и Telegram (ОАЭ/Великобритания). Используя Сервис, вы даёте согласие на такую трансграничную передачу.
+  </div>
+
+  <h2>4. Авторизация через Telegram</h2>
+  <p>При входе через Telegram (Mini App, OIDC или QR-код) мы получаем:</p>
+  <ul>
+    <li>Ваш Telegram ID (числовой идентификатор)</li>
+    <li>Ваш username (если установлен)</li>
+    <li>Ваше имя (только для отображения, не сохраняется отдельно)</li>
+  </ul>
+  <p>Мы НЕ запрашиваем доступ к вашим контактам, сообщениям или другим данным Telegram-аккаунта.</p>
+
+  <h2>5. Cookie</h2>
+  <p>Мы используем следующие cookie:</p>
+  <ul>
+    <li><code>tg_session</code> — HttpOnly, подписанный HMAC, 30 дней. Используется для авторизации.</li>
+    <li><code>tg_oauth_state</code>, <code>tg_oauth_verifier</code> — HttpOnly, 10 минут. CSRF-защита при OAuth.</li>
+    <li><code>tg_guest_id</code> — HttpOnly, 10 минут. Временный, для миграции гостя.</li>
+  </ul>
+  <p>Мы НЕ используем рекламные или аналитические cookie сторонних сервисов.</p>
+
+  <h2>6. Ваши права</h2>
+  <p>Вы имеете право:</p>
+  <ul>
+    <li><strong>Доступ:</strong> запросить копию ваших данных</li>
+    <li><strong>Удаление:</strong> удалить все ваши данные (через команду <code>/clear</code> в боте)</li>
+    <li><strong>Исправление:</strong> обновить или исправить данные</li>
+    <li><strong>Отзыв согласия:</strong> прекратить использование Сервиса</li>
+    <li><strong>Экспорт:</strong> получить ваши данные в машиночитаемом формате</li>
+  </ul>
+  <p>Для реализации этих прав напишите в Telegram-бота <code>@Genopoiskbot</code> или обратитесь к администратору.</p>
+
+  <h2>7. Удаление данных</h2>
+  <p>Вы можете удалить все свои данные в любой момент:</p>
+  <ul>
+    <li>Команда <code>/clear</code> в боте — удаляет всю историю, избранное, профиль</li>
+    <li>Удаление диалога с ботом в Telegram — данные сохраняются, но вы теряете доступ</li>
+    <li>Автоматическое удаление — история просмотров старше 90 дней удаляется автоматически</li>
+  </ul>
+
+  <h2>8. Безопасность</h2>
+  <p>Мы применяем следующие меры защиты:</p>
+  <ul>
+    <li>Подписанные cookie (HMAC-SHA256) — невозможность подделки</li>
+    <li>HttpOnly cookie — недоступны из JavaScript</li>
+    <li>Верификация Telegram initData — HMAC подпись</li>
+    <li>CSRF-защита при OAuth (state + PKCE)</li>
+    <li>Хэширование IP-адресов — необратимое</li>
+    <li>Row-Level Security в Supabase</li>
+    <li>HTTPS везде</li>
+  </ul>
+
+  <h2>9. Дети</h2>
+  <p>Сервис не предназначен для лиц младше 16 лет. Мы намеренно не собираем данные детей. Если вы считаете, что мы случайно получили данные ребёнка, свяжитесь с нами для удаления.</p>
+
+  <h2>10. Изменения политики</h2>
+  <p>Мы можем обновлять эту Политику. Дата последнего обновления указана вверху. Significant changes will be announced in the Telegram channel <code>@genopoisk_news</code>.</p>
+
+  <h2>11. Контакты</h2>
+  <p>По вопросам конфиденциальности:</p>
+  <ul>
+    <li>Telegram: <code>@Genopoiskbot</code></li>
+    <li>Канал: <code>@genopoisk_news</code></li>
+  </ul>
+
+  <a href="/" class="back-link">← Вернуться на главную</a>
+</body>
+</html>

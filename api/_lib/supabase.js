@@ -447,20 +447,21 @@ async function recordEvent(telegramId, eventType, data) {
   updates.events_by_type = ebt;
 
   // Update IP + device info (ip_history as objects)
+  // Privacy: IP is now hashed (not raw). UA is not stored (only device type).
+  // ip_history limited to 3 entries (was 10) to minimize stored data.
   if (data.ip) {
     updates.ip = data.ip;
     const ipHistory = normalizeIpHistory(user.ip_history || []);
-    // Check if this IP already exists
+    // Check if this IP hash already exists
     const existingIdx = ipHistory.findIndex(e => e.ip === data.ip);
     if (existingIdx !== -1) {
-      // Update device/ts for existing IP entry
-      ipHistory[existingIdx].ua = data.ua || ipHistory[existingIdx].ua;
+      // Update device/ts for existing IP entry (no UA stored)
       ipHistory[existingIdx].device = device;
       ipHistory[existingIdx].ts = nowIso;
     } else {
-      // Add new entry at start
-      ipHistory.unshift({ ip: data.ip, ua: data.ua || '', device: device, ts: nowIso });
-      if (ipHistory.length > 10) ipHistory.pop();
+      // Add new entry at start (no UA field — privacy)
+      ipHistory.unshift({ ip: data.ip, device: device, ts: nowIso });
+      if (ipHistory.length > 3) ipHistory.pop(); // was 10, now 3
     }
     updates.ip_history = ipHistory;
   }

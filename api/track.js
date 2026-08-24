@@ -107,32 +107,10 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 3.5) VPN/re-login detection: if this is a guest (web_*) session,
-    //      check if the IP was previously used by a real Telegram user.
-    //      If so, link this visit to that user instead of creating a new
-    //      ghost record. This prevents VPN users from fragmenting data.
-    if (telegramId && telegramId.startsWith('web_') && ip) {
-      try {
-        const { getAllUsers } = require('./_lib/supabase');
-        const allUsers = await getAllUsers();
-        // Find a real TG user (not web_*) who has this IP in ip_history
-        const matchedUser = allUsers.find(function(u) {
-          if (!u.telegram_id || String(u.telegram_id).startsWith('web_')) return false;
-          if (!u.ip_history) return false;
-          return u.ip_history.some(function(entry) {
-            if (typeof entry === 'string') return entry === ip;
-            return entry && entry.ip === ip;
-          });
-        });
-        if (matchedUser) {
-          console.log('[track] VPN/re-login: linked web_ guest to existing user by IP:', ip, '→', matchedUser.telegram_id);
-          telegramId = matchedUser.telegram_id;
-          if (!username && matchedUser.username) username = matchedUser.username;
-        }
-      } catch (e) {
-        console.warn('[track] IP-based user linking failed:', e.message);
-      }
-    }
+    // NOTE: IP-based user identification removed — it was unreliable
+    // (VPN, NAT, shared IPs can merge different users) and expensive
+    // (getAllUsers() on every tracking request). Guest migration is now
+    // handled by guest_id cookie during OIDC login (see callback.js).
 
     // 4) If still no telegramId → SKIP (guest)
     if (!telegramId) {

@@ -106,13 +106,25 @@ function extractVerifiedUser(body, req) {
     }
   }
 
-  // 3) Legacy browser path — accept userId.
-  //    Guest web_* IDs are accepted as guest users (tracked in Supabase).
+  // 3) Guest browser path — accept ONLY web_* IDs.
+  //    Real telegram_ids are NO LONGER accepted via body.userId — this
+  //    closes the IDOR vulnerability where anyone who knows a telegram_id
+  //    could read another user's data. Real users must authenticate via
+  //    initData (Mini App) or tg_session cookie (OIDC login).
+  //    Guest web_* IDs are safe to accept because they're opaque random
+  //    tokens with no personal data — they're migrated to real accounts
+  //    on OIDC login.
   if (body.userId) {
     const uid = String(body.userId);
-    result.telegramId = uid;
-    result.username = body.username || '';
-    result.source = 'browser';
+    if (uid.startsWith('web_')) {
+      result.telegramId = uid;
+      result.username = body.username || '';
+      result.source = 'guest';
+      return result;
+    }
+    // Non-web_ userId without auth = potential IDOR attack — reject
+    console.warn('[auth] Rejected unauthenticated userId (IDOR attempt):', uid.substring(0, 20));
+    result.source = 'rejected_idor';
     return result;
   }
 
@@ -151,8 +163,18 @@ function parseSessionCookie(cookieHeader) {
     if (expectedSig.length !== signature.length) return null;
     if (!crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(signature))) return null;
 
-    // Extract telegramId from "telegramId:timestamp"
-    var telegramId = payload.split(':')[0];
+    // Extract telegramId and timestamp from "telegramId:timestamp"
+    var parts = payload.split(':');
+    var telegramId = parts[0];
+    var timestamp = parseInt(parts[1], 10);
+
+    // Validate session age — cookies older than 30 days are expired.
+    // This closes the gap where stolen cookies never expired server-side.
+    var SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+    if (!timestamp || (Date.now() - timestamp) > SESSION_MAX_AGE_MS) {
+      return null; // expired
+    }
+
     return telegramId || null;
   } catch (e) {
     return null;

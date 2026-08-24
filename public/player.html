@@ -395,7 +395,14 @@
       return id;
     }
     var browserUserId = getUserId();
-    var tgInitData = (tg && tg.initData) || '';
+    // tgInitData is dynamic — telegram-web-app.js loads async, so we
+    // re-read it every time instead of caching at page load.
+    function getTgInitData() {
+      try {
+        var t = window.Telegram && window.Telegram.WebApp;
+        return (t && t.initData) ? t.initData : '';
+      } catch(_) { return ''; }
+    }
 
     var toastTimer = null;
     function showToast(msg, ms) {
@@ -409,7 +416,7 @@
     function trackEvent(type, payload) {
       payload = payload || {};
       // Re-read userId (in case login completed after page load)
-      var body = { type: type, initData: tgInitData, userId: getUserId() };
+      var body = { type: type, initData: getTgInitData(), userId: getUserId() };
       Object.keys(payload).forEach(function(k) { body[k] = payload[k]; });
       try {
         fetch('/api/track', {
@@ -431,7 +438,7 @@
       if (String(uid).indexOf('web_') === 0) return;
       var payload = JSON.stringify({
         type: 'position_update',
-        initData: tgInitData,
+        initData: getTgInitData(),
         userId: uid,
         username: localStorage.getItem('genopoisk_tg_username') || '',
         filmId: kid,
@@ -533,7 +540,7 @@
         var res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: uid, initData: tgInitData })
+          body: JSON.stringify({ userId: uid, initData: getTgInitData() })
         });
         if (!res.ok) return;
         var data = await res.json();
@@ -556,7 +563,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: newType,
-            initData: tgInitData,
+            initData: getTgInitData(),
             userId: uid,
             username: localStorage.getItem('genopoisk_tg_username') || '',
             filmId: kid,
@@ -884,7 +891,7 @@
       // next to films in 'Мои фильмы'.
       var payload = JSON.stringify({
         type: 'rate',
-        initData: tgInitData,
+        initData: getTgInitData(),
         userId: uid,
         username: localStorage.getItem('genopoisk_tg_username') || '',
         filmId: kid,

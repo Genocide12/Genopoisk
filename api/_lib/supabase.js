@@ -371,11 +371,28 @@ async function recordEvent(telegramId, eventType, data) {
 
   // favorite_added / favorite_removed
   if (eventType === 'favorite_added' || eventType === 'favorite_removed') {
-    const user = await getUser(telegramId);
-    if (!user) return;
+    var favUser = await getUser(telegramId);
+    // If user doesn't exist, CREATE them first (was silently dropping favorite!)
+    if (!favUser) {
+      var createData = {
+        username: data.username || null,
+        ip: data.ip || null,
+        ip_history: data.ip ? [{ ip: data.ip, device: device, ts: nowIso }] : [],
+        events_count: 0,
+        events_by_type: {},
+        watched_films: [],
+        rated_films: [],
+        favorite_films: [],
+        last_seen: nowIso
+      };
+      try { createData.sessions = upsertSession([], platform, device, data.ip, nowIso); } catch(_) {}
+      var newUser = await upsertUser(telegramId, createData);
+      if (!newUser) { console.error('[supabase] Failed to create user for favorite:', telegramId); return; }
+      favUser = newUser;
+    }
     if (!data.filmId) return;
-    let favs = user.favorite_films || [];
-    let watched = user.watched_films || [];
+    let favs = favUser.favorite_films || [];
+    let watched = favUser.watched_films || [];
     if (eventType === 'favorite_added') {
       // Add to favorites (dedupe)
       const exists = favs.some(f => String(f.filmId) === String(data.filmId));
@@ -383,8 +400,7 @@ async function recordEvent(telegramId, eventType, data) {
         favs.unshift({ filmId: String(data.filmId), title: data.title || '', ts: nowIso });
         if (favs.length > 100) favs.pop();
       }
-      // Also add to watched_films if not already there — this ensures the
-      // film appears in "Мои фильмы" even if user never opened the player
+      // Also add to watched_films if not already there
       const watchedExists = watched.some(f => String(f.filmId) === String(data.filmId));
       if (!watchedExists) {
         watched.unshift({ filmId: String(data.filmId), title: data.title || '', ts: nowIso, position: 0, duration: 0 });
@@ -395,6 +411,7 @@ async function recordEvent(telegramId, eventType, data) {
       favs = favs.filter(f => String(f.filmId) !== String(data.filmId));
     }
     await updateUser(telegramId, { favorite_films: favs, watched_films: watched, last_seen: nowIso });
+    console.log('[supabase] Favorite ' + (eventType === 'favorite_added' ? 'added' : 'removed') + ':', telegramId, '→', data.filmId);
     return;
   }
 

@@ -124,7 +124,7 @@
       z-index: -1;
       pointer-events: none;
     }
-    /* Desktop-only: hover/active effects */
+    /* Desktop-only: hover glow effect (NO scale on hover — only on :active) */
     @media (hover: hover) and (pointer: fine) {
       .action-card:hover::before,
       .action-card.tracking::before { opacity: 1; }
@@ -133,10 +133,25 @@
         border-color: var(--ios-blue);
         box-shadow: 0 8px 28px rgba(0,122,255,0.22);
       }
-      .action-card:active { transform: perspective(800px) scale(0.94); }
     }
-    /* On touch devices — same press effect as desktop (perspective + scale + glow).
-       NO :hover effects (they stick), but :active gives full tactile feedback. */
+    /* Press effect for ALL devices (touch + desktop).
+       Uses .pressing class (JS-driven) + :active (CSS fallback).
+       No media query — works everywhere including iOS Safari and TG Mini App. */
+    .action-card.pressing,
+    .action-card:active {
+      transform: scale(0.92) !important;
+      border-color: var(--ios-blue) !important;
+      box-shadow: 0 8px 28px rgba(0,122,255,0.3) !important;
+      background: rgba(0, 122, 255, 0.15) !important;
+      transition: transform 0.08s ease-out, border-color 0.08s, box-shadow 0.08s, background 0.08s !important;
+    }
+    .film-card.pressing,
+    .film-card:active {
+      transform: scale(0.93) !important;
+      box-shadow: 0 12px 40px rgba(0,122,255,0.4) !important;
+      transition: transform 0.08s ease-out, box-shadow 0.08s !important;
+    }
+    /* On touch devices, disable sticky :hover */
     @media not all and (hover: hover) and (pointer: fine) {
       .action-card:hover,
       .action-card:focus {
@@ -144,24 +159,8 @@
         box-shadow: none !important;
         border-color: var(--separator) !important;
       }
-      .action-card:hover::before {
-        opacity: 0 !important;
-      }
-      /* Tap effect via .pressing class (JS-driven, more reliable than :active on iOS) */
-      .action-card.pressing,
-      .action-card:active {
-        transform: scale(0.92) !important;
-        border-color: var(--ios-blue) !important;
-        box-shadow: 0 8px 28px rgba(0,122,255,0.3) !important;
-        background: rgba(0, 122, 255, 0.15) !important;
-        transition: transform 0.08s ease-out, border-color 0.08s, box-shadow 0.08s, background 0.08s !important;
-      }
-      .film-card.pressing,
-      .film-card:active {
-        transform: scale(0.93) !important;
-        box-shadow: 0 12px 40px rgba(0,122,255,0.4) !important;
-        transition: transform 0.08s ease-out, box-shadow 0.08s !important;
-      }
+      .action-card:hover::before { opacity: 0 !important; }
+      /* But .pressing and :active STILL work (defined above, outside media query) */
     }
     .action-icon{font-size:40px;margin-bottom:8px;display:block;filter:drop-shadow(0 4px 12px rgba(0,122,255,0.3));position:relative;z-index:1;}
     .action-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em;position:relative;z-index:1;}

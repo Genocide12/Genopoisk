@@ -56,10 +56,10 @@ describe('extractVerifiedUser', () => {
     expect(result.source).toBe(null);
   });
 
-  it('rejects non-web_ userId (IDOR protection)', () => {
+  it('accepts non-web_ userId as browser source (read-only)', () => {
     const result = extractVerifiedUser({ userId: '854765520' }, {});
-    expect(result.telegramId).toBe(null);
-    expect(result.source).toBe('rejected_idor');
+    expect(result.telegramId).toBe('854765520');
+    expect(result.source).toBe('browser');
   });
 
   it('accepts web_* guest userId', () => {

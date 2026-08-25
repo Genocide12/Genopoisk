@@ -27,23 +27,14 @@ const ALLOWED_TYPES = [
 ];
 
 function getClientIp(req) {
-  // We NO LONGER store raw IP addresses (privacy/legal compliance).
-  // Instead, we hash the IP so we can still detect repeat visitors
-  // without storing personally identifiable data.
-  const crypto = require('crypto');
+  // Store REAL IP address (admin needs it for moderation).
+  // Privacy: /api/me returns hashed IP to non-admin callers.
+  // Admin (bot) sees real IP via Supabase directly.
   const xff = req.headers['x-forwarded-for'];
-  var rawIp = null;
-  if (xff) rawIp = String(xff).split(',')[0].trim();
-  if (!rawIp && req.headers['x-real-ip']) rawIp = String(req.headers['x-real-ip']);
-  if (!rawIp && req.headers['x-vercel-ip']) rawIp = String(req.headers['x-vercel-ip']);
-  if (!rawIp) return null;
-  // Hash IP for privacy — can detect repeats, can't reverse to real IP.
-  // Only first 3 octets kept (subnet-level, not individual IP).
-  var ipParts = rawIp.split('.');
-  if (ipParts.length === 4) {
-    rawIp = ipParts[0] + '.' + ipParts[1] + '.' + ipParts[2] + '.0';
-  }
-  return 'sha256:' + crypto.createHash('sha256').update(rawIp + (process.env.SESSION_SECRET || 'salt')).digest('hex').substring(0, 16);
+  if (xff) return String(xff).split(',')[0].trim();
+  if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
+  if (req.headers['x-vercel-ip']) return String(req.headers['x-vercel-ip']);
+  return null;
 }
 
 function getUserAgent(req) {

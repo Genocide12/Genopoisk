@@ -147,20 +147,19 @@ function usersListKeyboard(users, page) {
 
   const buttons = entries.map((u) => {
     const isPrem = (u.is_premium) || (u.events_by_type && u.events_by_type.premium);
-    // Build display name: username > telegram_id > device + short IP
+    // Build display name: username > telegram_id > device + IP
     var name;
     if (u.username) {
-      // Don't add @ prefix — username may be first_name (not @username)
       name = u.username;
     } else if (u.telegram_id && !String(u.telegram_id).startsWith('web_')) {
       name = String(u.telegram_id); // real Telegram ID
     } else {
-      // Guest (web_*) — show device + short IP
+      // Guest (web_*) — show device + IP
       var device = 'неизвестно';
       var ipShort = '?';
       if (u.sessions && u.sessions[0] && u.sessions[0].device) device = u.sessions[0].device;
       else if (u.ip_history && u.ip_history[0] && u.ip_history[0].device) device = u.ip_history[0].device;
-      if (u.ip) ipShort = String(u.ip).replace('sha256:', '').substring(0, 8);
+      if (u.ip) ipShort = String(u.ip).substring(0, 20); // real IP now
       name = device + ' · ' + ipShort;
     }
     return [{

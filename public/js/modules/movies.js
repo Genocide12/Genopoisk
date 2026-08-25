@@ -101,8 +101,22 @@
     },
 
     searchFilms: async function(query) {
-      var url = App.CORE.API_BASE + '/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(query) + '&page=1';
-      return App.MOVIES.extractFilms(await App.MOVIES.apiGet(url));
+      // Search returns 20 films per page. Fetch first 3 pages = 60 films
+      // for better coverage (user complaint: "не находит все фильмы")
+      var allFilms = [];
+      for (var page = 1; page <= 3; page++) {
+        try {
+          var url = App.CORE.API_BASE + '/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(query) + '&page=' + page;
+          var data = await App.MOVIES.apiGet(url);
+          var films = App.MOVIES.extractFilms(data);
+          if (films.length === 0) break;
+          allFilms = allFilms.concat(films);
+        } catch (e) {
+          // If page fails, return what we have
+          break;
+        }
+      }
+      return allFilms;
     },
 
     // --- Category loading ---

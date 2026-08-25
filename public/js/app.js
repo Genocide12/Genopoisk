@@ -135,6 +135,7 @@
       }
       hideCategories();
       searchTimeout = setTimeout(async function() {
+        App.UI.clearFilms();
         App.UI.showLoader();
         try {
           var films = await App.MOVIES.searchFilms(query);

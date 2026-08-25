@@ -96,7 +96,9 @@ module.exports = async (req, res) => {
       const validatedUser = validateInitData(body.initData, process.env.TG_BOT_TOKEN);
       if (validatedUser) {
         telegramId = String(validatedUser.id);
-        username = validatedUser.username || '';
+        // Use @username if available, otherwise first_name as display name
+        // Many Telegram users don't have @username — they only have first_name
+        username = validatedUser.username || validatedUser.first_name || '';
       }
     }
 

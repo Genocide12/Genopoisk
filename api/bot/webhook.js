@@ -147,7 +147,22 @@ function usersListKeyboard(users, page) {
 
   const buttons = entries.map((u) => {
     const isPrem = (u.is_premium) || (u.events_by_type && u.events_by_type.premium);
-    const name = u.username ? '@' + u.username : (u.ip || u.telegram_id || '?');
+    // Build display name: username > telegram_id > device + short IP
+    var name;
+    if (u.username) {
+      // Don't add @ prefix — username may be first_name (not @username)
+      name = u.username;
+    } else if (u.telegram_id && !String(u.telegram_id).startsWith('web_')) {
+      name = String(u.telegram_id); // real Telegram ID
+    } else {
+      // Guest (web_*) — show device + short IP
+      var device = 'неизвестно';
+      var ipShort = '?';
+      if (u.sessions && u.sessions[0] && u.sessions[0].device) device = u.sessions[0].device;
+      else if (u.ip_history && u.ip_history[0] && u.ip_history[0].device) device = u.ip_history[0].device;
+      if (u.ip) ipShort = String(u.ip).replace('sha256:', '').substring(0, 8);
+      name = device + ' · ' + ipShort;
+    }
     return [{
       text: (isPrem ? '🔥 ' : '👤 ') + name + ' →',
       callback_data: `user_${u.telegram_id || u.id}`
@@ -791,7 +806,9 @@ async function buildUserProfileText(targetId) {
 
   const isPrem = (u.is_premium) || (u.events_by_type && u.events_by_type.premium);
   const premBadge = isPrem ? '🔥 <b>Premium активен</b>\n\n' : '';
-  const text = `👤 <b>Профиль пользователя</b>\n\n${premBadge}<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Username:</b> ${u.username ? "@" + escapeHtml(u.username) : "—"}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В коллекции: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Коллекция (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
+  // Username may be @username or first_name (for users without @username)
+  var displayName = u.username ? escapeHtml(u.username) : '—';
+  const text = `👤 <b>Профиль пользователя</b>\n\n${premBadge}<b>Telegram ID:</b> <code>${escapeHtml(telegramId)}</code>\n<b>Browser OIDC sub:</b> <code>${escapeHtml(browserOidcSub)}</code>\n<b>Имя:</b> ${displayName}\n<b>Статус:</b> ${onlineStatus}\n<b>Текущий IP:</b> <code>${u.ip || "—"}</code>\n\n<b>📱 Сессии:</b>\n   • ${sessionsText}\n\n<b>🌐 История IP:</b>\n   • ${ipHistoryText}\n\n<b>Активность:</b>\n   🔍 Поиски: ${ebt.searches || 0}\n   🎬 Фильмов открыто: ${ebt.movies_opened || 0}\n   ⭐ Оценено фильмов: ${(u.rated_films || []).length}\n   ⭐ В коллекции: ${favorites.length}\n\n<b>Просмотренные фильмы (${watchedFilms.length}):</b>\n   ${filmsText}\n\n<b>⭐ Коллекция (${favorites.length}):</b>\n   ${favText}\n\n<b>Первый визит:</b> ${first}\n<b>Последний визит:</b> ${last}`;
   return { text, hasLastFilm: !!u.last_film };
 }
 

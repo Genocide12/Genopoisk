@@ -29,20 +29,8 @@
     apiGet: async function(url) {
       var lastErr = null;
       for (var attempt = 0; attempt < 2; attempt++) {
-        var controller = null;
-        var timeoutId = null;
         try {
-          // 10s timeout — generous for slow connections/VPN
-          controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-          if (controller) {
-            timeoutId = setTimeout(function() { try { controller.abort(); } catch (_) {} }, 10000);
-          }
-          var fetchOpts = { headers: { 'Content-Type': 'application/json' } };
-          if (controller) fetchOpts.signal = controller.signal;
-
-          var res = await fetch(url, fetchOpts);
-          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-
+          var res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
           if (res.ok) return await res.json();
           var errData = null;
           try { errData = await res.json(); } catch (_) {}
@@ -55,10 +43,7 @@
           if (errData && errData.message) throw new Error(errData.message);
           throw new Error('HTTP ' + res.status);
         } catch (e) {
-          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
           lastErr = e;
-          // Don't retry on AbortError (timeout) — just fail fast
-          if (e.name === 'AbortError') throw e;
           if (attempt === 0) { await new Promise(function(r) { setTimeout(r, 300); }); continue; }
           throw e;
         }

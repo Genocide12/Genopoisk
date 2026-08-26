@@ -227,19 +227,29 @@
       App.UI.clearFilms();
       App.UI.showLoader();
       var uid = App.CORE.getUserId();
-      if (!uid || uid.startsWith('web_')) {
-        App.UI.showEmptyState('Войдите через Telegram, чтобы видеть коллекцию');
-        return;
-      }
+      var initData = App.CORE.getTgInitData();
+      // Don't block guests — try /api/me anyway, session cookie may work
+      // even if localStorage doesn't have tg_user_id
       try {
         var res = await fetch('/api/me', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ userId: uid, initData: App.CORE.getTgInitData() })
+          body: JSON.stringify({ userId: uid, initData: initData })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
+        // If user doesn't exist or is guest with no server data
+        if (!data.exists && !data.favorites) {
+          if (data.is_guest) {
+            App.UI.showEmptyState('Войдите через Telegram, чтобы видеть коллекцию');
+          } else if (data.reauth) {
+            App.UI.showEmptyState('Сессия истекла. Обновите страницу.');
+          } else {
+            App.UI.showEmptyState('Войдите через Telegram, чтобы видеть коллекцию');
+          }
+          return;
+        }
         var favs = data.favorites || [];
         if (favs.length === 0) {
           App.UI.showEmptyState('В избранном пока пусто. Нажмите ☆ в плеере, чтобы добавить фильм.');

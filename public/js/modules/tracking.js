@@ -35,20 +35,19 @@
         var initData = App.CORE.getTgInitData();
         var filmData = null;
 
-        if (uid && !uid.startsWith('web_')) {
-          try {
-            var res = await fetch('/api/me', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ initData: initData, userId: uid })
-            });
-            if (res.ok) {
-              var data = await res.json();
-              if (data.last_film) filmData = data.last_film;
-            }
-          } catch (e) { console.warn('[resume] server fetch failed:', e); }
-        }
+        // Always try server — session cookie may work even for web_* guests
+        try {
+          var res = await fetch('/api/me', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ initData: initData, userId: uid })
+          });
+          if (res.ok) {
+            var data = await res.json();
+            if (data.last_film) filmData = data.last_film;
+          }
+        } catch (e) { console.warn('[resume] server fetch failed:', e); }
 
         if (!filmData) {
           try {

@@ -29,18 +29,19 @@
     apiGet: async function(url) {
       var lastErr = null;
       for (var attempt = 0; attempt < 2; attempt++) {
+        var controller = null;
+        var timeoutId = null;
         try {
-          // 7s timeout — prevents eternal loading on slow projectors
-          var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-          var timeoutId = null;
+          // 10s timeout — generous for slow connections/VPN
+          controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
           if (controller) {
-            timeoutId = setTimeout(function() { try { controller.abort(); } catch (_) {} }, 7000);
+            timeoutId = setTimeout(function() { try { controller.abort(); } catch (_) {} }, 10000);
           }
           var fetchOpts = { headers: { 'Content-Type': 'application/json' } };
           if (controller) fetchOpts.signal = controller.signal;
 
           var res = await fetch(url, fetchOpts);
-          if (timeoutId) clearTimeout(timeoutId);
+          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
 
           if (res.ok) return await res.json();
           var errData = null;
@@ -54,8 +55,10 @@
           if (errData && errData.message) throw new Error(errData.message);
           throw new Error('HTTP ' + res.status);
         } catch (e) {
-          if (timeoutId) clearTimeout(timeoutId);
+          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
           lastErr = e;
+          // Don't retry on AbortError (timeout) — just fail fast
+          if (e.name === 'AbortError') throw e;
           if (attempt === 0) { await new Promise(function(r) { setTimeout(r, 300); }); continue; }
           throw e;
         }
@@ -203,6 +206,9 @@
           if (document.getElementById('filmGrid').children.length === 0) App.UI.showEmptyState('Фильмы не найдены');
         }
       } catch (e) {
+        // Network errors (ERR_CONNECTION_RESET, AbortError) are common on
+        // mobile/VPN/Telegram WebView. Don't show error if films are already
+        // on screen from cache — just silently fail the background refresh.
         var cachedFilms = null;
         try {
           var raw = localStorage.getItem('genopoisk_films_' + currentCategory + '_' + currentPage);
@@ -215,7 +221,14 @@
           currentPage++;
           App.UI.appendFilms(cachedFilms);
         } else {
-          App.UI.showEmptyState('Ошибка загрузки: ' + e.message);
+          // Only show error if grid is EMPTY — if films already shown (from
+          // cache-first), don't disrupt the user with a background error
+          var filmGrid = document.getElementById('filmGrid');
+          if (filmGrid && filmGrid.children.length === 0) {
+            App.UI.showEmptyState('Ошибка загрузки: ' + e.message);
+          } else {
+            console.warn('[movies] Background fetch failed, films already shown:', e.message);
+          }
           hasMore = false;
         }
       } finally {

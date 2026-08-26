@@ -6,7 +6,7 @@
 //   - API endpoints: network-only (always need live data)
 //   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
 
-const CACHE_NAME = 'genopoisk-v70';
+const CACHE_NAME = 'genopoisk-v71';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -85,7 +85,9 @@ self.addEventListener('fetch', function(event) {
         fetch(req).then(function(res) {
           if (res && res.ok) {
             caches.open(CACHE_NAME).then(function(cache) {
-              cache.put(req, res.clone());
+              cache.put(req, res.clone()).catch(function(e) {
+                console.warn('[sw] Cache.put failed:', e.message);
+              });
             });
           }
         }).catch(function() {});

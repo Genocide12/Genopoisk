@@ -67,11 +67,6 @@
         var title = film.nameRu || film.nameEn || 'Без названия';
         var year = film.year || 'Н/Д';
         var rating = film.rating || film.ratingKinopoisk || 'Н/Д';
-        var description = film.shortDescription || film.description || '';
-        // Truncate description to 120 chars for card display
-        if (description && description.length > 120) {
-          description = description.substring(0, 117) + '...';
-        }
         var genres = '';
         if (film.genres && film.genres.length > 0) {
           genres = film.genres.slice(0, 3).map(function(g) { return g.genre; }).join(', ');
@@ -117,8 +112,7 @@
         var metaHtml = '<span>' + year + '</span>';
         if (genres) metaHtml += '<span class="film-genres">' + genres + '</span>';
         if (rating !== 'Н/Д') metaHtml += '<span class="rating">⭐ ' + rating + '</span>';
-        var descHtml = description ? '<div class="film-desc">' + App.CORE.escapeHtml(description) + '</div>' : '';
-        info.innerHTML = '<div class="film-title">' + App.CORE.escapeHtml(title) + '</div><div class="film-meta">' + metaHtml + '</div>' + descHtml;
+        info.innerHTML = '<div class="film-title">' + App.CORE.escapeHtml(title) + '</div><div class="film-meta">' + metaHtml + '</div>';
         card.appendChild(info);
         card.dataset.filmId = filmId || '';
         card.dataset.title = title;

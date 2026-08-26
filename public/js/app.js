@@ -3,21 +3,6 @@
 (function() {
   'use strict';
 
-  // ====== Copy protection (except inside film info popup) ======
-  function isInsideFilmInfoPopup(el) {
-    return !!(el && el.closest && el.closest('.film-info-popup'));
-  }
-  document.addEventListener('contextmenu', function(e) { if (!isInsideFilmInfoPopup(e.target)) e.preventDefault(); });
-  document.addEventListener('copy', function(e) { if (!isInsideFilmInfoPopup(e.target)) e.preventDefault(); });
-  document.addEventListener('cut', function(e) { if (!isInsideFilmInfoPopup(e.target)) e.preventDefault(); });
-  document.addEventListener('selectstart', function(e) { if (!isInsideFilmInfoPopup(e.target)) e.preventDefault(); });
-  document.onkeydown = function(e) {
-    if (isInsideFilmInfoPopup(e.target)) return;
-    var key = e.key || '';
-    if (e.ctrlKey && (key === 'c' || key === 'C' || key === 'x' || key === 'X' || key === 'u' || key === 'U' || key === 's' || key === 'S')) { e.preventDefault(); return false; }
-    if (key === 'F12') { e.preventDefault(); return false; }
-  };
-
   // ====== Global error handler ======
   window.addEventListener('error', function(e) {
     if (e.message && e.message.indexOf('Script error') === -1) {

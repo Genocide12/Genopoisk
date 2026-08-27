@@ -3,17 +3,11 @@
 // Only caches static assets (JS/CSS/images) for offline.
 // HTML pages go directly to network — no SW interference.
 
-const CACHE_NAME = 'genopoisk-v79';
+const CACHE_NAME = 'genopoisk-v80';
 const STATIC_ASSETS = [
   '/css/app.css',
   '/js/app.js',
   '/js/error-handler.js',
-  '/js/modules/core.js',
-  '/js/modules/device.js',
-  '/js/modules/auth.js',
-  '/js/modules/ui.js',
-  '/js/modules/movies.js',
-  '/js/modules/tracking.js',
   '/i18n.js',
   '/bridge.js',
   '/manifest.json',

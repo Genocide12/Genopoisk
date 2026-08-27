@@ -6,7 +6,7 @@
 
   App.CORE = {
     API_BASE: '/api/kinopoisk',
-    SW_CACHE_VERSION: '83',
+    SW_CACHE_VERSION: '84',
 
     // --- User identification ---
     // Priority: 1) Stored TG user ID  2) Stable localStorage web_ ID
@@ -91,8 +91,8 @@
 
     // --- Theme system ---
     getThemeMode: function() {
-      try { return localStorage.getItem('genopoisk_theme') || 'dark'; }
-      catch (_) { return 'dark'; }
+      try { return localStorage.getItem('genopoisk_theme') || 'auto'; }
+      catch (_) { return 'auto'; }
     },
 
     setThemeMode: function(mode) {
@@ -115,9 +115,13 @@
     },
 
     cycleTheme: function() {
-      var modes = ['dark', 'light', 'night', 'auto'];
+      // Cycle: dark → light → night (no auto after first click)
+      var modes = ['dark', 'light', 'night'];
       var current = App.DEVICE.getThemeMode();
+      // If current is 'auto', start cycling from dark
+      if (current === 'auto') current = 'dark';
       var idx = modes.indexOf(current);
+      if (idx === -1) idx = 0;
       var next = modes[(idx + 1) % modes.length];
       App.DEVICE.setThemeMode(next);
       App.DEVICE.applyTheme(next);
@@ -1432,15 +1436,18 @@
   });
 
   // ====== Theme toggle (click on hero title) ======
-  var heroTitle = document.querySelector('.hero-title');
+  // Expose globally for onclick fallback
+  window.toggleTheme = function() {
+    var mode = App.DEVICE.cycleTheme();
+    App.UI.showToast('Тема: ' + (mode === 'dark' ? 'тёмная' : mode === 'light' ? 'светлая' : 'ночная'), 1500);
+  };
+
+  var heroTitle = document.getElementById('heroTitle');
   if (heroTitle) {
-    heroTitle.addEventListener('click', function() {
-      var mode = App.DEVICE.cycleTheme();
-      App.UI.showToast('Тема: ' + mode, 1500);
-    });
+    heroTitle.addEventListener('click', window.toggleTheme);
   }
 
-  // Apply initial theme
+  // Apply initial theme (auto by default — follows system preference)
   App.DEVICE.applyTheme(App.DEVICE.getThemeMode());
 
   // Auto theme re-evaluation every 30 min

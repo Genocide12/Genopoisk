@@ -3,7 +3,7 @@
 // Only caches static assets (JS/CSS/images) for offline.
 // HTML pages go directly to network — no SW interference.
 
-const CACHE_NAME = 'genopoisk-v84';
+const CACHE_NAME = 'genopoisk-v85';
 const STATIC_ASSETS = [
   '/css/app.css',
   '/js/app.js',
@@ -56,7 +56,7 @@ self.addEventListener('fetch', function(event) {
   if (req.mode === 'navigate' || req.destination === 'document') return;
 
   // SKIP player.html
-  if (url.pathname === '/player.html' || url.pathname === '/debug-player.html') return;
+  if (url.pathname === '/player.html') return;
 
   // ONLY cache static assets (JS/CSS/images/fonts)
   // Cache-first with background update

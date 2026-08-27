@@ -60,6 +60,13 @@
   // ====== Track initial page view ======
   App.TRACKING.trackEvent('page_views', { path: '/' });
 
+  // ====== Global openPlayer (also defined in auth.js, but ensure it's available) ======
+  if (!window.openPlayer) {
+    window.openPlayer = function(filmId, title) {
+      window.location.href = 'player.html?id=' + filmId + '&title=' + encodeURIComponent(title);
+    };
+  }
+
   // ====== Action card clicks + touch press effect ======
   function setupTouchPressEffect(el) {
     el.addEventListener('touchstart', function() {
@@ -170,14 +177,35 @@
   // ====== Service Worker ======
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+      // Force unregister old SW versions, then register new one
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) {
+          reg.unregister().then(function() {
+            console.log('[sw] Unregistered old SW:', reg.scope);
+          }).catch(function() {});
+        });
+        // Register fresh SW
+        return navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      }).then(function(reg) {
         console.log('[sw] registered, scope:', reg.scope);
-        setInterval(function() { reg.update().catch(function() {}); }, 60000);
+        // Check for updates every 5 min
+        setInterval(function() { reg.update().catch(function() {}); }, 300000);
         var hasReloaded = false;
         navigator.serviceWorker.addEventListener('controllerchange', function() {
-          if (!hasReloaded) { hasReloaded = true; window.location.reload(); }
+          if (!hasReloaded) { hasReloaded = true; console.log('[sw] controller changed — reload'); window.location.reload(); }
         });
       }).catch(function(e) { console.warn('[sw] registration failed:', e); });
+
+      // Also clear ALL caches (force fresh start)
+      if (window.caches) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) {
+            caches.delete(name).then(function() {
+              console.log('[sw] Deleted cache:', name);
+            });
+          });
+        });
+      }
     });
   }
 

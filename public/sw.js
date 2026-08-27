@@ -5,7 +5,7 @@
 //   - API endpoints: network-only (bypass SW)
 //   - Cross-origin: bypass SW
 
-const CACHE_NAME = 'genopoisk-v77';
+const CACHE_NAME = 'genopoisk-v78';
 const APP_SHELL = [
   '/',
   '/index.html',

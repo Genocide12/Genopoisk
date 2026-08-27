@@ -6,7 +6,7 @@
 
   App.CORE = {
     API_BASE: '/api/kinopoisk',
-    SW_CACHE_VERSION: '81',
+    SW_CACHE_VERSION: '82',
 
     // --- User identification ---
     // Priority: 1) Stored TG user ID  2) Stable localStorage web_ ID
@@ -598,17 +598,32 @@
     },
 
     getRandomFilm: async function() {
-      var randomPage = Math.floor(Math.random() * 5) + 1;
+      // Try cached films first (instant — no API call)
+      var cachedCats = ['top250', 'popular', 'new'];
+      for (var i = 0; i < cachedCats.length; i++) {
+        try {
+          var raw = localStorage.getItem('genopoisk_films_' + cachedCats[i] + '_1');
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && parsed.films && parsed.films.length > 0 && 
+                (Date.now() - parsed.ts < 7 * 24 * 60 * 60 * 1000)) {
+              var films = parsed.films;
+              return films[Math.floor(Math.random() * films.length)];
+            }
+          }
+        } catch (_) {}
+      }
+      // No cache — fetch from API (slower, ~1-2s)
+      var randomPage = Math.floor(Math.random() * 3) + 1; // pages 1-3 only (cached)
       var films = await App.MOVIES.getTop250(randomPage);
       if (films && films.length > 0) return films[Math.floor(Math.random() * films.length)];
       return null;
     },
 
     searchFilms: async function(query) {
-      // Search returns 20 films per page. Fetch first 3 pages = 60 films
-      // for better coverage (user complaint: "не находит все фильмы")
+      // Search returns 20 films per page. Fetch 2 pages = 40 films.
       var allFilms = [];
-      for (var page = 1; page <= 3; page++) {
+      for (var page = 1; page <= 2; page++) {
         try {
           var url = App.CORE.API_BASE + '/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(query) + '&page=' + page;
           var data = await App.MOVIES.apiGet(url);

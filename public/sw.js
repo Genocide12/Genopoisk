@@ -1,12 +1,11 @@
-// Genopoisk Service Worker
-// Caches the main app shell for offline access. Player (video streams) requires
-// online and is NOT cached. Strategy:
-//   - index.html, manifest, icons, bridge.js: cache-first (offline-capable)
-//   - player.html: network-first (always fresh, fallback to cache)
-//   - API endpoints: network-only (always need live data)
-//   - Everything else (cross-origin video streams, kinopoisk API): bypass SW
+// Genopoisk Service Worker v77
+// Strategy:
+//   - HTML pages (navigations): network-first, fallback to cache
+//   - Static assets (JS/CSS/images): cache-first, background update
+//   - API endpoints: network-only (bypass SW)
+//   - Cross-origin: bypass SW
 
-const CACHE_NAME = 'genopoisk-v76';
+const CACHE_NAME = 'genopoisk-v77';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -21,7 +20,6 @@ const APP_SHELL = [
   '/js/error-handler.js'
 ];
 
-// Install: pre-cache the app shell
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
@@ -33,80 +31,70 @@ self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
-// Activate: clean up old caches + take control immediately
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(names) {
       return Promise.all(
         names.filter(function(name) { return name !== CACHE_NAME; })
-             .map(function(name) {
-               console.log('[sw] Deleting old cache:', name);
-               return caches.delete(name);
-             })
+             .map(function(name) { return caches.delete(name); })
       );
     }).then(function() {
-      // Force claim all clients — needed for old projectors that don't
-      // support skipWaiting() properly (Chrome < 40).
       return self.clients.claim();
     })
   );
 });
 
-// Fetch handler
 self.addEventListener('fetch', function(event) {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Only handle GET requests
   if (req.method !== 'GET') return;
-
-  // Skip cross-origin requests (video streams, kinopoisk API, telegram scripts)
-  // — let them go to network
   if (url.origin !== self.location.origin) return;
-
-  // Skip API calls (always need live data)
   if (url.pathname.startsWith('/api/')) return;
 
-  // Skip player.html — it always needs fresh code
-  if (url.pathname === '/player.html' || url.pathname === '/debug-player.html') {
+  // HTML pages: network-first (always get fresh HTML)
+  if (req.mode === 'navigate' || req.destination === 'document') {
     event.respondWith(
-      fetch(req).catch(function() {
-        return caches.match(req);
-      })
+      fetch(req)
+        .then(function(res) {
+          if (res && res.ok) {
+            var clone = res.clone();
+            caches.open(CACHE_NAME).then(function(cache) {
+              cache.put(req, clone).catch(function() {});
+            });
+          }
+          return res;
+        })
+        .catch(function() {
+          return caches.match(req).then(function(cached) {
+            return cached || caches.match('/index.html');
+          });
+        })
     );
     return;
   }
 
-  // For app shell: cache-first with network update in background
+  // Static assets: cache-first with background update
   event.respondWith(
     caches.match(req).then(function(cached) {
       if (cached) {
-        // Return cached immediately, update cache in background
         fetch(req).then(function(res) {
           if (res && res.ok) {
             caches.open(CACHE_NAME).then(function(cache) {
-              cache.put(req, res.clone()).catch(function(e) {
-                console.warn('[sw] Cache.put failed:', e.message);
-              });
+              cache.put(req, res.clone()).catch(function() {});
             });
           }
         }).catch(function() {});
         return cached;
       }
-      // Not in cache — fetch from network, cache if successful
       return fetch(req).then(function(res) {
         if (!res || !res.ok) return res;
-        const clone = res.clone();
+        var clone = res.clone();
         caches.open(CACHE_NAME).then(function(cache) {
-          cache.put(req, clone);
+          cache.put(req, clone).catch(function() {});
         });
         return res;
       }).catch(function() {
-        // Offline and not cached — return offline.html for navigations,
-        // or index.html for other assets
-        if (req.mode === 'navigate') {
-          return caches.match('/offline.html') || caches.match('/index.html');
-        }
         return caches.match('/index.html');
       });
     })

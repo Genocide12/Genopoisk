@@ -6,7 +6,7 @@
 
   App.CORE = {
     API_BASE: '/api/kinopoisk',
-    SW_CACHE_VERSION: '80',
+    SW_CACHE_VERSION: '81',
 
     // --- User identification ---
     // Priority: 1) Stored TG user ID  2) Stable localStorage web_ ID

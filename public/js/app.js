@@ -6,7 +6,7 @@
 
   App.CORE = {
     API_BASE: '/api/kinopoisk',
-    SW_CACHE_VERSION: '82',
+    SW_CACHE_VERSION: '83',
 
     // --- User identification ---
     // Priority: 1) Stored TG user ID  2) Stable localStorage web_ ID
@@ -1087,6 +1087,98 @@
       });
     });
     observer.observe(filmGrid, { childList: true });
+  }
+
+  // ====== Desktop hover effects (PC only) ======
+  // Holo card effect: cursor-following glow + 3D tilt on action cards
+  function setupActionCardEffects() {
+    // Only on devices with hover + fine pointer (desktop with mouse)
+    if (!window.matchMedia || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+
+    document.querySelectorAll('.action-card').forEach(function(card) {
+      var rafId = null;
+
+      card.addEventListener('mousemove', function(e) {
+        var rect = card.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+
+        // Glow position (0-100%)
+        var px = Math.max(0, Math.min(100, (x / rect.width) * 100));
+        var py = Math.max(0, Math.min(100, (y / rect.height) * 100));
+
+        // 3D tilt — cursor on left → card tilts right (repel)
+        var cx = (x / rect.width) - 0.5;
+        var cy = (y / rect.height) - 0.5;
+        var maxTilt = 12;
+        var maxShift = 6;
+        var rx = -cy * maxTilt * 2;
+        var ry = cx * maxTilt * 2;
+        var tx = cx * maxShift * 2;
+        var ty = cy * maxShift * 2;
+
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(function() {
+          card.classList.add('tracking');
+          card.style.setProperty('--mx', px + '%');
+          card.style.setProperty('--my', py + '%');
+          card.style.setProperty('--rx', rx + 'deg');
+          card.style.setProperty('--ry', ry + 'deg');
+          card.style.setProperty('--tx', tx + 'px');
+          card.style.setProperty('--ty', ty + 'px');
+        });
+      });
+
+      card.addEventListener('mouseleave', function() {
+        if (rafId) cancelAnimationFrame(rafId);
+        card.classList.remove('tracking');
+        card.style.setProperty('--rx', '0deg');
+        card.style.setProperty('--ry', '0deg');
+        card.style.setProperty('--tx', '0px');
+        card.style.setProperty('--ty', '0px');
+      });
+    });
+  }
+
+  // Hero title cursor glow — radial gradient follows cursor over "Genopoisk" title
+  function setupHeroTitleGlow() {
+    if (!window.matchMedia || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+
+    var heroTitle = document.querySelector('.hero-title');
+    if (!heroTitle) return;
+
+    var rafId = null;
+
+    heroTitle.addEventListener('mousemove', function(e) {
+      var rect = heroTitle.getBoundingClientRect();
+      var x = ((e.clientX - rect.left) / rect.width) * 100;
+      var y = ((e.clientY - rect.top) / rect.height) * 100;
+
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(function() {
+        heroTitle.classList.add('cursor-glow');
+        heroTitle.style.setProperty('--cursor-x', x + '%');
+        heroTitle.style.setProperty('--cursor-y', y + '%');
+        heroTitle.style.setProperty('--cursor-strength', '1');
+      });
+    });
+
+    heroTitle.addEventListener('mouseleave', function() {
+      if (rafId) cancelAnimationFrame(rafId);
+      heroTitle.style.setProperty('--cursor-strength', '0');
+      setTimeout(function() { heroTitle.classList.remove('cursor-glow'); }, 300);
+    });
+  }
+
+  // Run hover effects after DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setupActionCardEffects();
+      setupHeroTitleGlow();
+    });
+  } else {
+    setupActionCardEffects();
+    setupHeroTitleGlow();
   }
 
   // ====== Search ======

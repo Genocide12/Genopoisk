@@ -1,31 +1,31 @@
-// Genopoisk Service Worker v77
-// Strategy:
-//   - HTML pages (navigations): network-first, fallback to cache
-//   - Static assets (JS/CSS/images): cache-first, background update
-//   - API endpoints: network-only (bypass SW)
-//   - Cross-origin: bypass SW
+// Genopoisk Service Worker v79
+// SIMPLIFIED — does NOT intercept navigation requests.
+// Only caches static assets (JS/CSS/images) for offline.
+// HTML pages go directly to network — no SW interference.
 
-const CACHE_NAME = 'genopoisk-v78';
-const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/offline.html',
+const CACHE_NAME = 'genopoisk-v79';
+const STATIC_ASSETS = [
+  '/css/app.css',
+  '/js/app.js',
+  '/js/error-handler.js',
+  '/js/modules/core.js',
+  '/js/modules/device.js',
+  '/js/modules/auth.js',
+  '/js/modules/ui.js',
+  '/js/modules/movies.js',
+  '/js/modules/tracking.js',
+  '/i18n.js',
+  '/bridge.js',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/bridge.js',
-  '/i18n.js',
-  '/css/app.css',
-  '/js/app.js',
-  '/js/error-handler.js'
+  '/offline.html'
 ];
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(APP_SHELL).catch(function(e) {
-        console.warn('[sw] Some app shell resources failed to cache:', e);
-      });
+      return cache.addAll(STATIC_ASSETS).catch(function() {});
     })
   );
   self.skipWaiting();
@@ -45,39 +45,31 @@ self.addEventListener('activate', function(event) {
 });
 
 self.addEventListener('fetch', function(event) {
-  const req = event.request;
-  const url = new URL(req.url);
+  var req = event.request;
+  var url = new URL(req.url);
 
+  // ONLY handle GET
   if (req.method !== 'GET') return;
+
+  // SKIP cross-origin
   if (url.origin !== self.location.origin) return;
+
+  // SKIP API calls
   if (url.pathname.startsWith('/api/')) return;
 
-  // HTML pages: network-first (always get fresh HTML)
-  if (req.mode === 'navigate' || req.destination === 'document') {
-    event.respondWith(
-      fetch(req)
-        .then(function(res) {
-          if (res && res.ok) {
-            var clone = res.clone();
-            caches.open(CACHE_NAME).then(function(cache) {
-              cache.put(req, clone).catch(function() {});
-            });
-          }
-          return res;
-        })
-        .catch(function() {
-          return caches.match(req).then(function(cached) {
-            return cached || caches.match('/index.html');
-          });
-        })
-    );
-    return;
-  }
+  // SKIP ALL navigation requests (HTML pages) — let browser handle directly
+  // This prevents SW from breaking page loads when network is unstable
+  if (req.mode === 'navigate' || req.destination === 'document') return;
 
-  // Static assets: cache-first with background update
+  // SKIP player.html
+  if (url.pathname === '/player.html' || url.pathname === '/debug-player.html') return;
+
+  // ONLY cache static assets (JS/CSS/images/fonts)
+  // Cache-first with background update
   event.respondWith(
     caches.match(req).then(function(cached) {
       if (cached) {
+        // Background update
         fetch(req).then(function(res) {
           if (res && res.ok) {
             caches.open(CACHE_NAME).then(function(cache) {
@@ -87,6 +79,7 @@ self.addEventListener('fetch', function(event) {
         }).catch(function() {});
         return cached;
       }
+      // Not in cache — fetch from network
       return fetch(req).then(function(res) {
         if (!res || !res.ok) return res;
         var clone = res.clone();
@@ -95,7 +88,8 @@ self.addEventListener('fetch', function(event) {
         });
         return res;
       }).catch(function() {
-        return caches.match('/index.html');
+        // Return empty response for failed static asset
+        return new Response('', { status: 404 });
       });
     })
   );

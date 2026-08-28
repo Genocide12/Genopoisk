@@ -6,7 +6,7 @@
 
   App.CORE = {
     API_BASE: '/api/kinopoisk',
-    SW_CACHE_VERSION: '85',
+    SW_CACHE_VERSION: '86',
 
     // --- User identification ---
     // Priority: 1) Stored TG user ID  2) Stable localStorage web_ ID
@@ -248,14 +248,17 @@
           credentials: 'include',
           body: JSON.stringify({ userId: tgId, username: tgUsername, initData: App.CORE.getTgInitData() })
         });
+        if (!res.ok) return; // network error — don't reload
         var data = await res.json();
-        if (data.reauth) {
+        // Only reload if server EXPLICITLY says reauth (user deleted)
+        // Don't reload on network errors or empty responses
+        if (data.reauth === true && data.exists === false) {
           localStorage.removeItem('genopoisk_tg_user_id');
           localStorage.removeItem('genopoisk_tg_user_name');
           localStorage.removeItem('genopoisk_tg_username');
           window.location.reload();
         }
-      } catch (e) { console.warn('[auth] check failed:', e); }
+      } catch (e) { console.warn('[auth] check failed (non-fatal):', e); }
     },
 
     // --- QR Login ---
@@ -1256,35 +1259,23 @@
   // ====== Service Worker ======
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      // Force unregister old SW versions, then register new one
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        regs.forEach(function(reg) {
-          reg.unregister().then(function() {
-            console.log('[sw] Unregistered old SW:', reg.scope);
-          }).catch(function() {});
-        });
-        // Register fresh SW
-        return navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      }).then(function(reg) {
+      // Register SW only ONCE per session — don't unregister on every load
+      // (was causing infinite reload loop on bad internet)
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
         console.log('[sw] registered, scope:', reg.scope);
-        // Check for updates every 5 min
-        setInterval(function() { reg.update().catch(function() {}); }, 300000);
+        // Check for updates every 10 min (not 5)
+        setInterval(function() { reg.update().catch(function() {}); }, 600000);
+        // Only reload on controllerchange if it's a NEW SW version
+        // (not the same one being re-registered)
         var hasReloaded = false;
         navigator.serviceWorker.addEventListener('controllerchange', function() {
-          if (!hasReloaded) { hasReloaded = true; console.log('[sw] controller changed — reload'); window.location.reload(); }
+          if (!hasReloaded) {
+            hasReloaded = true;
+            // Delay reload to avoid loop — give SW time to settle
+            setTimeout(function() { window.location.reload(); }, 1000);
+          }
         });
       }).catch(function(e) { console.warn('[sw] registration failed:', e); });
-
-      // Also clear ALL caches (force fresh start)
-      if (window.caches) {
-        caches.keys().then(function(names) {
-          names.forEach(function(name) {
-            caches.delete(name).then(function() {
-              console.log('[sw] Deleted cache:', name);
-            });
-          });
-        });
-      }
     });
   }
 
